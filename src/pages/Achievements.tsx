@@ -134,13 +134,13 @@ export default function Achievements() {
               /{totalCount}
             </span>
           </p>
-          <p className="mt-1 text-[10px] md:text-xs text-muted-foreground">已解锁徽章</p>
+          <p className="mt-1 text-[11px] md:text-xs text-muted-foreground">已解锁徽章</p>
         </div>
         <div className="rounded-xl border bg-card p-3 md:p-4 text-center shadow-sm">
           <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
             {totalXP}
           </p>
-          <p className="mt-1 text-[10px] md:text-xs text-muted-foreground">总经验值 (XP)</p>
+          <p className="mt-1 text-[11px] md:text-xs text-muted-foreground">总经验值 (XP)</p>
         </div>
       </div>
 
@@ -212,12 +212,12 @@ export default function Achievements() {
                     {badge.name}
                   </p>
 
-                  <p className="mt-1 line-clamp-2 text-[10px] md:text-xs leading-snug text-muted-foreground">
+                  <p className="mt-1 line-clamp-2 text-[11px] md:text-xs leading-snug text-muted-foreground">
                     {badge.description}
                   </p>
 
                   <p
-                    className={`mt-1.5 md:mt-2 text-[10px] md:text-xs font-medium ${
+                    className={`mt-1.5 md:mt-2 text-[11px] md:text-xs font-medium ${
                       isUnlocked
                         ? 'text-purple-600 dark:text-purple-400'
                         : 'text-muted-foreground/40'

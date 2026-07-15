@@ -182,7 +182,7 @@ function StatsSummary({ type }: { type: PracticeType }) {
     <div className="grid grid-cols-3 gap-2 md:gap-3 mb-3 md:mb-4">
       <Card size="sm" className="flex-1">
         <CardContent className="text-center py-2 px-2">
-          <div className="text-[10px] md:text-xs text-muted-foreground mb-0.5">平均分</div>
+          <div className="text-[11px] md:text-xs text-muted-foreground mb-0.5">平均分</div>
           <div className="text-base md:text-lg font-bold" style={{ color }}>
             {avgScore !== undefined ? avgScore.toFixed(1) : '--'}
           </div>
@@ -190,7 +190,7 @@ function StatsSummary({ type }: { type: PracticeType }) {
       </Card>
       <Card size="sm" className="flex-1">
         <CardContent className="text-center py-2 px-2">
-          <div className="text-[10px] md:text-xs text-muted-foreground mb-0.5">总时长</div>
+          <div className="text-[11px] md:text-xs text-muted-foreground mb-0.5">总时长</div>
           <div className="text-base md:text-lg font-bold" style={{ color }}>
             {totalDuration > 0 ? formatDuration(totalDuration) : '--'}
           </div>
@@ -198,7 +198,7 @@ function StatsSummary({ type }: { type: PracticeType }) {
       </Card>
       <Card size="sm" className="flex-1">
         <CardContent className="text-center py-2 px-2">
-          <div className="text-[10px] md:text-xs text-muted-foreground mb-0.5">练习次数</div>
+          <div className="text-[11px] md:text-xs text-muted-foreground mb-0.5">练习次数</div>
           <div className="text-base md:text-lg font-bold" style={{ color }}>
             {count > 0 ? count : '--'}
           </div>

@@ -295,25 +295,25 @@ export default function Settings() {
               <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {totalWords}
               </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">单词总数</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground">单词总数</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-3 text-center">
               <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {totalPractice}
               </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">练习次数</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground">练习次数</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-3 text-center">
               <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {totalPlans}
               </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">计划数量</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground">计划数量</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-3 text-center">
               <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {totalDiary}
               </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">日记数量</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground">日记数量</p>
             </div>
           </div>
         </CardContent>

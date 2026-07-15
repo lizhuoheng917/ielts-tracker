@@ -348,7 +348,7 @@ export default function Stats() {
                 {heatmapData.monthLabels.map((ml) => (
                   <div
                     key={ml.colIndex}
-                    className="text-[10px] md:text-xs text-muted-foreground"
+                    className="text-[11px] md:text-xs text-muted-foreground"
                     style={{
                       width: `${ml.span * 1.125}rem`, // span * (1rem cell + 0.125rem gap)
                       textAlign: 'left',
@@ -370,7 +370,7 @@ export default function Stats() {
                   return (
                     <div
                       key={rowIdx}
-                      className="flex h-[0.875rem] md:h-[1rem] items-center text-[9px] md:text-[10px] leading-none text-muted-foreground"
+                      className="flex h-[0.875rem] md:h-[1rem] items-center text-[10px] md:text-[10px] leading-none text-muted-foreground"
                     >
                       {WEEKDAY_LABELS[jsDayIdx]}
                     </div>
@@ -414,7 +414,7 @@ export default function Stats() {
               <div />
 
               {/* 图例行 */}
-              <div className="mt-2 flex items-center justify-end gap-1 text-[10px] md:text-xs text-muted-foreground">
+              <div className="mt-2 flex items-center justify-end gap-1 text-[11px] md:text-xs text-muted-foreground">
                 <span>少</span>
                 <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px] bg-muted" />
                 <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: PURPLE_COLORS[100] }} />

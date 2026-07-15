@@ -34,7 +34,7 @@ export function MobileNav() {
           </div>
           <div>
             <h1 className="font-semibold text-sm leading-tight">IELTS Tracker</h1>
-            <p className="text-[10px] text-muted-foreground leading-tight">{currentLevel.name} · Lv.{level}</p>
+            <p className="text-[11px] text-muted-foreground leading-tight">{currentLevel.name} · Lv.{level}</p>
           </div>
         </div>
         <button

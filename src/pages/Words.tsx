@@ -381,7 +381,7 @@ export default function Words() {
             <span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
               {todayCount}
             </span>
-            <span className="text-[10px] md:text-xs text-muted-foreground">今日背诵</span>
+            <span className="text-[11px] md:text-xs text-muted-foreground">今日背诵</span>
           </CardContent>
         </Card>
         <Card>
@@ -389,7 +389,7 @@ export default function Words() {
             <span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
               {weekCount}
             </span>
-            <span className="text-[10px] md:text-xs text-muted-foreground">本周背诵</span>
+            <span className="text-[11px] md:text-xs text-muted-foreground">本周背诵</span>
           </CardContent>
         </Card>
         <Card>
@@ -397,7 +397,7 @@ export default function Words() {
             <span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
               {monthCount}
             </span>
-            <span className="text-[10px] md:text-xs text-muted-foreground">本月背诵</span>
+            <span className="text-[11px] md:text-xs text-muted-foreground">本月背诵</span>
           </CardContent>
         </Card>
       </div>
@@ -586,7 +586,7 @@ function ListView({
                 </span>
                 <Badge
                   variant="outline"
-                  className={cn('border text-[10px] md:text-xs', getCategoryColor(record.category))}
+                  className={cn('border text-[11px] md:text-xs', getCategoryColor(record.category))}
                 >
                   {record.category}
                 </Badge>
@@ -669,7 +669,7 @@ function CalendarView({
           {weekLabels.map((label) => (
             <div
               key={label}
-              className="py-1 text-center text-[10px] md:text-xs font-medium text-muted-foreground"
+              className="py-1 text-center text-[11px] md:text-xs font-medium text-muted-foreground"
             >
               {label}
             </div>
@@ -697,11 +697,11 @@ function CalendarView({
                 )}
                 title={`${formatDateCN(dateStr)}: ${count}词`}
               >
-                <span className="text-[10px] md:text-xs leading-none">{day.getDate()}</span>
+                <span className="text-[11px] md:text-xs leading-none">{day.getDate()}</span>
                 {count > 0 && (
                   <span
                     className={cn(
-                      'text-[9px] md:text-[10px] font-semibold leading-none',
+                      'text-[10px] md:text-[10px] font-semibold leading-none',
                       count / maxCalCount > 0.75 && 'text-white'
                     )}
                   >

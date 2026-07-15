@@ -277,7 +277,7 @@ export default function Dashboard() {
               {WEEKDAY_LABELS.map((label) => (
                 <div
                   key={label}
-                  className="text-[10px] md:text-xs text-muted-foreground text-center mb-1"
+                  className="text-[11px] md:text-xs text-muted-foreground text-center mb-1"
                 >
                   {label}
                 </div>
@@ -416,7 +416,7 @@ function StatCard({
         </div>
         <div className="min-w-0">
           <div className="text-base md:text-lg font-bold leading-tight">{value}</div>
-          <div className="text-[10px] md:text-xs text-muted-foreground">{label}</div>
+          <div className="text-[11px] md:text-xs text-muted-foreground">{label}</div>
         </div>
       </CardContent>
     </Card>

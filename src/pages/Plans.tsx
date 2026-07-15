@@ -190,7 +190,7 @@ export default function Plans() {
                     >
                       {plan.title}
                     </span>
-                    <Badge variant="outline" className="text-[10px] md:text-xs shrink-0">
+                    <Badge variant="outline" className="text-[11px] md:text-xs shrink-0">
                       {FREQUENCY_LABELS[plan.frequency]}
                     </Badge>
                   </button>
@@ -223,11 +223,11 @@ export default function Plans() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{plan.title}</p>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <Badge variant="outline" className="text-[10px] md:text-xs">
+                    <Badge variant="outline" className="text-[11px] md:text-xs">
                       {FREQUENCY_LABELS[plan.frequency]}
                     </Badge>
                     {plan.frequency === 'weekly' && plan.weekDays && (
-                      <span className="text-[10px] md:text-xs text-muted-foreground">
+                      <span className="text-[11px] md:text-xs text-muted-foreground">
                         周{plan.weekDays.map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label).join('、')}
                       </span>
                     )}

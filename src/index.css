@@ -126,5 +126,12 @@
     }
   html {
     @apply font-sans;
+    font-size: 16px;
     }
+  /* 移动端增大根字体大小，提升小屏幕可读性 */
+  @media (max-width: 767px) {
+    html {
+      font-size: 17.5px;
+    }
+  }
 }

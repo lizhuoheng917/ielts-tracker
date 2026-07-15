@@ -109,7 +109,7 @@ export default function Diary() {
                       </span>
                       <span
                         className={cn(
-                          'rounded-full px-2 py-0.5 text-[10px] md:text-xs bg-muted'
+                          'rounded-full px-2 py-0.5 text-[11px] md:text-xs bg-muted'
                         )}
                       >
                         {mood?.label}
