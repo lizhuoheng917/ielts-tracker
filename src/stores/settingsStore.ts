@@ -15,7 +15,7 @@ interface SettingsStore extends Settings {
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       ...DEFAULT_SETTINGS,
       setExamDate: (date) => set({ examDate: date }),
       clearExamDate: () => set((state) => ({ ...state, examDate: undefined })),
