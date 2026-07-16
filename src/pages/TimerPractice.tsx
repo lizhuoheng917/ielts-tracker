@@ -216,26 +216,26 @@ function TimerSection() {
   const progress = mode === 'countdown' && totalSeconds > 0
     ? 1 - (remainingSeconds / totalSeconds)
     : 0
-  const radius = 90
+  const radius = 78
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference * (1 - progress)
 
-  // 根据科目获取对应颜色
   const subjectConfig = SUBJECT_CONFIG[selectedSubject]
+  const gradientId = `ring-gradient-${selectedSubject}`
 
   return (
     <>
       <Card
         className={cn(
           'mb-4 overflow-hidden rounded-2xl transition-all duration-500',
-          isRunning && 'ring-2 ring-indigo-500/40 shadow-[0_0_20px_rgba(79,70,229,0.12)]',
-          isPaused && 'ring-2 ring-amber-400/40 shadow-[0_0_20px_rgba(251,191,36,0.12)]',
-          isFinished && 'ring-2 ring-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.12)]',
+          isRunning && 'ring-2 ring-indigo-500/30',
+          isPaused && 'ring-2 ring-amber-400/30',
+          isFinished && 'ring-2 ring-emerald-400/30',
         )}
       >
-        <CardContent className="py-8 md:py-10 px-6">
-          {/* 科目选择 */}
-          <div className="flex items-center justify-center gap-2 flex-wrap mb-6">
+        <CardContent className="py-6 md:py-8 px-5 md:px-6">
+          {/* 科目选择：文字标签 + 图标 */}
+          <div className="flex items-center justify-center gap-1.5 md:gap-2 flex-wrap mb-5 md:mb-6">
             {(Object.keys(SUBJECT_CONFIG) as TimerSubject[]).map((key) => {
               const config = SUBJECT_CONFIG[key]
               const isActive = selectedSubject === key
@@ -245,11 +245,11 @@ function TimerSection() {
                   onClick={() => canSwitch && setSelectedSubject(key)}
                   disabled={!canSwitch}
                   className={cn(
-                    'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium transition-all',
+                    'flex items-center gap-1 px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl text-[13px] md:text-[14px] font-medium transition-all',
                     isActive
-                      ? `${config.badgeClass} ring-2 ${config.ringColor} shadow-sm`
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
-                    !canSwitch && 'opacity-50 cursor-not-allowed'
+                      ? `${config.badgeClass} shadow-sm`
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                    !canSwitch && 'opacity-40 cursor-not-allowed'
                   )}
                 >
                   {config.icon}
@@ -259,123 +259,136 @@ function TimerSection() {
             })}
           </div>
 
-          {/* SVG 圆形进度环 + 时间显示 */}
-          <div className="flex items-center justify-center mb-6">
-            <svg width="192" height="192" viewBox="0 0 200 200" className="w-48 h-48 md:w-56 md:h-56">
+          {/* SVG 圆形进度环 */}
+          <div className="flex items-center justify-center mb-4 md:mb-5">
+            <svg width="180" height="180" viewBox="0 0 180 180" className="w-[160px] h-[160px] md:w-[200px] md:h-[200px]">
+              <defs>
+                <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={subjectConfig.gradientFrom} />
+                  <stop offset="100%" stopColor={subjectConfig.gradientTo} />
+                </linearGradient>
+              </defs>
               {/* 背景圆 */}
-              <circle cx="100" cy="100" r={radius} fill="none" stroke="oklch(0.92 0.01 270)" strokeWidth="6" strokeLinecap="round" />
+              <circle cx="90" cy="90" r={radius} fill="none" stroke="oklch(0.93 0.01 270)" strokeWidth="8" strokeLinecap="round" />
               {/* 进度圆 */}
               <circle
-                cx="100" cy="100" r={radius}
+                cx="90" cy="90" r={radius}
                 fill="none"
-                stroke={subjectConfig.gradientFrom}
-                strokeWidth="6"
+                stroke={`url(#${gradientId})`}
+                strokeWidth="8"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
-                transform="rotate(-90 100 100)"
+                transform="rotate(-90 90 90)"
                 className="transition-all duration-1000 ease-linear"
-                style={{ opacity: mode === 'countdown' ? 1 : 0.25 }}
+                style={{ opacity: mode === 'countdown' ? 1 : 0.2 }}
               />
-              {/* 中心时间文本 */}
+              {/* 时间文字 */}
               <text
-                x="100" y="92"
+                x="90" y="85"
                 textAnchor="middle"
-                fill="oklch(0.17 0.02 270)"
-                fontSize="42"
-                fontFamily="ui-monospace, SFMono-Regular, monospace"
-                fontWeight="bold"
+                fill="oklch(0.15 0.02 270)"
+                fontSize="36"
+                fontFamily="'DM Mono', 'JetBrains Mono', ui-monospace, monospace"
+                fontWeight="500"
+                letterSpacing="-1"
               >
                 {formatTimerDisplay(displaySeconds)}
               </text>
-              {/* 状态标签 */}
+              {/* 状态文字 */}
               {isRunning && (
-                <text x="100" y="120" textAnchor="middle" fill="#4F46E5" fontSize="12" fontWeight="500">
+                <text x="90" y="110" textAnchor="middle" fill={subjectConfig.gradientFrom} fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   进行中
                 </text>
               )}
               {isPaused && (
-                <text x="100" y="120" textAnchor="middle" fill="#D97706" fontSize="12" fontWeight="500">
+                <text x="90" y="110" textAnchor="middle" fill="#D97706" fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   已暂停
                 </text>
               )}
-              {!isRunning && !isPaused && !isFinished && (
-                <text x="100" y="120" textAnchor="middle" fill="oklch(0.5 0.02 270)" fontSize="12" fontWeight="500">
-                  {subjectConfig.label}
+              {isFinished && (
+                <text x="90" y="110" textAnchor="middle" fill="#059669" fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                  已完成
                 </text>
               )}
-              {isFinished && (
-                <text x="100" y="120" textAnchor="middle" fill="#059669" fontSize="12" fontWeight="500">
-                  已完成
+              {!isRunning && !isPaused && !isFinished && (
+                <text x="90" y="110" textAnchor="middle" fill="oklch(0.45 0.02 270)" fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                  {mode === 'countdown' ? `${presetMinutes} 分钟` : '正计时'}
                 </text>
               )}
             </svg>
           </div>
 
-          {/* 模式切换 + 时长预设 */}
-          <div className="flex items-center justify-center gap-1 mb-3">
-            <button
-              onClick={() => canSwitch && setSelectedMode('countdown')}
-              disabled={!canSwitch}
-              className={cn(
-                'px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all',
-                selectedMode === 'countdown'
-                  ? 'bg-foreground text-background shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              倒计时
-            </button>
-            <button
-              onClick={() => canSwitch && setSelectedMode('stopwatch')}
-              disabled={!canSwitch}
-              className={cn(
-                'px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all',
-                selectedMode === 'stopwatch'
-                  ? 'bg-foreground text-background shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              正计时
-            </button>
-          </div>
-
-          {/* 时长预设（仅倒计时模式显示） */}
-          {selectedMode === 'countdown' && (
-            <div className="flex items-center justify-center gap-1.5 flex-wrap mt-2">
-              {PRESETS.map((min) => (
-                <button
-                  key={min}
-                  onClick={() => canSwitch && setSelectedPreset(min)}
-                  disabled={!canSwitch}
-                  className={cn(
-                    'px-3 py-1.5 rounded-full text-[13px] font-medium transition-all',
-                    selectedPreset === min
-                      ? `${subjectConfig.badgeClass} shadow-sm`
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  {min}min
-                </button>
-              ))}
+          {/* 模式切换 + 时长预设（紧凑一行） */}
+          <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
+            {/* 模式切换 */}
+            <div className="flex items-center bg-muted rounded-lg p-0.5">
               <button
-                onClick={() => canSwitch && setSelectedPreset('custom')}
+                onClick={() => canSwitch && setSelectedMode('countdown')}
                 disabled={!canSwitch}
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-[13px] font-medium transition-all',
-                  isCustom
-                    ? `${subjectConfig.badgeClass} shadow-sm`
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  'px-2.5 py-1 rounded-md text-[12px] md:text-[13px] font-medium transition-all',
+                  selectedMode === 'countdown'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground'
                 )}
               >
-                自定义
+                倒计时
+              </button>
+              <button
+                onClick={() => canSwitch && setSelectedMode('stopwatch')}
+                disabled={!canSwitch}
+                className={cn(
+                  'px-2.5 py-1 rounded-md text-[12px] md:text-[13px] font-medium transition-all',
+                  selectedMode === 'stopwatch'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground'
+                )}
+              >
+                正计时
               </button>
             </div>
-          )}
+
+            {/* 时长预设（仅倒计时模式显示，分隔线随之出现/隐藏） */}
+            {selectedMode === 'countdown' && (
+              <>
+                <div className="w-px h-4 bg-border" />
+                <div className="flex items-center gap-1">
+                {PRESETS.map((min) => (
+                  <button
+                    key={min}
+                    onClick={() => canSwitch && setSelectedPreset(min)}
+                    disabled={!canSwitch}
+                    className={cn(
+                      'px-2 py-1 rounded-md text-[12px] md:text-[13px] font-medium transition-all',
+                      selectedPreset === min
+                        ? `${subjectConfig.badgeClass}`
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {min}m
+                  </button>
+                ))}
+                <button
+                  onClick={() => canSwitch && setSelectedPreset('custom')}
+                  disabled={!canSwitch}
+                  className={cn(
+                    'px-2 py-1 rounded-md text-[12px] md:text-[13px] font-medium transition-all',
+                    isCustom
+                      ? `${subjectConfig.badgeClass}`
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  自定义
+                </button>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* 自定义时长输入 */}
           {selectedMode === 'countdown' && isCustom && (
-            <div className="flex items-center justify-center gap-2 mt-3">
+            <div className="flex items-center justify-center mt-3">
               <input
                 type="number"
                 min={1}
@@ -390,28 +403,29 @@ function TimerSection() {
           )}
 
           {/* 控制按钮 */}
-          <div className="flex items-center justify-center gap-4 mt-6">
+          <div className="flex items-center justify-center gap-3 md:gap-4 mt-4 md:mt-5">
             {isIdle && (
               <button
                 onClick={handleStart}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/35 transition-all hover:scale-105 active:scale-95"
+                className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 active:scale-95"
+                style={{ background: `linear-gradient(135deg, ${subjectConfig.gradientFrom}, ${subjectConfig.gradientTo})` }}
               >
-                <Play className="h-6 w-6 ml-0.5" />
+                <Play className="h-5 w-5 md:h-6 md:w-6 ml-0.5" />
               </button>
             )}
             {isRunning && (
               <>
                 <button
                   onClick={handlePause}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all active:scale-95 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                  className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full border-2 border-amber-300 text-amber-500 hover:bg-amber-50 transition-all active:scale-95 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-900/30"
                 >
-                  <Pause className="h-5 w-5" />
+                  <Pause className="h-4 w-4 md:h-5 md:w-5" />
                 </button>
                 <button
                   onClick={handleStop}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all active:scale-95 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                  className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full border-2 border-red-300 text-red-500 hover:bg-red-50 transition-all active:scale-95 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/30"
                 >
-                  <Square className="h-4 w-4" />
+                  <Square className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 </button>
               </>
             )}
@@ -419,30 +433,31 @@ function TimerSection() {
               <>
                 <button
                   onClick={handleStop}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all active:scale-95 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                  className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full border-2 border-red-300 text-red-500 hover:bg-red-50 transition-all active:scale-95 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/30"
                 >
-                  <Square className="h-4 w-4" />
+                  <Square className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 </button>
                 <button
                   onClick={handleResume}
-                  className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/35 transition-all hover:scale-105 active:scale-95"
+                  className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 active:scale-95"
+                  style={{ background: `linear-gradient(135deg, ${subjectConfig.gradientFrom}, ${subjectConfig.gradientTo})` }}
                 >
-                  <Play className="h-6 w-6 ml-0.5" />
+                  <Play className="h-5 w-5 md:h-6 md:w-6 ml-0.5" />
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all active:scale-95"
+                  className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full border-2 border-border text-muted-foreground hover:bg-muted transition-all active:scale-95"
                 >
-                  <RotateCcw className="h-5 w-5" />
+                  <RotateCcw className="h-4 w-4 md:h-5 md:w-5" />
                 </button>
               </>
             )}
             {isFinished && (
               <button
                 onClick={handleCancel}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 transition-all hover:scale-105 active:scale-95"
+                className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95"
               >
-                <RotateCcw className="h-6 w-6" />
+                <RotateCcw className="h-5 w-5 md:h-6 md:w-6" />
               </button>
             )}
           </div>
