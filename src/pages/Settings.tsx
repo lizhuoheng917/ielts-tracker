@@ -20,6 +20,12 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
+import {
   CalendarDays,
   Download,
   Upload,
@@ -110,6 +116,59 @@ export default function Settings() {
     const a = document.createElement('a')
     a.href = url
     a.download = `ielts-tracker-backup-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // CSV 导出
+  const escapeCsv = (val: unknown) => {
+    const s = String(val ?? '')
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
+
+  const handleExportCSV = () => {
+    const dateStr = new Date().toISOString().split('T')[0]
+
+    // 单词记录
+    const wordsHeader = '日期,分类,子分类,数量,备注'
+    const wordsRows = useWordStore.getState().records.map((r) =>
+      [r.date, r.category, r.subCategory ?? '', r.count, r.note ?? ''].map(escapeCsv).join(',')
+    )
+    const wordsCsv = [wordsHeader, ...wordsRows].join('\n')
+
+    // 模考记录
+    const practiceHeader = '日期,科目,时长(分钟),分数,备注'
+    const practiceRows = usePracticeStore.getState().records.map((r) =>
+      [r.date, r.type, r.duration, r.score ?? '', r.note ?? ''].map(escapeCsv).join(',')
+    )
+    const practiceCsv = [practiceHeader, ...practiceRows].join('\n')
+
+    // 练习记录
+    const timerHeader = '日期,科目,时长(分钟),内容'
+    const timerRows = useTimerStore.getState().records.map((r) =>
+      [r.date, r.subject, Math.floor(r.duration / 60), r.note ?? ''].map(escapeCsv).join(',')
+    )
+    const timerCsv = [timerHeader, ...timerRows].join('\n')
+
+    // 合并为一个文件，用空行分隔
+    const fullCsv = [
+      '=== 单词记录 ===',
+      wordsCsv,
+      '',
+      '=== 模考记录 ===',
+      practiceCsv,
+      '',
+      '=== 练习记录 ===',
+      timerCsv,
+    ].join('\n')
+
+    const blob = new Blob(['\uFEFF' + fullCsv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ielts-tracker-data-${dateStr}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -297,10 +356,22 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={handleExport} className="w-full sm:w-auto">
-              <Download className="mr-1 h-4 w-4" />
-              导出数据
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="w-full sm:w-auto">
+                <Button variant="outline" className="w-full">
+                  <Download className="mr-1 h-4 w-4" />
+                  导出数据
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={handleExport}>
+                  导出为 JSON（完整备份）
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  导出为 CSV（Excel 可打开）
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" className="w-full sm:w-auto relative">
               <Upload className="mr-1 h-4 w-4" />
               导入数据

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { format, subDays, differenceInDays } from 'date-fns'
+import { format, subDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check } from 'lucide-react'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -48,6 +48,7 @@ export default function Dashboard() {
   const lastCheckinDate = useSettingsStore((s) => s.lastCheckinDate)
   const checkIn = useSettingsStore((s) => s.checkIn)
   const [checkedIn, setCheckedIn] = useState(false)
+  const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week')
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -89,6 +90,69 @@ export default function Dashboard() {
     () => executions.filter((e) => e.date === today && e.isCompleted).length,
     [executions, today]
   )
+
+  // ===== 周报/月报数据 =====
+  const weekReport = useMemo(() => {
+    const now = new Date()
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 })
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd')
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd')
+
+    const weekWords = wordRecords
+      .filter((r) => r.date >= weekStartStr && r.date <= weekEndStr)
+      .reduce((sum, r) => sum + r.count, 0)
+
+    const weekExamMinutes = practiceRecords
+      .filter((r) => r.date >= weekStartStr && r.date <= weekEndStr)
+      .reduce((sum, r) => sum + r.duration, 0)
+
+    const weekTimerMinutes = timerRecords
+      .filter((r) => r.date >= weekStartStr && r.date <= weekEndStr)
+      .reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
+
+    const weekCompletedTasks = executions
+      .filter((e) => e.date >= weekStartStr && e.date <= weekEndStr && e.isCompleted)
+      .length
+
+    return {
+      words: weekWords,
+      minutes: weekExamMinutes + weekTimerMinutes,
+      completedTasks: weekCompletedTasks,
+    }
+  }, [wordRecords, practiceRecords, timerRecords, executions])
+
+  const monthReport = useMemo(() => {
+    const now = new Date()
+    const monthStart = startOfMonth(now)
+    const monthEnd = endOfMonth(now)
+    const monthStartStr = format(monthStart, 'yyyy-MM-dd')
+    const monthEndStr = format(monthEnd, 'yyyy-MM-dd')
+
+    const monthWords = wordRecords
+      .filter((r) => r.date >= monthStartStr && r.date <= monthEndStr)
+      .reduce((sum, r) => sum + r.count, 0)
+
+    const monthExamMinutes = practiceRecords
+      .filter((r) => r.date >= monthStartStr && r.date <= monthEndStr)
+      .reduce((sum, r) => sum + r.duration, 0)
+
+    const monthTimerMinutes = timerRecords
+      .filter((r) => r.date >= monthStartStr && r.date <= monthEndStr)
+      .reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
+
+    const monthCompletedTasks = executions
+      .filter((e) => e.date >= monthStartStr && e.date <= monthEndStr && e.isCompleted)
+      .length
+
+    return {
+      words: monthWords,
+      minutes: monthExamMinutes + monthTimerMinutes,
+      completedTasks: monthCompletedTasks,
+    }
+  }, [wordRecords, practiceRecords, timerRecords, executions])
+
+  const reportData = reportPeriod === 'week' ? weekReport : monthReport
 
   // ===== 今日待办 =====
   const todayPlans = useMemo(() => {
@@ -291,6 +355,55 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* ===== 周报/月报摘要 ===== */}
+      <Card>
+        <CardContent className="pt-4 pb-3 px-3 md:px-4">
+          <div className="flex items-center justify-between mb-3">
+            <CardTitle className="text-[15px] md:text-base flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-indigo-500" />
+              学习进度
+            </CardTitle>
+            <div className="flex bg-muted rounded-md p-0.5">
+              <button
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded-md transition-all',
+                  reportPeriod === 'week' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setReportPeriod('week')}
+              >
+                本周
+              </button>
+              <button
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded-md transition-all',
+                  reportPeriod === 'month' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setReportPeriod('month')}
+              >
+                本月
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {/* 背词量 */}
+            <div className="text-center">
+              <p className="text-xl md:text-2xl font-bold">{reportData.words}</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">背词数量</p>
+            </div>
+            {/* 学习时长 */}
+            <div className="text-center">
+              <p className="text-xl md:text-2xl font-bold">{reportData.minutes}<span className="text-sm font-normal">min</span></p>
+              <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">学习时长</p>
+            </div>
+            {/* 完成任务 */}
+            <div className="text-center">
+              <p className="text-xl md:text-2xl font-bold">{reportData.completedTasks}</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">完成任务</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ===== 3. 今日概览 ===== */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
