@@ -33,8 +33,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
-  BookOpen,
 } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 // ===== Helper Functions =====
 
@@ -564,13 +564,11 @@ function ListView({
 }) {
   if (records.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 md:py-16 text-muted-foreground">
-        <BookOpen className="mb-4 size-10 md:size-12 opacity-30" />
-        <p className="text-base md:text-lg font-medium">还没有记录</p>
-        <p className="mt-1 text-[15px] px-4 text-center">
-          点击「添加记录」开始你的单词背诵之旅吧！坚持就是胜利。
-        </p>
-      </div>
+      <EmptyState
+        scene="words"
+        title="还没有记录任何单词"
+        description="开始你的第一个单词背诵记录吧，每天积累一点点"
+      />
     )
   }
 

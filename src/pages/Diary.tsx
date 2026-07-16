@@ -16,7 +16,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { BookOpen, PenLine, Trash2, Plus } from 'lucide-react'
+import { PenLine, Trash2, Plus } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default function Diary() {
   const entries = useDiaryStore((s) => s.entries)
@@ -86,11 +87,11 @@ export default function Diary() {
 
       {/* 空状态 */}
       {sortedEntries.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 md:py-16 text-muted-foreground">
-          <BookOpen className="mb-4 size-10 md:size-12 opacity-30" />
-          <p className="text-base md:text-lg font-medium">还没有日记</p>
-          <p className="mt-1 text-[15px] px-4 text-center">写下第一篇日记，记录你的学习旅程吧！</p>
-        </div>
+        <EmptyState
+          scene="diary"
+          title="还没有写过学习日记"
+          description="写下今天的学习感悟，记录你备考路上的每一步"
+        />
       )}
 
       {/* 日记列表 */}

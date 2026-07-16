@@ -127,20 +127,22 @@ export default function Achievements() {
 
       {/* ==================== STATS SUMMARY ==================== */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border bg-card p-3 md:p-4 text-center shadow-sm">
-          <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+        <div className="relative overflow-hidden rounded-xl p-3 md:p-4 text-center shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/50 dark:border-amber-800/30">
+          <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-amber-200/40 dark:bg-amber-700/20 blur-lg" />
+          <p className="relative text-xl md:text-2xl font-bold text-amber-600 dark:text-amber-400">
             {unlockedCount}
-            <span className="text-sm md:text-base font-normal text-muted-foreground">
+            <span className="text-sm md:text-base font-normal text-amber-500/70 dark:text-amber-400/60">
               /{totalCount}
             </span>
           </p>
-          <p className="mt-1 text-[13px] md:text-xs text-muted-foreground">已解锁徽章</p>
+          <p className="relative mt-1 text-[13px] md:text-xs text-amber-700/70 dark:text-amber-300/60">已解锁徽章</p>
         </div>
-        <div className="rounded-xl border bg-card p-3 md:p-4 text-center shadow-sm">
-          <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+        <div className="relative overflow-hidden rounded-xl p-3 md:p-4 text-center shadow-sm bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/20 border border-indigo-200/50 dark:border-indigo-800/30">
+          <div className="absolute -right-3 -top-3 h-12 w-12 rounded-full bg-indigo-200/40 dark:bg-indigo-700/20 blur-lg" />
+          <p className="relative text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
             {totalXP}
           </p>
-          <p className="mt-1 text-[13px] md:text-xs text-muted-foreground">总经验值 (XP)</p>
+          <p className="relative mt-1 text-[13px] md:text-xs text-indigo-700/70 dark:text-indigo-300/60">总经验值 (XP)</p>
         </div>
       </div>
 

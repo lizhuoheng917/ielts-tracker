@@ -27,6 +27,7 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { PlusIcon, PencilIcon, TrashIcon } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 // ===== 雅思分数选项（1-9，支持 0.5 分增量） =====
 const IELTS_SCORE_OPTIONS = [
@@ -51,14 +52,6 @@ const TYPE_LABEL_MAP: Record<PracticeType, string> = {
   listening: '听力',
   writing: '写作',
   speaking: '口语',
-}
-
-// ===== 空状态鼓励文字 =====
-const EMPTY_MESSAGES: Record<PracticeType, string> = {
-  reading: '还没有阅读练习记录，开始第一篇阅读吧！',
-  listening: '还没有听力练习记录，打开听力材料练起来！',
-  writing: '还没有写作练习记录，动笔写第一篇作文吧！',
-  speaking: '还没有口语练习记录，开口练习第一次吧！',
 }
 
 // ===== 格式化分数显示 =====
@@ -444,15 +437,11 @@ function TabPanel({ type }: { type: PracticeType }) {
       <StatsSummary type={type} />
 
       {records.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center">
-          <span className="text-3xl md:text-4xl mb-4">
-            {type === 'reading' && '\uD83D\uDCD6'}
-            {type === 'listening' && '\uD83C\uDFA7'}
-            {type === 'writing' && '\u270D\uFE0F'}
-            {type === 'speaking' && '\uD83C\uDFA4'}
-          </span>
-          <p className="text-[15px] text-muted-foreground px-4">{EMPTY_MESSAGES[type]}</p>
-        </div>
+        <EmptyState
+          scene="practice"
+          title="暂无练习记录"
+          description="开始你的第一次练习吧，勤加练习才能稳步提升"
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {records.map((record, index) => (

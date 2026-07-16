@@ -23,6 +23,7 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { Plus, CheckCircle, Circle, Pencil, Trash2, ListTodo } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: '每日',
@@ -174,7 +175,11 @@ export default function Plans() {
             今日待办 ({todayPlans.length})
           </h3>
           {todayPlans.length === 0 ? (
-            <p className="text-[15px] text-muted-foreground">今天没有待办任务</p>
+            <EmptyState
+              scene="tasks"
+              title="今天没有待办任务"
+              description="创建一个学习计划来安排你的每日任务"
+            />
           ) : (
             <div className="space-y-2">
               {todayPlans.map((plan, index) => {
@@ -219,11 +224,11 @@ export default function Plans() {
       <div className="space-y-2 md:space-y-3">
         <h3 className="text-[15px] md:text-base font-semibold">活跃计划 ({activePlans.length})</h3>
         {activePlans.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 md:py-16 text-muted-foreground">
-            <ListTodo className="mb-4 size-10 md:size-12 opacity-30" />
-            <p className="text-base md:text-lg font-medium">还没有计划</p>
-            <p className="mt-1 text-[15px] px-4 text-center">添加一个学习计划，开始你的备考之旅吧！</p>
-          </div>
+          <EmptyState
+            scene="plans"
+            title="还没有创建学习计划"
+            description="创建你的第一个学习计划，让每天的雅思备考更有条理"
+          />
         ) : (
           activePlans.map((plan, index) => (
             <Card key={plan.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card active:bg-accent/80 transition-colors`}>

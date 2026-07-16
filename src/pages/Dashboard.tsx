@@ -4,6 +4,7 @@ import { format, subDays, differenceInDays } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
@@ -180,17 +181,51 @@ export default function Dashboard() {
     'bg-indigo-700 dark:bg-indigo-300',
   ]
 
+  // ===== 时间感知问候语 =====
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 6) return '夜深了'
+    if (hour < 12) return '早上好'
+    if (hour < 14) return '中午好'
+    if (hour < 18) return '下午好'
+    return '晚上好'
+  }, [])
+
   return (
     <div className="space-y-5 md:space-y-6">
-      {/* ===== 1. 欢迎区域 ===== */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl md:text-2xl font-bold tracking-tight">欢迎回来</h1>
-          <p className="text-muted-foreground mt-1 text-[15px] md:text-base">{todayFormatted}</p>
+      {/* ===== 1. 欢迎横幅 ===== */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 p-6 md:p-8 text-white shadow-lg">
+        {/* 装饰性背景圆形 */}
+        <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -right-4 bottom-0 h-24 w-24 rounded-full bg-white/5 blur-xl" />
+        <div className="absolute left-1/2 -top-4 h-20 w-20 rounded-full bg-violet-400/20 blur-lg" />
+        <div className="relative z-10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{greeting}</h1>
+              <p className="mt-1 text-[15px] md:text-base text-indigo-100">{todayFormatted}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[13px] md:text-sm text-indigo-200 italic leading-relaxed max-w-lg">
+            {todayQuote}
+          </p>
+          {/* 今日快速概览 */}
+          <div className="mt-4 flex gap-4 md:gap-6">
+            <div className="flex items-center gap-1.5 text-[13px] md:text-sm">
+              <BookA className="h-4 w-4 text-amber-300" />
+              <span className="text-indigo-100">背词 <strong className="text-white">{todayWordCount}</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] md:text-sm">
+              <Clock className="h-4 w-4 text-amber-300" />
+              <span className="text-indigo-100">学习 <strong className="text-white">{todayPracticeMinutes}min</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] md:text-sm">
+              <Flame className="h-4 w-4 text-amber-300" />
+              <span className="text-indigo-100">连续 <strong className="text-white">{currentStreak}天</strong></span>
+            </div>
+          </div>
         </div>
-        <p className="hidden sm:block text-xs md:text-sm text-muted-foreground max-w-[240px] text-right italic leading-relaxed">{todayQuote}</p>
       </div>
-      <p className="sm:hidden text-[13px] text-muted-foreground italic leading-relaxed">{todayQuote}</p>
 
       {/* ===== 2. 考试倒计时 ===== */}
       {examCountdown && (
@@ -267,7 +302,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {todayPlans.length === 0 ? (
-            <p className="text-[15px] text-muted-foreground">今天没有待办任务</p>
+              <EmptyState
+                scene="tasks"
+                title="今天没有待办任务"
+                description="去「学习计划」页面创建你的第一个学习计划吧"
+              />
           ) : (
             <div className="space-y-2">
               {todayPlans.map((plan, index) => (
@@ -339,7 +378,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {recentAchievements.length === 0 ? (
-              <p className="text-[15px] text-muted-foreground">还没有解锁任何成就，继续加油!</p>
+              <EmptyState
+                scene="achievements"
+                title="还没有解锁任何成就"
+                description="坚持学习，完成每日任务来解锁你的第一个成就!"
+              />
             ) : (
               <div className="flex gap-3 md:gap-4 flex-wrap">
                 {recentAchievements.map((badge, index) => (
@@ -418,7 +461,11 @@ export default function Dashboard() {
               <p className="text-[15px]">{latestDiary.contentPreview}</p>
             </div>
           ) : (
-            <p className="text-[15px] text-muted-foreground">还没有写过学习日记</p>
+            <EmptyState
+              scene="diary"
+              title="还没有写过学习日记"
+              description="记录每天的学习感悟，回顾时会发现成长的轨迹"
+            />
           )}
           <Link
             to="/diary"
