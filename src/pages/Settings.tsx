@@ -238,7 +238,7 @@ export default function Settings() {
               onClick={() => setThemeInput('light')}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
                 themeInput === 'light'
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 ring-2 ring-purple-500/30'
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/50 ring-2 ring-purple-500/30'
                   : 'border-input hover:bg-accent'
               }`}
             >
@@ -249,7 +249,7 @@ export default function Settings() {
               onClick={() => setThemeInput('dark')}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
                 themeInput === 'dark'
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 ring-2 ring-purple-500/30'
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/50 ring-2 ring-purple-500/30'
                   : 'border-input hover:bg-accent'
               }`}
             >

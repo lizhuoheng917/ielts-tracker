@@ -171,12 +171,13 @@ export default function Dashboard() {
   }, [achievementStore])
 
   // ===== 热力图颜色 =====
+  // 暗色模式优化：拉大等级间亮度差，提升低等级可见度
   const heatmapColors = [
-    'bg-purple-50 dark:bg-purple-950/30',
-    'bg-purple-200 dark:bg-purple-800/60',
+    'bg-purple-50 dark:bg-purple-900/40',
+    'bg-purple-200 dark:bg-purple-700/70',
     'bg-purple-400 dark:bg-purple-600',
     'bg-purple-600 dark:bg-purple-500',
-    'bg-purple-800 dark:bg-purple-400',
+    'bg-purple-800 dark:bg-purple-300',
   ]
 
   return (
@@ -212,7 +213,7 @@ export default function Dashboard() {
             <p className="text-xs md:text-sm text-muted-foreground mt-2">
               距离考试还有 {examCountdown.daysLeft} 天
             </p>
-            <div className="mt-3 h-2 w-full rounded-full bg-purple-100 dark:bg-purple-950/50">
+            <div className="mt-3 h-2 w-full rounded-full bg-purple-100 dark:bg-purple-900/50">
               <div
                 className={`h-full rounded-full transition-all ${examCountdown.color}`}
                 style={{ width: `${examCountdown.progress}%` }}
@@ -264,7 +265,7 @@ export default function Dashboard() {
                   onClick={() => togglePlanComplete(plan.id, plan.execId)}
                   className={`animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-all ${
                     plan.completed
-                      ? 'bg-green-50 dark:bg-green-950/20'
+                      ? 'bg-green-50 dark:bg-green-900/30'
                       : 'hover:bg-accent'
                   }`}
                 >
@@ -333,7 +334,7 @@ export default function Dashboard() {
                 {recentAchievements.map((badge, index) => (
                   <div
                     key={badge.id}
-                    className={`animate-stagger-up stagger-${index + 1} flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 min-w-[72px] md:min-w-[80px]`}
+                    className={`animate-stagger-up stagger-${index + 1} flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-purple-50 dark:bg-purple-900/40 min-w-[72px] md:min-w-[80px]`}
                   >
                     <span className="text-xl md:text-2xl">{badge.icon}</span>
                     <span className="text-xs font-medium text-center">{badge.name}</span>
@@ -357,7 +358,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/50">
+              <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-800/50">
                 <Star className="h-4 w-4 md:h-5 md:w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
@@ -371,7 +372,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div className="h-2 md:h-2.5 w-full rounded-full bg-purple-100 dark:bg-purple-950/50">
+            <div className="h-2 md:h-2.5 w-full rounded-full bg-purple-100 dark:bg-purple-900/50">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all"
                 style={{
@@ -433,7 +434,7 @@ function StatCard({
   return (
     <Card size="sm">
       <CardContent className="flex items-center gap-2 md:gap-3 py-3 px-3 md:px-4">
-        <div className="flex h-8 w-8 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950/30">
+        <div className="flex h-8 w-8 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-900/40">
           {icon}
         </div>
         <div className="min-w-0">

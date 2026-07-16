@@ -96,14 +96,14 @@ interface FormData {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  '学术词汇': 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700',
-  '高频词汇': 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-700',
-  '场景词汇': 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-700',
-  '同义替换词': 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700',
+  '学术词汇': 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-700',
+  '高频词汇': 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700',
+  '场景词汇': 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/50 dark:text-fuchsia-300 dark:border-fuchsia-700',
+  '同义替换词': 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-700',
 }
 
 const DEFAULT_CATEGORY_COLOR =
-  'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700'
+  'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-700'
 
 function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] || DEFAULT_CATEGORY_COLOR
@@ -112,10 +112,10 @@ function getCategoryColor(category: string): string {
 function getHeatmapColor(count: number, maxCount: number): string {
   if (count === 0) return 'bg-muted/50'
   const ratio = maxCount > 0 ? count / maxCount : 0
-  if (ratio <= 0.25) return 'bg-purple-100 dark:bg-purple-900/30'
-  if (ratio <= 0.5) return 'bg-purple-200 dark:bg-purple-800/40'
-  if (ratio <= 0.75) return 'bg-purple-400 dark:bg-purple-600/50'
-  return 'bg-purple-600 text-white dark:bg-purple-500'
+  if (ratio <= 0.25) return 'bg-purple-100 dark:bg-purple-800/60'
+  if (ratio <= 0.5) return 'bg-purple-200 dark:bg-purple-700/70'
+  if (ratio <= 0.75) return 'bg-purple-400 dark:bg-purple-600'
+  return 'bg-purple-600 text-white dark:bg-purple-400'
 }
 
 // ===== Main Component =====

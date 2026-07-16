@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import { Flame, Trophy, CalendarDays } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
@@ -84,14 +85,21 @@ function CustomTooltip({
   active,
   payload,
   label,
+  bgColor,
+  borderColor,
 }: {
   active?: boolean
   payload?: Array<{ value: number; name: string; color: string }>
   label?: string
+  bgColor?: string
+  borderColor?: string
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-lg border bg-background px-3 py-2 shadow-sm text-xs md:text-sm">
+    <div
+      className="rounded-lg border px-3 py-2 shadow-sm text-xs md:text-sm"
+      style={{ backgroundColor: bgColor, borderColor }}
+    >
       <p className="font-medium">{label}</p>
       {payload.map((item, i) => (
         <p key={i} style={{ color: item.color }}>
@@ -118,6 +126,7 @@ export default function Stats() {
   }, [])
 
   // --- Store 数据（使用 stable selector）---
+  const theme = useSettingsStore((s) => s.theme)
   const streakData = useStreakStore((s) => s)
   const wordRecords = useWordStore((s) => s.records)
   const practiceRecords = usePracticeStore((s) => s.records)
@@ -126,6 +135,18 @@ export default function Stats() {
   const totalStudyDays = useMemo(() => {
     return Object.keys(streakData.heatmapData).length
   }, [streakData.heatmapData])
+
+  // --- 图表颜色配置（适配暗色模式）---
+  const chartColors = useMemo(() => {
+    const isDark = theme === 'dark'
+    return {
+      grid: isDark ? 'oklch(0.3 0 0)' : '#e5e7eb',
+      tick: isDark ? 'oklch(0.6 0 0)' : '#9ca3af',
+      label: isDark ? 'oklch(0.7 0 0)' : '#6b7280',
+      tooltipBg: isDark ? 'oklch(0.205 0 0)' : '#ffffff',
+      tooltipBorder: isDark ? 'oklch(1 0 0 / 10%)' : '#e5e7eb',
+    }
+  }, [theme])
 
   // --- 热力图数据（最近12周，CSS Grid）---
   // 生成最近 12 周 (84 天) 的所有日期，从周一开始排列
@@ -296,7 +317,7 @@ export default function Stats() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <Card>
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-500">
+            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-500 dark:bg-orange-900/40 dark:text-orange-400">
               <Flame className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
@@ -307,7 +328,7 @@ export default function Stats() {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-500">
+            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-500 dark:bg-purple-900/40 dark:text-purple-400">
               <Trophy className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
@@ -318,7 +339,7 @@ export default function Stats() {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-500">
+            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-500 dark:bg-blue-900/40 dark:text-blue-400">
               <CalendarDays className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
@@ -398,11 +419,11 @@ export default function Stats() {
                       return <div key={`${colIdx}-${rowIdx}`} className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem]" />
                     }
                     const levelColors = [
-                      'oklch(0.9 0 0)',
-                      PURPLE_COLORS[100],
-                      PURPLE_COLORS[300],
-                      PURPLE_COLORS[400],
-                      PURPLE_COLORS[600],
+                      'var(--heatmap-level-0)',
+                      'var(--heatmap-level-1)',
+                      'var(--heatmap-level-2)',
+                      'var(--heatmap-level-3)',
+                      'var(--heatmap-level-4)',
                     ]
                     return (
                       <div
@@ -422,11 +443,11 @@ export default function Stats() {
               {/* 图例行 */}
               <div className="mt-2 flex items-center justify-end gap-1 text-[11px] md:text-xs text-muted-foreground">
                 <span>少</span>
-                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px] bg-muted" />
-                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: PURPLE_COLORS[100] }} />
-                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: PURPLE_COLORS[300] }} />
-                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: PURPLE_COLORS[400] }} />
-                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: PURPLE_COLORS[600] }} />
+                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: 'var(--heatmap-level-0)' }} />
+                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: 'var(--heatmap-level-1)' }} />
+                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: 'var(--heatmap-level-2)' }} />
+                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: 'var(--heatmap-level-3)' }} />
+                <div className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px]" style={{ backgroundColor: 'var(--heatmap-level-4)' }} />
                 <span>多</span>
               </div>
             </div>
@@ -446,17 +467,17 @@ export default function Stats() {
               {wordTrend.some((d) => d.count > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={wordTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: '#9ca3af' }}
+                      tick={{ fontSize: 10, fill: chartColors.tick }}
                       interval={6}
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: '#9ca3af' }}
+                      tick={{ fontSize: 10, fill: chartColors.tick }}
                       allowDecimals={false}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
                     <Line
                       type="monotone"
                       dataKey="count"
@@ -485,17 +506,17 @@ export default function Stats() {
               {hasDurationData ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={durationData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: '#9ca3af' }}
+                      tick={{ fontSize: 10, fill: chartColors.tick }}
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: '#9ca3af' }}
+                      tick={{ fontSize: 10, fill: chartColors.tick }}
                       allowDecimals={false}
                       unit="分"
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
                     <Bar
                       dataKey="duration"
                       name="时长（分钟）"
@@ -525,10 +546,10 @@ export default function Stats() {
               {hasRadarData ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
-                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarGrid stroke={chartColors.grid} />
                     <PolarAngleAxis
                       dataKey="subject"
-                      tick={{ fontSize: 11, fill: '#6b7280' }}
+                      tick={{ fontSize: 11, fill: chartColors.label }}
                     />
                     <Radar
                       name="平均分"
@@ -538,7 +559,7 @@ export default function Stats() {
                       fillOpacity={0.5}
                       strokeWidth={2}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
@@ -570,7 +591,7 @@ export default function Stats() {
                       label={({ name, percent }) =>
                         `${name} ${(percent && typeof percent === 'number' ? percent * 100 : 0).toFixed(0)}%`
                       }
-                      labelLine={{ stroke: '#d1d5db' }}
+                      labelLine={{ stroke: chartColors.label }}
                     >
                       {categoryPieData.map((_, index) => (
                         <Cell
@@ -580,6 +601,7 @@ export default function Stats() {
                       ))}
                     </Pie>
                     <Tooltip
+                      content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />}
                       formatter={(value) => [`${value} 个`, '']}
                     />
                   </PieChart>

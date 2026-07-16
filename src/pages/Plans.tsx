@@ -187,7 +187,7 @@ export default function Plans() {
                     className={cn(
                       `animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all`,
                       isCompleted
-                        ? 'border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900/30'
+                        ? 'border-green-200 bg-green-50 dark:bg-green-900/30 dark:border-green-800/50'
                         : 'border-border bg-background hover:bg-accent'
                     )}
                   >

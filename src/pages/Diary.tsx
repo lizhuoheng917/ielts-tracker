@@ -175,7 +175,7 @@ export default function Diary() {
                     className={cn(
                       'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm transition-all',
                       formMood === mood.value
-                        ? 'ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                        ? 'ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/50'
                         : 'border bg-background hover:bg-accent'
                     )}
                   >
