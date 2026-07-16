@@ -173,13 +173,13 @@ export default function Achievements() {
         </h3>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
-          {BADGES.map((badge) => {
+          {BADGES.map((badge, index) => {
             const isUnlocked = unlockedBadges.includes(badge.id)
 
             return (
               <div
                 key={badge.id}
-                className={`relative overflow-hidden rounded-xl border p-3 md:p-4 text-center transition-all duration-300 hover:scale-105 hover:shadow-md ${
+                className={`animate-stagger-up stagger-${(index % 8) + 1} relative overflow-hidden rounded-xl border p-3 md:p-4 text-center transition-all duration-300 hover:scale-105 hover:shadow-md ${
                   isUnlocked
                     ? 'border-purple-300/60 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 dark:border-purple-700/50'
                     : 'border-border/40 bg-muted/20 opacity-50 grayscale'

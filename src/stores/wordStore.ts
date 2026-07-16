@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { WordRecord } from '@/lib/types'
 import { STORAGE_PREFIX } from '@/lib/constants'
+import { useStreakStore } from '@/stores/streakStore'
 
 interface WordStore {
   records: WordRecord[]
@@ -27,6 +28,9 @@ export const useWordStore = create<WordStore>()(
           updatedAt: now,
         }
         set((state) => ({ records: [record, ...state.records] }))
+
+        // 记录活动到热力图
+        useStreakStore.getState().recordActivity(data.date)
 
         // 成就联动：添加 XP + 检测徽章
         // 动态导入避免循环依赖

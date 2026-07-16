@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { DiaryEntry } from '@/lib/types'
 import { STORAGE_PREFIX, XP_RULES } from '@/lib/constants'
+import { useStreakStore } from '@/stores/streakStore'
 
 interface DiaryStore {
   entries: DiaryEntry[]
@@ -21,6 +22,9 @@ export const useDiaryStore = create<DiaryStore>()(
         const now = new Date().toISOString()
         const entry: DiaryEntry = { ...data, id: generateId(), createdAt: now, updatedAt: now }
         set((state) => ({ entries: [entry, ...state.entries] }))
+
+        // 记录活动到热力图
+        useStreakStore.getState().recordActivity(data.date)
 
         // 成就联动：添加日记 XP + 检测徽章
         import('@/lib/achievementService').then(({ addXP, checkDiaryBadges }) => {

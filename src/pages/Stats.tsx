@@ -112,6 +112,11 @@ export default function Stats() {
     })
   }, [])
 
+  // --- 首次加载时从 heatmapData 修正连续天数（确保历史数据一致）---
+  useEffect(() => {
+    useStreakStore.getState().recomputeStreak()
+  }, [])
+
   // --- Store 数据（使用 stable selector）---
   const streakData = useStreakStore((s) => s)
   const wordRecords = useWordStore((s) => s.records)
@@ -332,11 +337,10 @@ export default function Stats() {
         <CardContent>
           <div className="overflow-x-auto -mx-1 px-1">
             {/* CSS Grid 热力图：左列星期标签 + 右侧网格 */}
-            <div
-              className="grid gap-[3px]"
+            <div className="grid gap-[3px]"
               style={{
                 gridTemplateColumns: '1.5rem auto',
-                gridTemplateRows: 'auto 1fr auto',
+                gridTemplateRows: 'auto auto auto',
                 minWidth: '280px',
               }}
             >
@@ -390,9 +394,11 @@ export default function Stats() {
                 {Array.from({ length: 7 }, (_, rowIdx) =>
                   heatmapData.weeks.map((week, colIdx) => {
                     const day = week[rowIdx]
-                    if (!day || day.level === null) return <div key={`${colIdx}-${rowIdx}`} />
+                    if (!day || day.level === null) {
+                      return <div key={`${colIdx}-${rowIdx}`} className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem]" />
+                    }
                     const levelColors = [
-                      'bg-muted',
+                      'oklch(0.9 0 0)',
                       PURPLE_COLORS[100],
                       PURPLE_COLORS[300],
                       PURPLE_COLORS[400],
@@ -401,7 +407,7 @@ export default function Stats() {
                     return (
                       <div
                         key={`${colIdx}-${rowIdx}`}
-                        className="rounded-[3px] transition-colors"
+                        className="h-[0.875rem] w-[0.875rem] md:h-[1rem] md:w-[1rem] rounded-[3px] transition-colors"
                         style={{ backgroundColor: levelColors[day.level] }}
                         title={`${day.date}: ${day.value} 次活动`}
                       />

@@ -27,7 +27,7 @@ export function MobileNav() {
   return (
     <>
       {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 h-14 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 flex items-center justify-between px-4">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs">
             雅
@@ -38,61 +38,72 @@ export function MobileNav() {
           </div>
         </div>
         <button
-          onClick={() => setMenuOpen(true)}
+          onClick={() => setMenuOpen(!menuOpen)}
           className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-accent"
-          aria-label="打开菜单"
+          aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
         >
-          <Menu className="h-5 w-5" />
+          <div className={cn('transition-transform duration-300', menuOpen && 'rotate-90')}>
+            {menuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </div>
         </button>
       </header>
 
       {/* Full Screen Menu Overlay */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-50 bg-background">
-          <div className="flex h-14 items-center justify-between px-4 border-b border-border">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs">
-                雅
-              </div>
-              <span className="font-semibold text-sm">菜单</span>
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-background/95 backdrop-blur-md transition-all duration-300 ease-out',
+          menuOpen
+            ? 'opacity-100 pointer-events-auto visible'
+            : 'opacity-0 pointer-events-none invisible'
+        )}
+      >
+        <div
+          className={cn(
+            'h-full w-full transition-transform duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
+            menuOpen ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <div
+            className={cn(
+              'flex flex-col h-full pt-14 transition-opacity duration-300 delay-150',
+              menuOpen ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+              {navItems.map((item, index) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium transition-colors',
+                      menuOpen && 'animate-menu-item-in',
+                      `stagger-${index + 1}`,
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                  }
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="p-4 border-t border-border">
+              <p className="text-xs text-muted-foreground text-center">
+                坚持每天进步一点点
+              </p>
             </div>
-            <button
-              onClick={() => setMenuOpen(false)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-accent"
-              aria-label="关闭菜单"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <nav className="p-4 space-y-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMenuOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )
-                }
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              坚持每天进步一点点
-            </p>
           </div>
         </div>
-      )}
+      </div>
     </>
   )
 }

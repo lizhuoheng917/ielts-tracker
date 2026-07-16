@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { 
-  LayoutDashboard, BookA, ListTodo, PenTool, 
-  BarChart3, Trophy, BookOpen, Settings 
+import {
+  LayoutDashboard, BookA, ListTodo, PenTool,
+  BarChart3, Trophy, BookOpen, Settings
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAchievementStore } from '@/stores/achievementStore'
@@ -25,7 +25,7 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-60 border-r border-border bg-card flex flex-col">
       {/* Logo / Brand */}
-      <div className="flex items-center gap-3 px-5 py-6 border-b border-border">
+      <div className="animate-logo-in flex items-center gap-3 px-5 py-6 border-b border-border">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
           雅
         </div>
@@ -50,21 +50,32 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {navItems.map((item) => (
+        {navItems.map((item, index) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'animate-sidebar-item-in relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.02]',
+                `stagger-${index + 1}`,
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )
             }
           >
-            <item.icon className="h-4 w-4" />
-            {item.label}
+            {({ isActive }) => (
+              <>
+                <span
+                  className={cn(
+                    'absolute left-1 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-primary-foreground transition-all duration-200',
+                    isActive ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'
+                  )}
+                />
+                <item.icon className="h-4 w-4" />
+                <span>{item.label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>

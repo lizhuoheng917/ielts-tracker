@@ -258,11 +258,11 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground">今天没有待办任务</p>
           ) : (
             <div className="space-y-2">
-              {todayPlans.map((plan) => (
+              {todayPlans.map((plan, index) => (
                 <button
                   key={plan.id}
                   onClick={() => togglePlanComplete(plan.id, plan.execId)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-all ${
+                  className={`animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-all ${
                     plan.completed
                       ? 'bg-green-50 dark:bg-green-950/20'
                       : 'hover:bg-accent'
@@ -330,10 +330,10 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground">还没有解锁任何成就，继续加油!</p>
             ) : (
               <div className="flex gap-3 md:gap-4 flex-wrap">
-                {recentAchievements.map((badge) => (
+                {recentAchievements.map((badge, index) => (
                   <div
                     key={badge.id}
-                    className="flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 min-w-[72px] md:min-w-[80px]"
+                    className={`animate-stagger-up stagger-${index + 1} flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 min-w-[72px] md:min-w-[80px]`}
                   >
                     <span className="text-xl md:text-2xl">{badge.icon}</span>
                     <span className="text-xs font-medium text-center">{badge.name}</span>

@@ -95,10 +95,10 @@ export default function Diary() {
 
       {/* 日记列表 */}
       <div className="flex flex-col gap-3 md:gap-4">
-        {sortedEntries.map((entry) => {
+        {sortedEntries.map((entry, index) => {
           const mood = MOOD_OPTIONS.find((m) => m.value === entry.mood)
           return (
-            <Card key={entry.id} className="group/card">
+            <Card key={entry.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card`}>
               <CardContent className="p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

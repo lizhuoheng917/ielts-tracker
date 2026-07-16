@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { format } from 'date-fns'
 import type { PracticeType, PracticeRecord } from '@/lib/types'
 import { PRACTICE_TYPE_OPTIONS } from '@/lib/constants'
@@ -28,6 +28,16 @@ import {
 } from '@/components/ui/select'
 import { PlusIcon, PencilIcon, TrashIcon } from 'lucide-react'
 
+// ===== 雅思分数选项（1-9，支持 0.5 分增量） =====
+const IELTS_SCORE_OPTIONS = [
+  { value: 0, label: '未评分' },
+  ...Array.from({ length: 17 }, (_, i) => {
+    const score = 1 + i * 0.5
+    const label = Number.isInteger(score) ? score.toString() : score.toFixed(1)
+    return { value: score, label }
+  }),
+]
+
 // ===== 科目颜色映射 =====
 const TYPE_COLOR_MAP: Record<PracticeType, string> = {
   reading: '#3B82F6',
@@ -51,109 +61,10 @@ const EMPTY_MESSAGES: Record<PracticeType, string> = {
   speaking: '还没有口语练习记录，开口练习第一次吧！',
 }
 
-// ===== 星级评分组件（支持 0.5 分增量） =====
-function StarRating({
-  value,
-  onChange,
-  readonly = false,
-  size = 'md',
-  showNumber = false,
-}: {
-  value: number | undefined
-  onChange?: (v: number) => void
-  readonly?: boolean
-  size?: 'sm' | 'md'
-  showNumber?: boolean
-}) {
-  const starSize = size === 'sm' ? 'text-sm' : 'text-base md:text-lg'
-  const [hoverValue, setHoverValue] = useState<number | null>(null)
-  const displayValue = hoverValue ?? value ?? 0
-
-  // 计算第 index 颗星的填充百分比（0 / 50 / 100）
-  const getStarFill = (index: number): number => {
-    const starNum = index + 1
-    if (displayValue >= starNum) return 100
-    if (displayValue >= starNum - 0.5) return 50
-    return 0
-  }
-
-  // 格式化分数显示
-  const formatScore = (s: number) => {
-    if (Number.isInteger(s)) return s.toString()
-    return s.toFixed(1)
-  }
-
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      {Array.from({ length: 9 }, (_, i) => {
-        const fillPercent = getStarFill(i)
-        const halfScore = i + 0.5
-        const fullScore = i + 1
-        return (
-          <span
-            key={i}
-            className={cn(
-              'relative inline-block select-none leading-none',
-              starSize,
-              !readonly && 'cursor-pointer'
-            )}
-            style={{ width: '1em', height: '1em' }}
-          >
-            {/* 底层：空星 */}
-            <span className="absolute inset-0 text-gray-300 dark:text-gray-600">
-              {'\u2605'}
-            </span>
-            {/* 上层：填充星，通过宽度裁切实现半星效果 */}
-            <span
-              className={cn(
-                'absolute inset-0 text-yellow-400 overflow-hidden whitespace-nowrap',
-                !readonly && 'transition-all duration-100'
-              )}
-              style={{ width: `${fillPercent}%` }}
-            >
-              {'\u2605'}
-            </span>
-            {/* 交互层：左右两半 */}
-            {!readonly && onChange && (
-              <>
-                <span
-                  className="absolute left-0 top-0 w-1/2 h-full z-10"
-                  onMouseEnter={() => setHoverValue(halfScore)}
-                  onMouseLeave={() => setHoverValue(null)}
-                  onClick={() => {
-                    onChange(value === halfScore ? 0 : halfScore)
-                  }}
-                  onTouchStart={() => {
-                    onChange(value === halfScore ? 0 : halfScore)
-                  }}
-                  role="button"
-                  aria-label={`${halfScore}分`}
-                />
-                <span
-                  className="absolute right-0 top-0 w-1/2 h-full z-10"
-                  onMouseEnter={() => setHoverValue(fullScore)}
-                  onMouseLeave={() => setHoverValue(null)}
-                  onClick={() => {
-                    onChange(value === fullScore ? 0 : fullScore)
-                  }}
-                  onTouchStart={() => {
-                    onChange(value === fullScore ? 0 : fullScore)
-                  }}
-                  role="button"
-                  aria-label={`${fullScore}分`}
-                />
-              </>
-            )}
-          </span>
-        )
-      })}
-      {showNumber && value !== undefined && value > 0 && (
-        <span className="ml-1 text-xs md:text-sm font-medium text-foreground">
-          {formatScore(value)} / 9
-        </span>
-      )}
-    </span>
-  )
+// ===== 格式化分数显示 =====
+const formatScore = (s: number) => {
+  if (Number.isInteger(s)) return s.toString()
+  return s.toFixed(1)
 }
 
 // ===== 统计摘要卡片 =====
@@ -232,9 +143,9 @@ function PracticeFormDialog({
   const [score, setScore] = useState<number>(0)
   const [note, setNote] = useState('')
 
-  // 当弹窗打开时初始化表单
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (nextOpen) {
+  // 当弹窗打开或 editRecord 变化时，初始化表单内容
+  useEffect(() => {
+    if (open) {
       if (isEdit && editRecord) {
         setType(editRecord.type)
         setDate(editRecord.date)
@@ -251,8 +162,7 @@ function PracticeFormDialog({
         setNote('')
       }
     }
-    onOpenChange(nextOpen)
-  }
+  }, [open, isEdit, editRecord, defaultType])
 
   const handleSubmit = () => {
     const durationNum = parseInt(duration, 10)
@@ -279,7 +189,7 @@ function PracticeFormDialog({
   const canSubmit = date && parseInt(duration, 10) > 0
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑练习' : '添加练习'}</DialogTitle>
@@ -350,10 +260,26 @@ function PracticeFormDialog({
             />
           </div>
 
-          {/* 评分 */}
+          {/* 评分：下拉选择雅思分数 */}
           <div className="flex flex-col gap-1.5">
-            <Label>评分（雅思1-9分，支持0.5分）</Label>
-            <StarRating value={score || undefined} onChange={setScore} showNumber />
+            <Label>雅思分数</Label>
+            <Select
+              value={String(score)}
+              onValueChange={(v) => setScore(v ? parseFloat(v) : 0)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {score > 0 ? `雅思 ${formatScore(score)}` : '未评分'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {IELTS_SCORE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={String(opt.value)}>
+                    {opt.value > 0 ? `雅思 ${opt.label}` : opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 备注 */}
@@ -420,15 +346,17 @@ function RecordItem({
   record,
   onEdit,
   onDelete,
+  className,
 }: {
   record: PracticeRecord
   onEdit: () => void
   onDelete: () => void
+  className?: string
 }) {
   const color = TYPE_COLOR_MAP[record.type]
 
   return (
-    <Card size="sm" className="group/card">
+    <Card size="sm" className={cn('group/card', className)}>
       <CardContent className="py-2.5 md:py-3 px-3 md:px-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -448,11 +376,8 @@ function RecordItem({
                 时长：{record.duration}分钟
               </span>
               {record.score !== undefined && record.score > 0 && (
-                <span className="flex items-center gap-1">
-                  <StarRating value={record.score} readonly size="sm" />
-                  <span className="text-xs font-medium" style={{ color }}>
-                    {Number.isInteger(record.score) ? record.score : record.score.toFixed(1)}
-                  </span>
+                <span className="text-xs font-medium" style={{ color }}>
+                  雅思 {formatScore(record.score)}
                 </span>
               )}
             </div>
@@ -530,12 +455,13 @@ function TabPanel({ type }: { type: PracticeType }) {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {records.map((record) => (
+          {records.map((record, index) => (
             <RecordItem
               key={record.id}
               record={record}
               onEdit={() => handleEdit(record)}
               onDelete={() => handleDeleteClick(record)}
+              className={`animate-stagger-up stagger-${(index % 8) + 1}`}
             />
           ))}
         </div>

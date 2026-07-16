@@ -177,7 +177,7 @@ export default function Plans() {
             <p className="text-sm text-muted-foreground">今天没有待办任务</p>
           ) : (
             <div className="space-y-2">
-              {todayPlans.map((plan) => {
+              {todayPlans.map((plan, index) => {
                 const exec = todayExecMap[plan.id]
                 const isCompleted = exec?.completed ?? false
                 return (
@@ -185,7 +185,7 @@ export default function Plans() {
                     key={plan.id}
                     onClick={() => togglePlanComplete(plan.id)}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all',
+                      `animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all`,
                       isCompleted
                         ? 'border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900/30'
                         : 'border-border bg-background hover:bg-accent'
@@ -225,8 +225,8 @@ export default function Plans() {
             <p className="mt-1 text-sm px-4 text-center">添加一个学习计划，开始你的备考之旅吧！</p>
           </div>
         ) : (
-          activePlans.map((plan) => (
-            <Card key={plan.id} className="group/card">
+          activePlans.map((plan, index) => (
+            <Card key={plan.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card`}>
               <CardContent className="flex items-center gap-2 md:gap-3 py-2.5 px-3 md:px-4">
                 <span
                   className={cn(

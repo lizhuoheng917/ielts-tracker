@@ -576,8 +576,8 @@ function ListView({
 
   return (
     <div className="space-y-2 md:space-y-3">
-      {records.map((record) => (
-        <Card key={record.id} className="transition-shadow hover:shadow-md">
+      {records.map((record, index) => (
+        <Card key={record.id} className={`animate-stagger-up stagger-${(index % 8) + 1} transition-shadow hover:shadow-md`}>
           <CardContent className="flex items-center gap-3 md:gap-4 py-2.5 px-3 md:px-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">

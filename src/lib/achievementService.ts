@@ -99,11 +99,8 @@ export function checkFirstCheckin() {
  * 注意：每日打卡 XP 和 streak 更新每天只触发一次（根据 streakStore 的 lastActiveDate 判断）
  */
 export function handleCheckinCompleted() {
-  // 记录活动到热力图（每次打卡都记录）
-  useStreakStore.getState().recordActivity()
-
-  // 检查并更新连续打卡
-  const { isNewDay, streakExtended } = useStreakStore.getState().checkAndUpdateStreak()
+  // 记录活动到热力图 + 自动更新连续天数（recordActivity 内部已重算 streak）
+  const { isNewDay, streakExtended } = useStreakStore.getState().recordActivity()
 
   if (isNewDay) {
     // 新的一天第一次打卡：给每日打卡 XP

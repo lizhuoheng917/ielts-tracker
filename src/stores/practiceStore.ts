@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { PracticeRecord } from '@/lib/types'
 import { STORAGE_PREFIX } from '@/lib/constants'
+import { useStreakStore } from '@/stores/streakStore'
 
 interface PracticeStore {
   records: PracticeRecord[]
@@ -22,6 +23,9 @@ export const usePracticeStore = create<PracticeStore>()(
         const now = new Date().toISOString()
         const record: PracticeRecord = { ...data, id: generateId(), createdAt: now, updatedAt: now }
         set((state) => ({ records: [record, ...state.records] }))
+
+        // 记录活动到热力图
+        useStreakStore.getState().recordActivity(data.date)
 
         // 成就联动：添加 XP + 检测徽章
         import('@/lib/achievementService').then(
