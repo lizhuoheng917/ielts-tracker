@@ -493,7 +493,7 @@ export default function Practice() {
         <p className="mt-1 text-[15px] text-muted-foreground">记录你的雅思模拟考试</p>
         <Button onClick={() => setAddDialogOpen(true)} className="w-full sm:w-auto">
           <PlusIcon className="h-4 w-4" />
-          添加练习
+          添加模考
         </Button>
       </div>
 
