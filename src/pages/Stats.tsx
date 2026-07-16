@@ -25,6 +25,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
+import { useTimerStore } from '@/stores/timerStore'
 import { WEEKDAY_LABELS } from '@/lib/constants'
 import type { PracticeType } from '@/lib/types'
 
@@ -130,6 +131,7 @@ export default function Stats() {
   const streakData = useStreakStore((s) => s)
   const wordRecords = useWordStore((s) => s.records)
   const practiceRecords = usePracticeStore((s) => s.records)
+  const timerRecords = useTimerStore((s) => s.records)
 
   // --- 总学习天数 ---
   const totalStudyDays = useMemo(() => {
@@ -273,15 +275,18 @@ export default function Stats() {
       const dayDuration = practiceRecords
         .filter((r) => r.date === dateStr)
         .reduce((sum, r) => sum + r.duration, 0)
+      const dayTimerDuration = timerRecords
+        .filter((r) => r.date === dateStr)
+        .reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
       data.push({
         date: dateStr,
-        duration: dayDuration,
+        duration: dayDuration + dayTimerDuration,
         label: format(date, 'EEE', { locale: zhCN }),
       })
     }
 
     return data
-  }, [practiceRecords])
+  }, [practiceRecords, timerRecords])
 
   const hasDurationData = useMemo(() => {
     return durationData.some((d) => d.duration > 0)

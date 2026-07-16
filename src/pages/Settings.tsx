@@ -3,6 +3,7 @@ import { differenceInDays } from 'date-fns'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
+import { useTimerStore } from '@/stores/timerStore'
 import { usePlanStore } from '@/stores/planStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { useAchievementStore } from '@/stores/achievementStore'
@@ -57,7 +58,7 @@ export default function Settings() {
     []
   )
   const totalPractice = useMemo(
-    () => usePracticeStore.getState().records.length,
+    () => usePracticeStore.getState().records.length + useTimerStore.getState().records.length,
     []
   )
   const totalPlans = useMemo(
@@ -85,6 +86,7 @@ export default function Settings() {
     const data = {
       words: useWordStore.getState().records,
       practice: usePracticeStore.getState().records,
+      timer: useTimerStore.getState().records,
       plans: usePlanStore.getState().plans,
       executions: usePlanStore.getState().executions,
       diary: useDiaryStore.getState().entries,
@@ -121,6 +123,7 @@ export default function Settings() {
         const data = JSON.parse(reader.result as string)
         if (data.words) useWordStore.getState().records = data.words
         if (data.practice) usePracticeStore.getState().records = data.practice
+        if (data.timer) useTimerStore.getState().records = data.timer
         if (data.plans) usePlanStore.getState().plans = data.plans
         if (data.executions) usePlanStore.getState().executions = data.executions
         if (data.diary) useDiaryStore.getState().entries = data.diary
@@ -156,6 +159,7 @@ export default function Settings() {
     // 使用 setState 通过 set() 方法重置，确保 persist middleware 正确触发
     useWordStore.setState({ records: [] })
     usePracticeStore.setState({ records: [] })
+    useTimerStore.setState({ records: [] })
     usePlanStore.setState({ plans: [], executions: [] })
     useDiaryStore.setState({ entries: [] })
     useAchievementStore.setState({

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, BookA, ListTodo, PenTool,
+  LayoutDashboard, BookA, ListTodo, PenTool, Timer,
   BarChart3, Trophy, BookOpen, Settings
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,8 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: '仪表盘' },
   { to: '/words', icon: BookA, label: '单词记录' },
   { to: '/plans', icon: ListTodo, label: '学习计划' },
-  { to: '/practice', icon: PenTool, label: '听说读写' },
+  { to: '/exam', icon: PenTool, label: '模考' },
+  { to: '/practice', icon: Timer, label: '练习' },
   { to: '/stats', icon: BarChart3, label: '数据统计' },
   { to: '/achievements', icon: Trophy, label: '成就系统' },
   { to: '/diary', icon: BookOpen, label: '学习日记' },

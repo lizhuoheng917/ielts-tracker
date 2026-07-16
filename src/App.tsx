@@ -7,6 +7,7 @@ import Dashboard from '@/pages/Dashboard'
 import Words from '@/pages/Words'
 import Plans from '@/pages/Plans'
 import Practice from '@/pages/Practice'
+import TimerPractice from '@/pages/TimerPractice'
 import Stats from '@/pages/Stats'
 import Achievements from '@/pages/Achievements'
 import Diary from '@/pages/Diary'
@@ -29,7 +30,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/words" element={<Words />} />
           <Route path="/plans" element={<Plans />} />
-          <Route path="/practice" element={<Practice />} />
+          <Route path="/exam" element={<Practice />} />
+          <Route path="/practice" element={<TimerPractice />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/diary" element={<Diary />} />

@@ -54,6 +54,19 @@ export interface PracticeRecord {
   updatedAt: string
 }
 
+// ===== 计时练习记录 =====
+export type TimerSubject = 'reading' | 'listening' | 'writing' | 'speaking' | 'general'
+
+export interface TimerRecord {
+  id: string
+  subject: TimerSubject
+  date: string // YYYY-MM-DD
+  duration: number // 实际时长（秒）
+  note?: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ===== 学习日记 =====
 export interface DiaryEntry {
   id: string

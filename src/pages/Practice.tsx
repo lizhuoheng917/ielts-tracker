@@ -185,9 +185,9 @@ function PracticeFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑练习' : '添加练习'}</DialogTitle>
+          <DialogTitle>{isEdit ? '编辑模考' : '添加模考'}</DialogTitle>
           <DialogDescription>
-            {isEdit ? '修改这条练习记录的信息。' : '记录一次听说读写练习。'}
+            {isEdit ? '修改这条模考记录的信息。' : '记录一次模考练习。'}
           </DialogDescription>
         </DialogHeader>
 
@@ -489,7 +489,8 @@ export default function Practice() {
     <div className="flex flex-col h-full">
       {/* 顶部标题和操作 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-[22px] md:text-2xl font-bold">听说读写</h1>
+        <h1 className="text-[22px] md:text-2xl font-bold">模考</h1>
+        <p className="mt-1 text-[15px] text-muted-foreground">记录你的雅思模拟考试</p>
         <Button onClick={() => setAddDialogOpen(true)} className="w-full sm:w-auto">
           <PlusIcon className="h-4 w-4" />
           添加练习

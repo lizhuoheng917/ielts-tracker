@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
+import { useTimerStore } from '@/stores/timerStore'
 import { usePlanStore } from '@/stores/planStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { useAchievementStore } from '@/stores/achievementStore'
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const examDate = useSettingsStore((s) => s.examDate)
   const wordRecords = useWordStore((s) => s.records)
   const practiceRecords = usePracticeStore((s) => s.records)
+  const timerRecords = useTimerStore((s) => s.records)
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addExecution = usePlanStore((s) => s.addExecution)
@@ -66,8 +68,12 @@ export default function Dashboard() {
   )
 
   const todayPracticeMinutes = useMemo(
-    () => practiceRecords.filter((r) => r.date === today).reduce((sum, r) => sum + r.duration, 0),
-    [practiceRecords, today]
+    () => {
+      const examMinutes = practiceRecords.filter((r) => r.date === today).reduce((sum, r) => sum + r.duration, 0)
+      const timerMinutes = timerRecords.filter((r) => r.date === today).reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
+      return examMinutes + timerMinutes
+    },
+    [practiceRecords, timerRecords, today]
   )
 
   const todayCompletedTasks = useMemo(
