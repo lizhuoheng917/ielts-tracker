@@ -6,12 +6,8 @@ import { STORAGE_PREFIX, DEFAULT_SETTINGS } from '@/lib/constants'
 interface SettingsStore extends Settings {
   setExamDate: (date: string) => void
   clearExamDate: () => void
-  setPasswordHash: (hash: string) => void
-  clearPassword: () => void
   setTheme: (theme: 'light' | 'dark') => void
   toggleTheme: () => void
-  hasPassword: () => boolean
-  verifyPassword: (inputHash: string) => boolean
   exportAllData: () => string
   importAllData: (json: string) => boolean
   clearAllData: () => void
@@ -23,17 +19,8 @@ export const useSettingsStore = create<SettingsStore>()(
       ...DEFAULT_SETTINGS,
       setExamDate: (date) => set({ examDate: date }),
       clearExamDate: () => set((state) => ({ ...state, examDate: undefined })),
-      setPasswordHash: (hash) => set({ passwordHash: hash }),
-      clearPassword: () => set((state) => ({ ...state, passwordHash: undefined })),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
-      hasPassword: () => {
-        const hash = get().passwordHash
-        return !!hash && hash.length > 0
-      },
-      verifyPassword: (inputHash) => {
-        return get().passwordHash === inputHash
-      },
       exportAllData: () => {
         const prefix = STORAGE_PREFIX
         const data: Record<string, unknown> = {}

@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/dialog'
 import {
   CalendarDays,
-  Lock,
   Download,
   Upload,
   Trash2,
@@ -35,16 +34,11 @@ export default function Settings() {
   const setExamDate = useSettingsStore((s) => s.setExamDate)
   const clearExamDate = useSettingsStore((s) => s.clearExamDate)
 
-  const passwordHash = useSettingsStore((s) => s.passwordHash)
-  const setPasswordHash = useSettingsStore((s) => s.setPasswordHash)
-  const clearPassword = useSettingsStore((s) => s.clearPassword)
-
   const theme = useSettingsStore((s) => s.theme)
   const setTheme = useSettingsStore((s) => s.setTheme)
 
   // --- 本地 UI 状态 ---
   const [examDateInput, setExamDateInput] = useState(examDate || '')
-  const [passwordInput, setPasswordInput] = useState(passwordHash || '')
   const [themeInput, setThemeInput] = useState<'light' | 'dark'>(theme)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
 
@@ -82,11 +76,6 @@ export default function Settings() {
       setExamDate(examDateInput)
     } else {
       clearExamDate()
-    }
-    if (passwordInput) {
-      setPasswordHash(passwordInput)
-    } else {
-      clearPassword()
     }
     setTheme(themeInput)
     alert('设置已保存')
@@ -258,30 +247,6 @@ export default function Settings() {
               <Moon className="h-4 w-4" />
               深色
             </button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 密码设置 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm md:text-base flex items-center gap-2">
-            <Lock className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
-            密码保护
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <Input
-              type="password"
-              placeholder="设置访问密码（可选）"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              className="w-full sm:w-auto"
-            />
-            {passwordInput && (
-              <span className="text-xs text-muted-foreground">已设置密码</span>
-            )}
           </div>
         </CardContent>
       </Card>

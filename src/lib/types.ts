@@ -84,7 +84,6 @@ export interface AchievementState {
 // ===== 设置 =====
 export interface Settings {
   examDate?: string // YYYY-MM-DD
-  passwordHash?: string
   theme: 'light' | 'dark'
 }
 
