@@ -98,6 +98,7 @@ export interface AchievementState {
 export interface Settings {
   examDate?: string // YYYY-MM-DD
   theme: 'light' | 'dark'
+  lastCheckinDate?: string // YYYY-MM-DD
 }
 
 // ===== 连续打卡 =====

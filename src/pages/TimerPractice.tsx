@@ -23,7 +23,6 @@ import {
   Pause,
   Square,
   RotateCcw,
-  Timer,
   Trash2,
   Pencil,
   BookOpen,
@@ -35,12 +34,12 @@ import {
 import { EmptyState } from '@/components/ui/empty-state'
 
 // ===== 科目配置：标签、图标、颜色 =====
-const SUBJECT_CONFIG: Record<TimerSubject, { label: string; icon: ReactNode; color: string; badgeClass: string }> = {
-  reading: { label: '阅读', icon: <BookOpen className="h-4 w-4" />, color: 'text-blue-500', badgeClass: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-  listening: { label: '听力', icon: <Headphones className="h-4 w-4" />, color: 'text-purple-500', badgeClass: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
-  writing: { label: '写作', icon: <PenLine className="h-4 w-4" />, color: 'text-emerald-500', badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
-  speaking: { label: '口语', icon: <MessageCircle className="h-4 w-4" />, color: 'text-orange-500', badgeClass: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-  general: { label: '综合', icon: <Layers className="h-4 w-4" />, color: 'text-indigo-500', badgeClass: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
+const SUBJECT_CONFIG: Record<TimerSubject, { label: string; icon: ReactNode; color: string; badgeClass: string; ringColor: string; gradientFrom: string; gradientTo: string }> = {
+  reading: { label: '阅读', icon: <BookOpen className="h-4 w-4" />, color: 'text-blue-500', badgeClass: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', ringColor: 'ring-blue-400', gradientFrom: '#3B82F6', gradientTo: '#6366F1' },
+  listening: { label: '听力', icon: <Headphones className="h-4 w-4" />, color: 'text-violet-500', badgeClass: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', ringColor: 'ring-violet-400', gradientFrom: '#8B5CF6', gradientTo: '#A78BFA' },
+  writing: { label: '写作', icon: <PenLine className="h-4 w-4" />, color: 'text-emerald-500', badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', ringColor: 'ring-emerald-400', gradientFrom: '#10B981', gradientTo: '#34D399' },
+  speaking: { label: '口语', icon: <MessageCircle className="h-4 w-4" />, color: 'text-orange-500', badgeClass: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', ringColor: 'ring-orange-400', gradientFrom: '#F97316', gradientTo: '#FB923C' },
+  general: { label: '综合', icon: <Layers className="h-4 w-4" />, color: 'text-indigo-500', badgeClass: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300', ringColor: 'ring-indigo-400', gradientFrom: '#4F46E5', gradientTo: '#6366F1' },
 }
 
 // ===== 时长预设 =====
@@ -212,158 +211,243 @@ function TimerSection() {
   // 计时中禁止切换模式/科目/时长
   const canSwitch = isIdle
 
+  // SVG 圆环进度计算
+  const totalSeconds = mode === 'countdown' ? presetMinutes * 60 : 0
+  const progress = mode === 'countdown' && totalSeconds > 0
+    ? 1 - (remainingSeconds / totalSeconds)
+    : 0
+  const radius = 90
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference * (1 - progress)
+
+  // 根据科目获取对应颜色
+  const subjectConfig = SUBJECT_CONFIG[selectedSubject]
+
   return (
     <>
-      {/* 模式切换 */}
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <Button
-          variant={selectedMode === 'countdown' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => canSwitch && setSelectedMode('countdown')}
-          disabled={!canSwitch}
-          className="text-sm"
-        >
-          <Timer className="h-4 w-4 mr-1.5" />
-          倒计时
-        </Button>
-        <Button
-          variant={selectedMode === 'stopwatch' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => canSwitch && setSelectedMode('stopwatch')}
-          disabled={!canSwitch}
-          className="text-sm"
-        >
-          <Timer className="h-4 w-4 mr-1.5" />
-          正计时
-        </Button>
-      </div>
+      <Card
+        className={cn(
+          'mb-4 overflow-hidden rounded-2xl transition-all duration-500',
+          isRunning && 'ring-2 ring-indigo-500/40 shadow-[0_0_20px_rgba(79,70,229,0.12)]',
+          isPaused && 'ring-2 ring-amber-400/40 shadow-[0_0_20px_rgba(251,191,36,0.12)]',
+          isFinished && 'ring-2 ring-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.12)]',
+        )}
+      >
+        <CardContent className="py-8 md:py-10 px-6">
+          {/* 科目选择 */}
+          <div className="flex items-center justify-center gap-2 flex-wrap mb-6">
+            {(Object.keys(SUBJECT_CONFIG) as TimerSubject[]).map((key) => {
+              const config = SUBJECT_CONFIG[key]
+              const isActive = selectedSubject === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => canSwitch && setSelectedSubject(key)}
+                  disabled={!canSwitch}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium transition-all',
+                    isActive
+                      ? `${config.badgeClass} ring-2 ${config.ringColor} shadow-sm`
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
+                    !canSwitch && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  {config.icon}
+                  {config.label}
+                </button>
+              )
+            })}
+          </div>
 
-      {/* 科目选择 */}
-      <div className="flex items-center justify-center gap-2 flex-wrap mb-4">
-        {(Object.keys(SUBJECT_CONFIG) as TimerSubject[]).map((key) => {
-          const config = SUBJECT_CONFIG[key]
-          const isActive = selectedSubject === key
-          return (
-            <Button
-              key={key}
-              variant={isActive ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => canSwitch && setSelectedSubject(key)}
-              disabled={!canSwitch}
-              className={cn('text-sm gap-1.5', isActive && 'shadow-sm')}
-            >
-              {config.icon}
-              {config.label}
-            </Button>
-          )
-        })}
-      </div>
-
-      {/* 时长预设（仅倒计时模式显示） */}
-      {selectedMode === 'countdown' && (
-        <div className="flex items-center justify-center gap-2 flex-wrap mb-4">
-          {PRESETS.map((min) => {
-            const isActive = selectedPreset === min
-            return (
-              <Button
-                key={min}
-                variant={isActive ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => canSwitch && setSelectedPreset(min)}
-                disabled={!canSwitch}
-                className="text-sm"
+          {/* SVG 圆形进度环 + 时间显示 */}
+          <div className="flex items-center justify-center mb-6">
+            <svg width="192" height="192" viewBox="0 0 200 200" className="w-48 h-48 md:w-56 md:h-56">
+              {/* 背景圆 */}
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="oklch(0.92 0.01 270)" strokeWidth="6" strokeLinecap="round" />
+              {/* 进度圆 */}
+              <circle
+                cx="100" cy="100" r={radius}
+                fill="none"
+                stroke={subjectConfig.gradientFrom}
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                transform="rotate(-90 100 100)"
+                className="transition-all duration-1000 ease-linear"
+                style={{ opacity: mode === 'countdown' ? 1 : 0.25 }}
+              />
+              {/* 中心时间文本 */}
+              <text
+                x="100" y="92"
+                textAnchor="middle"
+                fill="oklch(0.17 0.02 270)"
+                fontSize="42"
+                fontFamily="ui-monospace, SFMono-Regular, monospace"
+                fontWeight="bold"
               >
-                {min}min
-              </Button>
-            )
-          })}
-          <Button
-            variant={isCustom ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => canSwitch && setSelectedPreset('custom')}
-            disabled={!canSwitch}
-            className="text-sm"
-          >
-            自定义
-          </Button>
-        </div>
-      )}
+                {formatTimerDisplay(displaySeconds)}
+              </text>
+              {/* 状态标签 */}
+              {isRunning && (
+                <text x="100" y="120" textAnchor="middle" fill="#4F46E5" fontSize="12" fontWeight="500">
+                  进行中
+                </text>
+              )}
+              {isPaused && (
+                <text x="100" y="120" textAnchor="middle" fill="#D97706" fontSize="12" fontWeight="500">
+                  已暂停
+                </text>
+              )}
+              {!isRunning && !isPaused && !isFinished && (
+                <text x="100" y="120" textAnchor="middle" fill="oklch(0.5 0.02 270)" fontSize="12" fontWeight="500">
+                  {subjectConfig.label}
+                </text>
+              )}
+              {isFinished && (
+                <text x="100" y="120" textAnchor="middle" fill="#059669" fontSize="12" fontWeight="500">
+                  已完成
+                </text>
+              )}
+            </svg>
+          </div>
 
-      {/* 自定义时长输入 */}
-      {selectedMode === 'countdown' && isCustom && (
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <Label className="text-sm text-muted-foreground">分钟：</Label>
-          <Input
-            type="number"
-            min={1}
-            max={180}
-            placeholder="输入分钟数"
-            value={customMinutes}
-            onChange={(e) => setCustomMinutes(e.target.value)}
-            className="w-24 text-center"
-            disabled={!canSwitch}
-          />
-        </div>
-      )}
+          {/* 模式切换 + 时长预设 */}
+          <div className="flex items-center justify-center gap-1 mb-3">
+            <button
+              onClick={() => canSwitch && setSelectedMode('countdown')}
+              disabled={!canSwitch}
+              className={cn(
+                'px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all',
+                selectedMode === 'countdown'
+                  ? 'bg-foreground text-background shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+            >
+              倒计时
+            </button>
+            <button
+              onClick={() => canSwitch && setSelectedMode('stopwatch')}
+              disabled={!canSwitch}
+              className={cn(
+                'px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all',
+                selectedMode === 'stopwatch'
+                  ? 'bg-foreground text-background shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+            >
+              正计时
+            </button>
+          </div>
 
-      {/* 中央大号计时显示 */}
-      <div className="flex items-center justify-center mb-6">
-        <div
-          className={cn(
-            'text-6xl md:text-7xl font-mono font-bold tracking-wider tabular-nums transition-colors',
-            isRunning && 'text-indigo-600 dark:text-indigo-400',
-            isPaused && 'text-amber-500',
-            isFinished && 'text-emerald-500',
-            isIdle && 'text-foreground'
+          {/* 时长预设（仅倒计时模式显示） */}
+          {selectedMode === 'countdown' && (
+            <div className="flex items-center justify-center gap-1.5 flex-wrap mt-2">
+              {PRESETS.map((min) => (
+                <button
+                  key={min}
+                  onClick={() => canSwitch && setSelectedPreset(min)}
+                  disabled={!canSwitch}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-[13px] font-medium transition-all',
+                    selectedPreset === min
+                      ? `${subjectConfig.badgeClass} shadow-sm`
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  {min}min
+                </button>
+              ))}
+              <button
+                onClick={() => canSwitch && setSelectedPreset('custom')}
+                disabled={!canSwitch}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-[13px] font-medium transition-all',
+                  isCustom
+                    ? `${subjectConfig.badgeClass} shadow-sm`
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                自定义
+              </button>
+            </div>
           )}
-        >
-          {formatTimerDisplay(displaySeconds)}
-        </div>
-      </div>
 
-      {/* 控制按钮 */}
-      <div className="flex items-center justify-center gap-3">
-        {isIdle && (
-          <Button size="lg" onClick={handleStart} className="gap-2 px-8">
-            <Play className="h-5 w-5" />
-            开始
-          </Button>
-        )}
-        {isRunning && (
-          <>
-            <Button size="lg" variant="outline" onClick={handlePause} className="gap-2">
-              <Pause className="h-5 w-5" />
-              暂停
-            </Button>
-            <Button size="lg" variant="outline" onClick={handleStop} className="gap-2">
-              <Square className="h-5 w-5" />
-              结束
-            </Button>
-          </>
-        )}
-        {isPaused && (
-          <>
-            <Button size="lg" onClick={handleResume} className="gap-2">
-              <Play className="h-5 w-5" />
-              继续
-            </Button>
-            <Button size="lg" variant="outline" onClick={handleStop} className="gap-2">
-              <Square className="h-5 w-5" />
-              结束
-            </Button>
-            <Button size="lg" variant="outline" onClick={handleCancel} className="gap-2">
-              <RotateCcw className="h-5 w-5" />
-              取消
-            </Button>
-          </>
-        )}
-        {isFinished && (
-          <Button size="lg" variant="outline" onClick={handleCancel} className="gap-2">
-            <RotateCcw className="h-5 w-5" />
-            重置
-          </Button>
-        )}
-      </div>
+          {/* 自定义时长输入 */}
+          {selectedMode === 'countdown' && isCustom && (
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <input
+                type="number"
+                min={1}
+                max={180}
+                placeholder="分钟"
+                value={customMinutes}
+                onChange={(e) => setCustomMinutes(e.target.value)}
+                className="w-20 text-center bg-background border border-input rounded-lg px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                disabled={!canSwitch}
+              />
+            </div>
+          )}
+
+          {/* 控制按钮 */}
+          <div className="flex items-center justify-center gap-4 mt-6">
+            {isIdle && (
+              <button
+                onClick={handleStart}
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/35 transition-all hover:scale-105 active:scale-95"
+              >
+                <Play className="h-6 w-6 ml-0.5" />
+              </button>
+            )}
+            {isRunning && (
+              <>
+                <button
+                  onClick={handlePause}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all active:scale-95 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                >
+                  <Pause className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={handleStop}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all active:scale-95 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                >
+                  <Square className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            {isPaused && (
+              <>
+                <button
+                  onClick={handleStop}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all active:scale-95 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                >
+                  <Square className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleResume}
+                  className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/35 transition-all hover:scale-105 active:scale-95"
+                >
+                  <Play className="h-6 w-6 ml-0.5" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all active:scale-95"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                </button>
+              </>
+            )}
+            {isFinished && (
+              <button
+                onClick={handleCancel}
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/35 transition-all hover:scale-105 active:scale-95"
+              >
+                <RotateCcw className="h-6 w-6" />
+              </button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 记录弹窗 */}
       <RecordFormDialog
@@ -737,7 +821,11 @@ function RecordList() {
 
   return (
     <>
-      <h2 className="text-base md:text-lg font-semibold mb-3 mt-6">练习记录</h2>
+      <h2 className="text-base md:text-lg font-semibold mb-3 mt-6 flex items-center gap-2">
+        <span className="h-px flex-1 bg-border" />
+        <span>练习记录</span>
+        <span className="h-px flex-1 bg-border" />
+      </h2>
 
       {sortedRecords.length === 0 ? (
         <EmptyState
@@ -794,11 +882,9 @@ export default function TimerPractice() {
       </div>
 
       {/* 计时器主区域 */}
-      <Card className="mb-4 animate-stagger-up stagger-3">
-        <CardContent className="py-6 md:py-8">
-          <TimerSection />
-        </CardContent>
-      </Card>
+      <div className="mb-4 animate-stagger-up stagger-3">
+        <TimerSection />
+      </div>
 
       {/* 练习记录列表 */}
       <div className="flex-1 animate-stagger-up stagger-4">

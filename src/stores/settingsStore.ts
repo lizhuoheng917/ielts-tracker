@@ -8,6 +8,8 @@ interface SettingsStore extends Settings {
   clearExamDate: () => void
   setTheme: (theme: 'light' | 'dark') => void
   toggleTheme: () => void
+  checkIn: () => boolean // 返回是否打卡成功（false = 今天已打过卡）
+  isCheckedInToday: () => boolean
   exportAllData: () => string
   importAllData: (json: string) => boolean
   clearAllData: () => void
@@ -15,12 +17,31 @@ interface SettingsStore extends Settings {
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULT_SETTINGS,
       setExamDate: (date) => set({ examDate: date }),
       clearExamDate: () => set((state) => ({ ...state, examDate: undefined })),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
+      checkIn: () => {
+        const today = new Date().toISOString().split('T')[0]
+        if (get().lastCheckinDate === today) return false
+        set({ lastCheckinDate: today })
+
+        // 记录活动到热力图 + XP
+        import('@/stores/streakStore').then(({ useStreakStore }) => {
+          useStreakStore.getState().recordActivity(today)
+        })
+        import('@/lib/achievementService').then(({ addXP }) => {
+          addXP(10)
+        })
+
+        return true
+      },
+      isCheckedInToday: () => {
+        const today = new Date().toISOString().split('T')[0]
+        return get().lastCheckinDate === today
+      },
       exportAllData: () => {
         const prefix = STORAGE_PREFIX
         const data: Record<string, unknown> = {}

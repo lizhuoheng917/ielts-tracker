@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays, differenceInDays } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen } from 'lucide-react'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -14,6 +14,7 @@ import { useDiaryStore } from '@/stores/diaryStore'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { BADGES, MOOD_OPTIONS, WEEKDAY_LABELS } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import type { Achievement } from '@/lib/types'
 
 // ===== 激励语句 =====
@@ -44,6 +45,9 @@ export default function Dashboard() {
   const achievementStore = useAchievementStore()
   const currentStreak = useStreakStore((s) => s.currentStreak)
   const heatmapData = useStreakStore((s) => s.heatmapData)
+  const lastCheckinDate = useSettingsStore((s) => s.lastCheckinDate)
+  const checkIn = useSettingsStore((s) => s.checkIn)
+  const [checkedIn, setCheckedIn] = useState(false)
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -61,6 +65,11 @@ export default function Dashboard() {
 
   // ===== 今日数据 =====
   const today = todayStr()
+
+  // 检测今日是否已打卡
+  useMemo(() => {
+    setCheckedIn(lastCheckinDate === today)
+  }, [lastCheckinDate, today])
 
   const todayWordCount = useMemo(
     () => wordRecords.filter((r) => r.date === today).reduce((sum, r) => sum + r.count, 0),
@@ -211,6 +220,22 @@ export default function Dashboard() {
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{greeting}</h1>
               <p className="mt-1 text-[15px] md:text-base text-indigo-100">{todayFormatted}</p>
             </div>
+            {/* 打卡按钮 */}
+            <button
+              onClick={() => {
+                if (checkIn()) setCheckedIn(true)
+              }}
+              disabled={checkedIn}
+              className={cn(
+                'shrink-0 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all',
+                checkedIn
+                  ? 'bg-white/20 text-white/80 cursor-default'
+                  : 'bg-white text-indigo-600 hover:bg-white/90 hover:scale-105 active:scale-95 shadow-md'
+              )}
+            >
+              <Check className={cn('h-4 w-4', checkedIn && 'text-green-300')} />
+              {checkedIn ? '已打卡' : '打卡'}
+            </button>
           </div>
           <p className="mt-3 text-[13px] md:text-sm text-indigo-200 italic leading-relaxed max-w-lg">
             {todayQuote}
