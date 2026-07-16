@@ -27,19 +27,19 @@ export function MobileNav() {
   return (
     <>
       {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 flex items-center justify-between px-4">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-card/95 backdrop-blur-md supports-[backdrop-filter]:bg-card/80 shadow-[0_1px_3px_0_oklch(0_0_0/0.04)] flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-sm">
             雅
           </div>
           <div>
-            <h1 className="font-semibold text-sm leading-tight">IELTS Tracker</h1>
-            <p className="text-[11px] text-muted-foreground leading-tight">{currentLevel.name} · Lv.{level}</p>
+            <h1 className="font-semibold text-[15px] leading-tight">IELTS Tracker</h1>
+            <p className="text-[12px] text-muted-foreground leading-tight">{currentLevel.name} · Lv.{level}</p>
           </div>
         </div>
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-accent"
+          className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent active:scale-95 transition-transform"
           aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
         >
           <div className={cn('transition-transform duration-300', menuOpen && 'rotate-90')}>
@@ -81,12 +81,12 @@ export function MobileNav() {
                   onClick={() => setMenuOpen(false)}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-3 rounded-xl px-4 py-3.5 text-base font-medium transition-colors',
+                      'flex items-center gap-3 rounded-xl px-4 py-4 text-[17px] font-medium transition-all active:scale-[0.97]',
                       menuOpen && 'animate-menu-item-in',
                       `stagger-${index + 1}`,
                       isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent/80'
                     )
                   }
                 >
@@ -97,7 +97,7 @@ export function MobileNav() {
             </nav>
 
             <div className="p-4 border-t border-border">
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-[13px] text-muted-foreground text-center">
                 坚持每天进步一点点
               </p>
             </div>

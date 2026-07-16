@@ -67,12 +67,12 @@ export default function Achievements() {
 
       {/* ---------- page title ---------- */}
       <div>
-        <h1 className="text-xl md:text-2xl font-bold">成就系统</h1>
-        <p className="mt-1 text-xs md:text-sm text-muted-foreground">追踪你的学习进度与成就</p>
+        <h1 className="text-[22px] md:text-2xl font-bold">成就系统</h1>
+        <p className="mt-1 text-[13px] md:text-sm text-muted-foreground">追踪你的学习进度与成就</p>
       </div>
 
       {/* ==================== LEVEL CARD ==================== */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-500 to-indigo-600 p-4 md:p-6 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 p-4 md:p-6 text-white shadow-xl">
         {/* decorative blobs */}
         <div className="absolute -right-8 -top-8 h-28 w-28 md:h-36 md:w-36 rounded-full bg-white/10" />
         <div className="absolute -bottom-6 -left-6 h-20 w-20 md:h-28 md:w-28 rounded-full bg-white/[0.06]" />
@@ -85,15 +85,15 @@ export default function Achievements() {
 
           <div className="min-w-0 flex-1">
             <h2 className="text-lg md:text-xl font-bold leading-tight">{levelInfo.name}</h2>
-            <p className="mt-1 text-xs md:text-sm text-white/80">
+            <p className="mt-1 text-[13px] md:text-sm text-white/80">
               总经验值: <span className="font-semibold">{totalXP}</span> XP
             </p>
             {levelInfo.isMaxLevel ? (
-              <p className="mt-0.5 text-xs md:text-sm font-medium text-yellow-200">
+              <p className="mt-0.5 text-[13px] md:text-sm font-medium text-yellow-200">
                 已达到最高等级!
               </p>
             ) : (
-              <p className="mt-0.5 text-xs md:text-sm text-white/70">
+              <p className="mt-0.5 text-[13px] md:text-sm text-white/70">
                 距离{' '}
                 <span className="font-semibold text-white">
                   {levelInfo.nextName}
@@ -107,7 +107,7 @@ export default function Achievements() {
         {/* progress bar */}
         {!levelInfo.isMaxLevel && (
           <div className="relative mt-4 md:mt-5">
-            <div className="mb-1.5 flex justify-between text-xs">
+            <div className="mb-1.5 flex justify-between text-[12px]">
               <span className="text-white/70">
                 {levelInfo.progressXP} / {levelInfo.requiredXP} XP
               </span>
@@ -117,7 +117,7 @@ export default function Achievements() {
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-white/20">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-purple-200 via-yellow-200 to-yellow-300 transition-all duration-700 ease-out"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-200 via-amber-200 to-amber-300 transition-all duration-700 ease-out"
                 style={{ width: `${levelInfo.percentage}%` }}
               />
             </div>
@@ -128,19 +128,19 @@ export default function Achievements() {
       {/* ==================== STATS SUMMARY ==================== */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border bg-card p-3 md:p-4 text-center shadow-sm">
-          <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+          <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
             {unlockedCount}
             <span className="text-sm md:text-base font-normal text-muted-foreground">
               /{totalCount}
             </span>
           </p>
-          <p className="mt-1 text-[11px] md:text-xs text-muted-foreground">已解锁徽章</p>
+          <p className="mt-1 text-[13px] md:text-xs text-muted-foreground">已解锁徽章</p>
         </div>
         <div className="rounded-xl border bg-card p-3 md:p-4 text-center shadow-sm">
-          <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+          <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
             {totalXP}
           </p>
-          <p className="mt-1 text-[11px] md:text-xs text-muted-foreground">总经验值 (XP)</p>
+          <p className="mt-1 text-[13px] md:text-xs text-muted-foreground">总经验值 (XP)</p>
         </div>
       </div>
 
@@ -154,10 +154,10 @@ export default function Achievements() {
           {XP_RULES_LIST.map((rule) => (
             <li
               key={rule.label}
-              className="flex items-center justify-between rounded-lg bg-muted/50 px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm"
+              className="flex items-center justify-between rounded-lg bg-muted/50 px-3 md:px-4 py-2 md:py-2.5 text-[13px] md:text-sm"
             >
               <span className="text-foreground/80">{rule.label}</span>
-              <span className="font-semibold text-purple-600 dark:text-purple-400">
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
                 +{rule.value} XP
               </span>
             </li>
@@ -179,16 +179,16 @@ export default function Achievements() {
             return (
               <div
                 key={badge.id}
-                className={`animate-stagger-up stagger-${(index % 8) + 1} relative overflow-hidden rounded-xl border p-3 md:p-4 text-center transition-all duration-300 hover:scale-105 hover:shadow-md ${
+                className={`animate-stagger-up stagger-${(index % 8) + 1} relative overflow-hidden rounded-xl border p-3 md:p-4 text-center transition-all duration-300 hover:scale-105 active:scale-100 hover:shadow-md ${
                   isUnlocked
-                    ? 'border-purple-300/60 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 dark:border-purple-700/50'
+                    ? 'border-indigo-300/60 bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/40 dark:border-indigo-700/50'
                     : 'border-border/40 bg-muted/20 opacity-50 grayscale'
                 }`}
               >
                 {/* glow border for unlocked badges */}
                 {isUnlocked && (
                   <div
-                    className="pointer-events-none absolute inset-0 rounded-xl border-2 border-purple-400/40 dark:border-purple-500/30"
+                    className="pointer-events-none absolute inset-0 rounded-xl border-2 border-indigo-400/40 dark:border-indigo-500/30"
                     style={{
                       animation: 'badge-glow 2.5s ease-in-out infinite',
                     }}
@@ -205,21 +205,21 @@ export default function Achievements() {
                   </span>
 
                   <p
-                    className={`mt-1.5 md:mt-2 text-xs md:text-sm font-semibold leading-tight ${
+                    className={`mt-1.5 md:mt-2 text-[13px] md:text-sm font-semibold leading-tight ${
                       isUnlocked ? 'text-foreground' : 'text-muted-foreground'
                     }`}
                   >
                     {badge.name}
                   </p>
 
-                  <p className="mt-1 line-clamp-2 text-[11px] md:text-xs leading-snug text-muted-foreground">
+                  <p className="mt-1 line-clamp-2 text-[12px] md:text-xs leading-snug text-muted-foreground">
                     {badge.description}
                   </p>
 
                   <p
-                    className={`mt-1.5 md:mt-2 text-[11px] md:text-xs font-medium ${
+                    className={`mt-1.5 md:mt-2 text-[12px] md:text-xs font-medium ${
                       isUnlocked
-                        ? 'text-purple-600 dark:text-purple-400'
+                        ? 'text-indigo-600 dark:text-indigo-400'
                         : 'text-muted-foreground/40'
                     }`}
                   >

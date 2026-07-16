@@ -75,8 +75,8 @@ export default function Diary() {
       {/* 标题 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold">学习日记</h1>
-          <p className="mt-1 text-sm text-muted-foreground">记录每天的学习心情与感受</p>
+          <h1 className="text-[22px] md:text-2xl font-bold">学习日记</h1>
+          <p className="mt-1 text-[15px] text-muted-foreground">记录每天的学习心情与感受</p>
         </div>
         <Button onClick={openAdd} className="w-full sm:w-auto">
           <Plus className="mr-1 h-4 w-4" />
@@ -89,7 +89,7 @@ export default function Diary() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 md:py-16 text-muted-foreground">
           <BookOpen className="mb-4 size-10 md:size-12 opacity-30" />
           <p className="text-base md:text-lg font-medium">还没有日记</p>
-          <p className="mt-1 text-sm px-4 text-center">写下第一篇日记，记录你的学习旅程吧！</p>
+          <p className="mt-1 text-[15px] px-4 text-center">写下第一篇日记，记录你的学习旅程吧！</p>
         </div>
       )}
 
@@ -98,24 +98,24 @@ export default function Diary() {
         {sortedEntries.map((entry, index) => {
           const mood = MOOD_OPTIONS.find((m) => m.value === entry.mood)
           return (
-            <Card key={entry.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card`}>
+            <Card key={entry.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card active:bg-accent/50 transition-colors`}>
               <CardContent className="p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-lg md:text-xl">{mood?.emoji}</span>
-                      <span className="text-xs md:text-sm font-medium text-muted-foreground">
+                      <span className="text-[13px] md:text-sm font-medium text-muted-foreground">
                         {format(parseISO(entry.date), 'yyyy年M月d日 EEEE', { locale: zhCN })}
                       </span>
                       <span
                         className={cn(
-                          'rounded-full px-2 py-0.5 text-[11px] md:text-xs bg-muted'
+                          'rounded-full px-2 py-0.5 text-[12px] md:text-xs bg-muted'
                         )}
                       >
                         {mood?.label}
                       </span>
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{entry.content}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">{entry.content}</p>
                   </div>
 
                   {/* 移动端始终显示操作按钮，桌面端 hover 显示 */}
@@ -175,7 +175,7 @@ export default function Diary() {
                     className={cn(
                       'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm transition-all',
                       formMood === mood.value
-                        ? 'ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/50'
+                        ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-900/50'
                         : 'border bg-background hover:bg-accent'
                     )}
                   >

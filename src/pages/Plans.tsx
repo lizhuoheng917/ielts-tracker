@@ -157,8 +157,8 @@ export default function Plans() {
       {/* 标题 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold">学习计划</h1>
-          <p className="mt-1 text-sm text-muted-foreground">管理你的每日学习任务</p>
+          <h1 className="text-[22px] md:text-2xl font-bold">学习计划</h1>
+          <p className="mt-1 text-[15px] text-muted-foreground">管理你的每日学习任务</p>
         </div>
         <Button onClick={openAdd} className="w-full sm:w-auto">
           <Plus className="h-4 w-4" />
@@ -169,12 +169,12 @@ export default function Plans() {
       {/* 今日待办 */}
       <Card>
         <CardContent className="pt-4 pb-3 px-3 md:px-4">
-          <h3 className="text-sm md:text-base font-semibold mb-3 flex items-center gap-2">
-            <ListTodo className="h-4 w-4 text-purple-500" />
+          <h3 className="text-[15px] md:text-base font-semibold mb-3 flex items-center gap-2">
+            <ListTodo className="h-4 w-4 text-indigo-500" />
             今日待办 ({todayPlans.length})
           </h3>
           {todayPlans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">今天没有待办任务</p>
+            <p className="text-[15px] text-muted-foreground">今天没有待办任务</p>
           ) : (
             <div className="space-y-2">
               {todayPlans.map((plan, index) => {
@@ -188,7 +188,7 @@ export default function Plans() {
                       `animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all`,
                       isCompleted
                         ? 'border-green-200 bg-green-50 dark:bg-green-900/30 dark:border-green-800/50'
-                        : 'border-border bg-background hover:bg-accent'
+                        : 'border-border bg-background hover:bg-accent active:bg-accent/80'
                     )}
                   >
                     {isCompleted ? (
@@ -204,7 +204,7 @@ export default function Plans() {
                     >
                       {plan.title}
                     </span>
-                    <Badge variant="outline" className="text-[11px] md:text-xs shrink-0">
+                    <Badge variant="outline" className="text-[12px] md:text-xs shrink-0">
                       {FREQUENCY_LABELS[plan.frequency]}
                     </Badge>
                   </button>
@@ -217,16 +217,16 @@ export default function Plans() {
 
       {/* 所有活跃计划 */}
       <div className="space-y-2 md:space-y-3">
-        <h3 className="text-sm md:text-base font-semibold">活跃计划 ({activePlans.length})</h3>
+        <h3 className="text-[15px] md:text-base font-semibold">活跃计划 ({activePlans.length})</h3>
         {activePlans.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 md:py-16 text-muted-foreground">
             <ListTodo className="mb-4 size-10 md:size-12 opacity-30" />
             <p className="text-base md:text-lg font-medium">还没有计划</p>
-            <p className="mt-1 text-sm px-4 text-center">添加一个学习计划，开始你的备考之旅吧！</p>
+            <p className="mt-1 text-[15px] px-4 text-center">添加一个学习计划，开始你的备考之旅吧！</p>
           </div>
         ) : (
           activePlans.map((plan, index) => (
-            <Card key={plan.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card`}>
+            <Card key={plan.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card active:bg-accent/80 transition-colors`}>
               <CardContent className="flex items-center gap-2 md:gap-3 py-2.5 px-3 md:px-4">
                 <span
                   className={cn(
@@ -237,11 +237,11 @@ export default function Plans() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{plan.title}</p>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <Badge variant="outline" className="text-[11px] md:text-xs">
+                    <Badge variant="outline" className="text-[12px] md:text-xs">
                       {FREQUENCY_LABELS[plan.frequency]}
                     </Badge>
                     {plan.frequency === 'weekly' && plan.weekDays && (
-                      <span className="text-[11px] md:text-xs text-muted-foreground">
+                      <span className="text-[12px] md:text-xs text-muted-foreground">
                         周{plan.weekDays.map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label).join('、')}
                       </span>
                     )}
@@ -332,7 +332,7 @@ export default function Plans() {
                       className={cn(
                         'flex h-8 w-8 items-center justify-center rounded-md text-xs font-medium transition-all',
                         formWeekDays.includes(day.value)
-                          ? 'bg-purple-600 text-white'
+                          ? 'bg-indigo-600 text-white'
                           : 'border bg-background hover:bg-accent'
                       )}
                     >

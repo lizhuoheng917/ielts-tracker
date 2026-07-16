@@ -93,24 +93,24 @@ function StatsSummary({ type }: { type: PracticeType }) {
     <div className="grid grid-cols-3 gap-2 md:gap-3 mb-3 md:mb-4">
       <Card size="sm" className="flex-1">
         <CardContent className="text-center py-2 px-2">
-          <div className="text-[11px] md:text-xs text-muted-foreground mb-0.5">平均分</div>
-          <div className="text-base md:text-lg font-bold" style={{ color }}>
+          <div className="text-[13px] md:text-xs text-muted-foreground mb-0.5">平均分</div>
+          <div className="text-lg md:text-lg font-bold" style={{ color }}>
             {avgScore !== undefined ? avgScore.toFixed(1) : '--'}
           </div>
         </CardContent>
       </Card>
       <Card size="sm" className="flex-1">
         <CardContent className="text-center py-2 px-2">
-          <div className="text-[11px] md:text-xs text-muted-foreground mb-0.5">总时长</div>
-          <div className="text-base md:text-lg font-bold" style={{ color }}>
+          <div className="text-[13px] md:text-xs text-muted-foreground mb-0.5">总时长</div>
+          <div className="text-lg md:text-lg font-bold" style={{ color }}>
             {totalDuration > 0 ? formatDuration(totalDuration) : '--'}
           </div>
         </CardContent>
       </Card>
       <Card size="sm" className="flex-1">
         <CardContent className="text-center py-2 px-2">
-          <div className="text-[11px] md:text-xs text-muted-foreground mb-0.5">练习次数</div>
-          <div className="text-base md:text-lg font-bold" style={{ color }}>
+          <div className="text-[13px] md:text-xs text-muted-foreground mb-0.5">练习次数</div>
+          <div className="text-lg md:text-lg font-bold" style={{ color }}>
             {count > 0 ? count : '--'}
           </div>
         </CardContent>
@@ -365,25 +365,25 @@ function RecordItem({
                 className="inline-block w-2 h-2 rounded-full shrink-0"
                 style={{ backgroundColor: color }}
               />
-              <span className="text-xs text-muted-foreground">{record.date}</span>
+              <span className="text-[13px] text-muted-foreground">{record.date}</span>
               {record.topic && (
-                <span className="text-sm font-medium truncate">{record.topic}</span>
+                <span className="text-[15px] font-medium truncate">{record.topic}</span>
               )}
             </div>
 
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[13px] text-muted-foreground">
                 时长：{record.duration}分钟
               </span>
               {record.score !== undefined && record.score > 0 && (
-                <span className="text-xs font-medium" style={{ color }}>
+                <span className="text-[13px] font-medium" style={{ color }}>
                   雅思 {formatScore(record.score)}
                 </span>
               )}
             </div>
 
             {record.note && (
-              <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+              <p className="text-[13px] text-muted-foreground mt-2 line-clamp-2">
                 {record.note}
               </p>
             )}
@@ -451,7 +451,7 @@ function TabPanel({ type }: { type: PracticeType }) {
             {type === 'writing' && '\u270D\uFE0F'}
             {type === 'speaking' && '\uD83C\uDFA4'}
           </span>
-          <p className="text-sm text-muted-foreground px-4">{EMPTY_MESSAGES[type]}</p>
+          <p className="text-[15px] text-muted-foreground px-4">{EMPTY_MESSAGES[type]}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -500,7 +500,7 @@ export default function Practice() {
     <div className="flex flex-col h-full">
       {/* 顶部标题和操作 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-xl md:text-2xl font-bold">听说读写</h1>
+        <h1 className="text-[22px] md:text-2xl font-bold">听说读写</h1>
         <Button onClick={() => setAddDialogOpen(true)} className="w-full sm:w-auto">
           <PlusIcon className="h-4 w-4" />
           添加练习
@@ -520,7 +520,7 @@ export default function Practice() {
               value={opt.value}
               className={cn(
                 'data-active:text-foreground px-3 md:px-4 py-1.5 text-sm md:text-base',
-                'transition-colors whitespace-nowrap'
+                'transition-colors transition-transform whitespace-nowrap active:scale-95'
               )}
               style={tabStyle(opt.value as PracticeType)}
             >

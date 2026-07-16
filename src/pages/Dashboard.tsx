@@ -171,32 +171,35 @@ export default function Dashboard() {
   }, [achievementStore])
 
   // ===== 热力图颜色 =====
-  // 暗色模式优化：拉大等级间亮度差，提升低等级可见度
+  // Indigo 体系（与主色统一）
   const heatmapColors = [
-    'bg-purple-50 dark:bg-purple-900/40',
-    'bg-purple-200 dark:bg-purple-700/70',
-    'bg-purple-400 dark:bg-purple-600',
-    'bg-purple-600 dark:bg-purple-500',
-    'bg-purple-800 dark:bg-purple-300',
+    'bg-indigo-50 dark:bg-indigo-950/50',
+    'bg-indigo-100 dark:bg-indigo-900/60',
+    'bg-indigo-300 dark:bg-indigo-700/70',
+    'bg-indigo-500 dark:bg-indigo-500',
+    'bg-indigo-700 dark:bg-indigo-300',
   ]
 
   return (
     <div className="space-y-5 md:space-y-6">
       {/* ===== 1. 欢迎区域 ===== */}
-      <div>
-        <h1 className="text-xl md:text-2xl font-bold tracking-tight">欢迎回来</h1>
-        <p className="text-muted-foreground mt-1 text-sm md:text-base">{todayFormatted}</p>
-        <p className="text-muted-foreground text-xs md:text-sm mt-1">{todayQuote}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl md:text-2xl font-bold tracking-tight">欢迎回来</h1>
+          <p className="text-muted-foreground mt-1 text-[15px] md:text-base">{todayFormatted}</p>
+        </div>
+        <p className="hidden sm:block text-xs md:text-sm text-muted-foreground max-w-[240px] text-right italic leading-relaxed">{todayQuote}</p>
       </div>
+      <p className="sm:hidden text-[13px] text-muted-foreground italic leading-relaxed">{todayQuote}</p>
 
       {/* ===== 2. 考试倒计时 ===== */}
       {examCountdown && (
-        <Card className="border-l-4 border-l-purple-500">
+        <Card className="border-l-4 border-l-indigo-500">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 md:gap-3">
-                <CalendarDays className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
-                <CardTitle className="text-sm md:text-base">考试倒计时</CardTitle>
+                <CalendarDays className="h-5 w-5 text-indigo-500" />
+                <CardTitle className="text-[15px] md:text-base">考试倒计时</CardTitle>
               </div>
               <span
                 className={`text-3xl md:text-4xl font-bold ${
@@ -210,10 +213,10 @@ export default function Dashboard() {
                 {examCountdown.daysLeft}
               </span>
             </div>
-            <p className="text-xs md:text-sm text-muted-foreground mt-2">
+            <p className="text-[13px] md:text-sm text-muted-foreground mt-2">
               距离考试还有 {examCountdown.daysLeft} 天
             </p>
-            <div className="mt-3 h-2 w-full rounded-full bg-purple-100 dark:bg-purple-900/50">
+            <div className="mt-3 h-2 w-full rounded-full bg-indigo-100 dark:bg-indigo-900/50">
               <div
                 className={`h-full rounded-full transition-all ${examCountdown.color}`}
                 style={{ width: `${examCountdown.progress}%` }}
@@ -226,24 +229,32 @@ export default function Dashboard() {
       {/* ===== 3. 今日概览 ===== */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <StatCard
-          icon={<BookA className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />}
+          icon={<BookA className="h-5 w-5 text-indigo-500" />}
           value={todayWordCount}
           label="今日背词"
+          accentBg="bg-indigo-50 dark:bg-indigo-950/40"
+          accentBorder="border-l-indigo-400"
         />
         <StatCard
-          icon={<Clock className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />}
+          icon={<Clock className="h-5 w-5 text-amber-500" />}
           value={`${todayPracticeMinutes}min`}
           label="学习时长"
+          accentBg="bg-amber-50 dark:bg-amber-950/40"
+          accentBorder="border-l-amber-400"
         />
         <StatCard
-          icon={<CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-green-500" />}
+          icon={<CheckCircle className="h-5 w-5 text-emerald-500" />}
           value={todayCompletedTasks}
           label="完成任务"
+          accentBg="bg-emerald-50 dark:bg-emerald-950/40"
+          accentBorder="border-l-emerald-400"
         />
         <StatCard
-          icon={<Flame className="h-4 w-4 md:h-5 md:w-5 text-orange-500" />}
+          icon={<Flame className="h-5 w-5 text-orange-500" />}
           value={currentStreak}
           label="连续天数"
+          accentBg="bg-orange-50 dark:bg-orange-950/40"
+          accentBorder="border-l-orange-400"
         />
       </div>
 
@@ -252,11 +263,11 @@ export default function Dashboard() {
         {/* 今日待办 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">今日待办</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">今日待办</CardTitle>
           </CardHeader>
           <CardContent>
             {todayPlans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">今天没有待办任务</p>
+            <p className="text-[15px] text-muted-foreground">今天没有待办任务</p>
           ) : (
             <div className="space-y-2">
               {todayPlans.map((plan, index) => (
@@ -283,7 +294,7 @@ export default function Dashboard() {
           )}
             <Link
               to="/plans"
-              className="text-sm text-primary hover:underline mt-3 inline-block"
+              className="text-[15px] text-primary hover:underline mt-3 inline-block"
             >
               查看全部计划 &rarr;
             </Link>
@@ -293,14 +304,14 @@ export default function Dashboard() {
         {/* 热力图 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">最近活跃度</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">最近活跃度</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-7 gap-1 md:gap-1.5">
               {WEEKDAY_LABELS.map((label) => (
                 <div
                   key={label}
-                  className="text-[11px] md:text-xs text-muted-foreground text-center mb-1"
+                  className="text-xs md:text-xs text-muted-foreground text-center mb-1"
                 >
                   {label}
                 </div>
@@ -310,7 +321,7 @@ export default function Dashboard() {
                   key={cell.date}
                   title={`${cell.date}: ${cell.level > 0 ? '有学习记录' : '无记录'}`}
                   className={`aspect-square rounded-sm ${heatmapColors[cell.level]} ${
-                    cell.isToday ? 'ring-2 ring-purple-500 ring-offset-1' : ''
+                    cell.isToday ? 'ring-2 ring-indigo-500 ring-offset-1' : ''
                   } transition-colors`}
                 />
               ))}
@@ -324,17 +335,17 @@ export default function Dashboard() {
         {/* 最近成就 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">最近成就</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">最近成就</CardTitle>
           </CardHeader>
           <CardContent>
             {recentAchievements.length === 0 ? (
-              <p className="text-sm text-muted-foreground">还没有解锁任何成就，继续加油!</p>
+              <p className="text-[15px] text-muted-foreground">还没有解锁任何成就，继续加油!</p>
             ) : (
               <div className="flex gap-3 md:gap-4 flex-wrap">
                 {recentAchievements.map((badge, index) => (
                   <div
                     key={badge.id}
-                    className={`animate-stagger-up stagger-${index + 1} flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-purple-50 dark:bg-purple-900/40 min-w-[72px] md:min-w-[80px]`}
+                    className={`animate-stagger-up stagger-${index + 1} flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 min-w-[72px] md:min-w-[80px]`}
                   >
                     <span className="text-xl md:text-2xl">{badge.icon}</span>
                     <span className="text-xs font-medium text-center">{badge.name}</span>
@@ -344,7 +355,7 @@ export default function Dashboard() {
             )}
             <Link
               to="/achievements"
-              className="text-sm text-primary hover:underline mt-3 inline-block"
+              className="text-[15px] text-primary hover:underline mt-3 inline-block"
             >
               查看全部成就 &rarr;
             </Link>
@@ -354,33 +365,33 @@ export default function Dashboard() {
         {/* 等级和经验值 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">等级与经验</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">等级与经验</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-800/50">
-                <Star className="h-4 w-4 md:h-5 md:w-5 text-purple-600 dark:text-purple-400" />
+              <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
+                <Star className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                <div className="font-semibold text-sm md:text-base">
+                <div className="font-semibold text-[15px] md:text-base">
                   Lv.{levelInfo.level} {levelInfo.name}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[13px] text-muted-foreground">
                   {levelInfo.xpProgress.current} XP
                   {levelInfo.xpProgress.required !== levelInfo.xpProgress.current &&
                     ` / ${levelInfo.xpProgress.required} XP`}
                 </div>
               </div>
             </div>
-            <div className="h-2 md:h-2.5 w-full rounded-full bg-purple-100 dark:bg-purple-900/50">
+            <div className="h-2 md:h-2.5 w-full rounded-full bg-indigo-100 dark:bg-indigo-900/50">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all"
                 style={{
                   width: `${Math.min(100, levelInfo.xpProgress.percentage)}%`,
                 }}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1.5">
+            <p className="text-[13px] text-muted-foreground mt-1.5">
               {levelInfo.xpProgress.percentage >= 100
                 ? '已达到最高等级!'
                 : `距离下一等级还需 ${Math.max(0, levelInfo.xpProgress.required - levelInfo.xpProgress.current)} XP`}
@@ -392,26 +403,26 @@ export default function Dashboard() {
       {/* ===== 7. 最近学习日记 ===== */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm md:text-base">最近学习日记</CardTitle>
+          <CardTitle className="text-[15px] md:text-base">最近学习日记</CardTitle>
         </CardHeader>
         <CardContent>
           {latestDiary ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 <BookOpen className="h-4 w-4" />
                 <span>{format(new Date(latestDiary.date), 'yyyy年M月d日', { locale: zhCN })}</span>
                 <span>
                   {latestDiary.moodEmoji} {latestDiary.moodLabel}
                 </span>
               </div>
-              <p className="text-sm">{latestDiary.contentPreview}</p>
+              <p className="text-[15px]">{latestDiary.contentPreview}</p>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">还没有写过学习日记</p>
+            <p className="text-[15px] text-muted-foreground">还没有写过学习日记</p>
           )}
           <Link
             to="/diary"
-            className="text-sm text-primary hover:underline mt-3 inline-block"
+            className="text-[15px] text-primary hover:underline mt-3 inline-block"
           >
             查看全部日记 &rarr;
           </Link>
@@ -426,20 +437,24 @@ function StatCard({
   icon,
   value,
   label,
+  accentBg = 'bg-indigo-50 dark:bg-indigo-950/40',
+  accentBorder = 'border-l-indigo-400',
 }: {
   icon: React.ReactNode
   value: number | string
   label: string
+  accentBg?: string
+  accentBorder?: string
 }) {
   return (
-    <Card size="sm">
-      <CardContent className="flex items-center gap-2 md:gap-3 py-3 px-3 md:px-4">
-        <div className="flex h-8 w-8 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-900/40">
+    <Card size="sm" className={`border-l-2 ${accentBorder}`}>
+      <CardContent className="flex items-center gap-2.5 md:gap-3 py-3.5 px-3.5 md:px-4">
+        <div className={`flex h-9 w-9 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg ${accentBg}`}>
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="text-base md:text-lg font-bold leading-tight">{value}</div>
-          <div className="text-[11px] md:text-xs text-muted-foreground">{label}</div>
+          <div className="text-lg md:text-lg font-bold leading-tight">{value}</div>
+          <div className="text-[13px] md:text-xs text-muted-foreground">{label}</div>
         </div>
       </CardContent>
     </Card>

@@ -96,14 +96,14 @@ interface FormData {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  '学术词汇': 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-700',
+  '学术词汇': 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-700',
   '高频词汇': 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700',
   '场景词汇': 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/50 dark:text-fuchsia-300 dark:border-fuchsia-700',
   '同义替换词': 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-700',
 }
 
 const DEFAULT_CATEGORY_COLOR =
-  'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-700'
+  'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-700'
 
 function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] || DEFAULT_CATEGORY_COLOR
@@ -112,10 +112,10 @@ function getCategoryColor(category: string): string {
 function getHeatmapColor(count: number, maxCount: number): string {
   if (count === 0) return 'bg-muted/50'
   const ratio = maxCount > 0 ? count / maxCount : 0
-  if (ratio <= 0.25) return 'bg-purple-100 dark:bg-purple-800/60'
-  if (ratio <= 0.5) return 'bg-purple-200 dark:bg-purple-700/70'
-  if (ratio <= 0.75) return 'bg-purple-400 dark:bg-purple-600'
-  return 'bg-purple-600 text-white dark:bg-purple-400'
+  if (ratio <= 0.25) return 'bg-indigo-100 dark:bg-indigo-800/60'
+  if (ratio <= 0.5) return 'bg-indigo-200 dark:bg-indigo-700/70'
+  if (ratio <= 0.75) return 'bg-indigo-400 dark:bg-indigo-600'
+  return 'bg-indigo-600 text-white dark:bg-indigo-400'
 }
 
 // ===== Main Component =====
@@ -307,8 +307,8 @@ export default function Words() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold">单词记录</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-[22px] md:text-2xl font-bold">单词记录</h1>
+          <p className="mt-1 text-[15px] text-muted-foreground">
             记录每日单词背诵数量和分类
           </p>
         </div>
@@ -378,26 +378,26 @@ export default function Words() {
       <div className="grid grid-cols-3 gap-3 md:gap-4">
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-3 md:py-4">
-            <span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+            <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {todayCount}
             </span>
-            <span className="text-[11px] md:text-xs text-muted-foreground">今日背诵</span>
+            <span className="text-[13px] md:text-xs text-muted-foreground">今日背诵</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-3 md:py-4">
-            <span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+            <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {weekCount}
             </span>
-            <span className="text-[11px] md:text-xs text-muted-foreground">本周背诵</span>
+            <span className="text-[13px] md:text-xs text-muted-foreground">本周背诵</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-3 md:py-4">
-            <span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+            <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {monthCount}
             </span>
-            <span className="text-[11px] md:text-xs text-muted-foreground">本月背诵</span>
+            <span className="text-[13px] md:text-xs text-muted-foreground">本月背诵</span>
           </CardContent>
         </Card>
       </div>
@@ -567,7 +567,7 @@ function ListView({
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 md:py-16 text-muted-foreground">
         <BookOpen className="mb-4 size-10 md:size-12 opacity-30" />
         <p className="text-base md:text-lg font-medium">还没有记录</p>
-        <p className="mt-1 text-sm px-4 text-center">
+        <p className="mt-1 text-[15px] px-4 text-center">
           点击「添加记录」开始你的单词背诵之旅吧！坚持就是胜利。
         </p>
       </div>
@@ -577,7 +577,7 @@ function ListView({
   return (
     <div className="space-y-2 md:space-y-3">
       {records.map((record, index) => (
-        <Card key={record.id} className={`animate-stagger-up stagger-${(index % 8) + 1} transition-shadow hover:shadow-md`}>
+        <Card key={record.id} className={`animate-stagger-up stagger-${(index % 8) + 1} transition-[shadow,transform] hover:shadow-md active:scale-[0.99] active:bg-accent/80`}>
           <CardContent className="flex items-center gap-3 md:gap-4 py-2.5 px-3 md:px-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -586,7 +586,7 @@ function ListView({
                 </span>
                 <Badge
                   variant="outline"
-                  className={cn('border text-[11px] md:text-xs', getCategoryColor(record.category))}
+                  className={cn('border text-[12px] md:text-xs', getCategoryColor(record.category))}
                 >
                   {record.category}
                 </Badge>
@@ -599,7 +599,7 @@ function ListView({
             </div>
 
             <div className="flex shrink-0 items-baseline gap-0.5">
-              <span className="text-lg md:text-xl font-bold text-purple-600 dark:text-purple-400">
+              <span className="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400">
                 {record.count}
               </span>
               <span className="text-xs text-muted-foreground">词</span>
@@ -669,7 +669,7 @@ function CalendarView({
           {weekLabels.map((label) => (
             <div
               key={label}
-              className="py-1 text-center text-[11px] md:text-xs font-medium text-muted-foreground"
+              className="py-1 text-center text-xs md:text-xs font-medium text-muted-foreground"
             >
               {label}
             </div>
@@ -693,15 +693,15 @@ function CalendarView({
                 className={cn(
                   'flex aspect-square flex-col items-center justify-center rounded-lg text-xs md:text-sm',
                   getHeatmapColor(count, maxCalCount),
-                  isToday && 'ring-2 ring-purple-500'
+                  isToday && 'ring-2 ring-indigo-500'
                 )}
                 title={`${formatDateCN(dateStr)}: ${count}词`}
               >
-                <span className="text-[11px] md:text-xs leading-none">{day.getDate()}</span>
+                <span className="text-xs md:text-xs leading-none">{day.getDate()}</span>
                 {count > 0 && (
                   <span
                     className={cn(
-                      'text-[10px] md:text-[10px] font-semibold leading-none',
+                      'text-[12px] md:text-[12px] font-semibold leading-none',
                       count / maxCalCount > 0.75 && 'text-white'
                     )}
                   >

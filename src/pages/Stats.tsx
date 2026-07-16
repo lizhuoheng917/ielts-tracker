@@ -29,13 +29,13 @@ import { WEEKDAY_LABELS } from '@/lib/constants'
 import type { PracticeType } from '@/lib/types'
 
 // ===== 颜色常量 =====
-const PURPLE_COLORS = {
-  100: '#F3F0FF',
-  200: '#DDD8FF',
-  300: '#A9AEFF',
-  400: '#6F6FFF',
-  500: '#4B3FE3',
-  600: '#3C2ECA',
+const INDIGO_COLORS = {
+  100: '#EEF2FF',
+  200: '#E0E7FF',
+  300: '#A5B4FC',
+  400: '#818CF8',
+  500: '#6366F1',
+  600: '#4F46E5',
 }
 
 const SKILL_COLORS: Record<PracticeType, string> = {
@@ -52,7 +52,7 @@ const SKILL_LABELS: Record<PracticeType, string> = {
   speaking: '口语',
 }
 
-const PIE_COLORS = [PURPLE_COLORS[500], PURPLE_COLORS[400], PURPLE_COLORS[300], PURPLE_COLORS[200], PURPLE_COLORS[600]]
+const PIE_COLORS = [INDIGO_COLORS[500], INDIGO_COLORS[400], INDIGO_COLORS[300], INDIGO_COLORS[200], INDIGO_COLORS[600]]
 
 // ===== 工具函数 =====
 function formatDate(date: Date): string {
@@ -74,7 +74,7 @@ function getHeatmapLevel(value: number): number {
 // ===== 空数据占位组件 =====
 function EmptyChartTip({ text }: { text: string }) {
   return (
-    <div className="flex h-full items-center justify-center text-xs md:text-sm text-muted-foreground px-4 text-center">
+    <div className="flex h-full items-center justify-center text-[13px] md:text-sm text-muted-foreground px-4 text-center">
       {text}
     </div>
   )
@@ -309,8 +309,8 @@ export default function Stats() {
     <div className="space-y-5 md:space-y-6">
       {/* 标题 */}
       <div>
-        <h1 className="text-xl md:text-2xl font-bold">数据统计</h1>
-        <p className="mt-1 text-xs md:text-sm text-muted-foreground">可视化你的学习数据</p>
+        <h1 className="text-[22px] md:text-2xl font-bold">数据统计</h1>
+        <p className="mt-1 text-[13px] md:text-sm text-muted-foreground">可视化你的学习数据</p>
       </div>
 
       {/* 连续打卡统计区 */}
@@ -321,18 +321,18 @@ export default function Stats() {
               <Flame className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
-              <p className="text-xs md:text-sm text-muted-foreground">当前连续天数</p>
+              <p className="text-[13px] md:text-sm text-muted-foreground">当前连续天数</p>
               <p className="text-xl md:text-2xl font-bold">{streakData.currentStreak}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-500 dark:bg-purple-900/40 dark:text-purple-400">
+            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-500 dark:bg-indigo-900/40 dark:text-indigo-400">
               <Trophy className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
-              <p className="text-xs md:text-sm text-muted-foreground">最长连续天数</p>
+              <p className="text-[13px] md:text-sm text-muted-foreground">最长连续天数</p>
               <p className="text-xl md:text-2xl font-bold">{streakData.longestStreak}</p>
             </div>
           </CardContent>
@@ -343,7 +343,7 @@ export default function Stats() {
               <CalendarDays className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
-              <p className="text-xs md:text-sm text-muted-foreground">总学习天数</p>
+              <p className="text-[13px] md:text-sm text-muted-foreground">总学习天数</p>
               <p className="text-xl md:text-2xl font-bold">{totalStudyDays}</p>
             </div>
           </CardContent>
@@ -353,7 +353,7 @@ export default function Stats() {
       {/* 学习热力图 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm md:text-base">学习热力图</CardTitle>
+          <CardTitle className="text-[15px] md:text-base">学习热力图</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto -mx-1 px-1">
@@ -373,7 +373,7 @@ export default function Stats() {
                 {heatmapData.monthLabels.map((ml) => (
                   <div
                     key={ml.colIndex}
-                    className="text-[11px] md:text-xs text-muted-foreground"
+                    className="text-[12px] md:text-xs text-muted-foreground"
                     style={{
                       width: `${ml.span * 1.125}rem`, // span * (1rem cell + 0.125rem gap)
                       textAlign: 'left',
@@ -395,7 +395,7 @@ export default function Stats() {
                   return (
                     <div
                       key={rowIdx}
-                      className="flex h-[0.875rem] md:h-[1rem] items-center text-[10px] md:text-[10px] leading-none text-muted-foreground"
+                      className="flex h-[0.875rem] md:h-[1rem] items-center text-[11px] md:text-[10px] leading-none text-muted-foreground"
                     >
                       {WEEKDAY_LABELS[jsDayIdx]}
                     </div>
@@ -460,7 +460,7 @@ export default function Stats() {
         {/* 单词背诵趋势 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">单词背诵趋势（近30天）</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">单词背诵趋势（近30天）</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[200px] md:h-[250px]">
@@ -470,11 +470,11 @@ export default function Stats() {
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: chartColors.tick }}
+                      tick={{ fontSize: 11, fill: chartColors.tick }}
                       interval={6}
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: chartColors.tick }}
+                      tick={{ fontSize: 11, fill: chartColors.tick }}
                       allowDecimals={false}
                     />
                     <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
@@ -482,10 +482,10 @@ export default function Stats() {
                       type="monotone"
                       dataKey="count"
                       name="背诵量"
-                      stroke={PURPLE_COLORS[500]}
+                      stroke={INDIGO_COLORS[500]}
                       strokeWidth={2}
                       dot={false}
-                      activeDot={{ r: 4, fill: PURPLE_COLORS[500] }}
+                      activeDot={{ r: 4, fill: INDIGO_COLORS[500] }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -499,7 +499,7 @@ export default function Stats() {
         {/* 学习时长分布 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">学习时长分布（近7天）</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">学习时长分布（近7天）</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[200px] md:h-[250px]">
@@ -509,10 +509,10 @@ export default function Stats() {
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: chartColors.tick }}
+                      tick={{ fontSize: 11, fill: chartColors.tick }}
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: chartColors.tick }}
+                      tick={{ fontSize: 11, fill: chartColors.tick }}
                       allowDecimals={false}
                       unit="分"
                     />
@@ -520,7 +520,7 @@ export default function Stats() {
                     <Bar
                       dataKey="duration"
                       name="时长（分钟）"
-                      fill={PURPLE_COLORS[500]}
+                      fill={INDIGO_COLORS[500]}
                       radius={[4, 4, 0, 0]}
                       barSize={28}
                     />
@@ -539,7 +539,7 @@ export default function Stats() {
         {/* 四科能力雷达图 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">四科能力雷达图</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">四科能力雷达图</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[240px] md:h-[300px]">
@@ -554,8 +554,8 @@ export default function Stats() {
                     <Radar
                       name="平均分"
                       dataKey="score"
-                      stroke={PURPLE_COLORS[500]}
-                      fill={PURPLE_COLORS[300]}
+                      stroke={INDIGO_COLORS[500]}
+                      fill={INDIGO_COLORS[300]}
                       fillOpacity={0.5}
                       strokeWidth={2}
                     />
@@ -572,7 +572,7 @@ export default function Stats() {
         {/* 单词分类饼图 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm md:text-base">单词分类占比</CardTitle>
+            <CardTitle className="text-[15px] md:text-base">单词分类占比</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[240px] md:h-[300px]">

@@ -49,92 +49,92 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --background: oklch(0.985 0.002 270);
+    --foreground: oklch(0.17 0.02 270);
+    --card: oklch(0.998 0 0);
+    --card-foreground: oklch(0.17 0.02 270);
+    --popover: oklch(0.998 0 0);
+    --popover-foreground: oklch(0.17 0.02 270);
+    --primary: oklch(0.437 0.18 275);
+    --primary-foreground: oklch(0.99 0 0);
+    --secondary: oklch(0.96 0.015 270);
+    --secondary-foreground: oklch(0.3 0.05 275);
+    --muted: oklch(0.96 0.01 270);
+    --muted-foreground: oklch(0.5 0.02 270);
+    --accent: oklch(0.96 0.015 270);
+    --accent-foreground: oklch(0.3 0.05 275);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --border: oklch(0.91 0.015 270);
+    --input: oklch(0.91 0.015 270);
+    --ring: oklch(0.437 0.18 275);
+    --chart-1: oklch(0.87 0.02 270);
+    --chart-2: oklch(0.556 0.05 275);
+    --chart-3: oklch(0.439 0.1 275);
+    --chart-4: oklch(0.371 0.15 275);
+    --chart-5: oklch(0.269 0.2 275);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-    /* 热力图颜色（亮色模式） */
-    --heatmap-level-0: oklch(0.9 0 0);
-    --heatmap-level-1: #F3F0FF;
-    --heatmap-level-2: #A9AEFF;
-    --heatmap-level-3: #6F6FFF;
-    --heatmap-level-4: #3C2ECA;
+    --sidebar: oklch(0.995 0.005 270);
+    --sidebar-foreground: oklch(0.17 0.02 270);
+    --sidebar-primary: oklch(0.437 0.18 275);
+    --sidebar-primary-foreground: oklch(0.99 0 0);
+    --sidebar-accent: oklch(0.95 0.02 275);
+    --sidebar-accent-foreground: oklch(0.3 0.05 275);
+    --sidebar-border: oklch(0.92 0.015 270);
+    --sidebar-ring: oklch(0.437 0.18 275);
+    /* 热力图颜色（亮色模式）- Indigo 体系 */
+    --heatmap-level-0: oklch(0.95 0.01 270);
+    --heatmap-level-1: #E8E5FF;
+    --heatmap-level-2: #B4AEFF;
+    --heatmap-level-3: #7C6FFF;
+    --heatmap-level-4: #4338CA;
     /* 图表颜色（亮色模式） */
-    --chart-grid: #e5e7eb;
-    --chart-tick: #9ca3af;
-    --chart-label: #6b7280;
+    --chart-grid: #e8e5f0;
+    --chart-tick: #9492a8;
+    --chart-label: #6b6880;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: oklch(0.155 0.02 275);
+    --foreground: oklch(0.95 0.01 270);
+    --card: oklch(0.2 0.025 275);
+    --card-foreground: oklch(0.95 0.01 270);
+    --popover: oklch(0.2 0.025 275);
+    --popover-foreground: oklch(0.95 0.01 270);
+    --primary: oklch(0.65 0.2 275);
+    --primary-foreground: oklch(0.15 0.02 275);
+    --secondary: oklch(0.27 0.03 275);
+    --secondary-foreground: oklch(0.92 0.01 270);
+    --muted: oklch(0.27 0.03 275);
+    --muted-foreground: oklch(0.68 0.03 275);
+    --accent: oklch(0.27 0.03 275);
+    --accent-foreground: oklch(0.92 0.01 270);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-    /* 热力图颜色（暗色模式）—— 提升低等级亮度，拉大等级间对比度 */
-    --heatmap-level-0: oklch(0.28 0.02 280);
-    --heatmap-level-1: oklch(0.42 0.1 280);
-    --heatmap-level-2: oklch(0.55 0.18 280);
-    --heatmap-level-3: oklch(0.65 0.2 280);
-    --heatmap-level-4: oklch(0.78 0.16 280);
+    --border: oklch(1 0 0 / 8%);
+    --input: oklch(1 0 0 / 12%);
+    --ring: oklch(0.65 0.2 275);
+    --chart-1: oklch(0.87 0.02 270);
+    --chart-2: oklch(0.65 0.08 275);
+    --chart-3: oklch(0.5 0.12 275);
+    --chart-4: oklch(0.4 0.16 275);
+    --chart-5: oklch(0.3 0.2 275);
+    --sidebar: oklch(0.17 0.025 275);
+    --sidebar-foreground: oklch(0.95 0.01 270);
+    --sidebar-primary: oklch(0.65 0.2 275);
+    --sidebar-primary-foreground: oklch(0.15 0.02 275);
+    --sidebar-accent: oklch(0.25 0.04 275);
+    --sidebar-accent-foreground: oklch(0.92 0.01 270);
+    --sidebar-border: oklch(1 0 0 / 8%);
+    --sidebar-ring: oklch(0.65 0.2 275);
+    /* 热力图颜色（暗色模式）- Indigo 体系 */
+    --heatmap-level-0: oklch(0.26 0.03 275);
+    --heatmap-level-1: oklch(0.38 0.1 275);
+    --heatmap-level-2: oklch(0.5 0.16 275);
+    --heatmap-level-3: oklch(0.62 0.18 275);
+    --heatmap-level-4: oklch(0.75 0.14 275);
     /* 图表颜色（暗色模式） */
-    --chart-grid: oklch(0.3 0 0);
-    --chart-tick: oklch(0.6 0 0);
-    --chart-label: oklch(0.7 0 0);
+    --chart-grid: oklch(0.28 0.03 275);
+    --chart-tick: oklch(0.58 0.03 275);
+    --chart-label: oklch(0.65 0.03 275);
 }
 
 @layer base {
@@ -153,6 +153,38 @@
     html {
       font-size: 17.5px;
     }
+  }
+
+  /* 全局链接悬浮效果 */
+  a {
+    @apply transition-colors duration-150;
+  }
+
+  /* 按钮按压反馈 */
+  button:active:not(:disabled) {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+
+  /* 滚动条美化 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.7 0.02 270);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0.04 275);
+  }
+
+  /* 选中文字颜色 */
+  ::selection {
+    background: oklch(0.437 0.18 275 / 20%);
   }
 }
 
@@ -189,7 +221,7 @@
 @keyframes page-enter {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -297,7 +329,7 @@
 
 @layer utilities {
   .page-transition-enter {
-    animation: page-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: page-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
   .page-transition-exit {
     animation: page-exit 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;

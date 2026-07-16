@@ -199,7 +199,7 @@ export default function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm md:text-base flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
+            <CalendarDays className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
             考试日期
           </CardTitle>
         </CardHeader>
@@ -212,7 +212,7 @@ export default function Settings() {
               className="w-full sm:w-auto"
             />
             {daysUntilExam !== null && (
-              <span className="text-sm text-purple-600 dark:text-purple-400 font-medium">
+              <span className="text-sm text-indigo-600 dark:text-indigo-400 font-medium">
                 距离考试还有 {daysUntilExam} 天
               </span>
             )}
@@ -225,7 +225,7 @@ export default function Settings() {
         <CardHeader>
           <CardTitle className="text-sm md:text-base flex items-center gap-2">
             {themeInput === 'dark' ? (
-              <Moon className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
+              <Moon className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
             ) : (
               <Sun className="h-4 w-4 md:h-5 md:w-5 text-orange-500" />
             )}
@@ -238,7 +238,7 @@ export default function Settings() {
               onClick={() => setThemeInput('light')}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
                 themeInput === 'light'
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/50 ring-2 ring-purple-500/30'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/50 ring-2 ring-indigo-500/30'
                   : 'border-input hover:bg-accent'
               }`}
             >
@@ -249,7 +249,7 @@ export default function Settings() {
               onClick={() => setThemeInput('dark')}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
                 themeInput === 'dark'
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/50 ring-2 ring-purple-500/30'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/50 ring-2 ring-indigo-500/30'
                   : 'border-input hover:bg-accent'
               }`}
             >
@@ -264,7 +264,7 @@ export default function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm md:text-base flex items-center gap-2">
-            <Lock className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
+            <Lock className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
             密码保护
           </CardTitle>
         </CardHeader>
@@ -292,25 +292,25 @@ export default function Settings() {
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+              <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                 {totalWords}
               </p>
               <p className="text-[11px] md:text-xs text-muted-foreground">单词总数</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+              <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                 {totalPractice}
               </p>
               <p className="text-[11px] md:text-xs text-muted-foreground">练习次数</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+              <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                 {totalPlans}
               </p>
               <p className="text-[11px] md:text-xs text-muted-foreground">计划数量</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">
+              <p className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                 {totalDiary}
               </p>
               <p className="text-[11px] md:text-xs text-muted-foreground">日记数量</p>
