@@ -482,8 +482,8 @@ function RecordFormDialog({
   useEffect(() => {
     if (open) {
       setSubject(defaultSubject)
-      const mins = Math.round(defaultDuration / 60)
-      setDurationMinutes(mins > 0 ? String(mins) : '')
+      const mins = Math.max(1, Math.round(defaultDuration / 60))
+      setDurationMinutes(String(mins))
       setNote('')
     }
   }, [open, defaultSubject, defaultDuration])
@@ -593,7 +593,7 @@ function EditRecordDialog({
   useEffect(() => {
     if (open && record) {
       setSubject(record.subject)
-      setDurationMinutes(String(Math.round(record.duration / 60)))
+      setDurationMinutes(String(Math.max(1, Math.round(record.duration / 60))))
       setNote(record.note ?? '')
     }
   }, [open, record])
