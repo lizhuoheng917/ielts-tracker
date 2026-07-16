@@ -216,7 +216,7 @@ function TimerSection() {
   const progress = mode === 'countdown' && totalSeconds > 0
     ? 1 - (remainingSeconds / totalSeconds)
     : 0
-  const radius = 78
+  const radius = 88
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference * (1 - progress)
 
@@ -260,8 +260,8 @@ function TimerSection() {
           </div>
 
           {/* SVG 圆形进度环 */}
-          <div className="flex items-center justify-center mb-4 md:mb-5">
-            <svg width="180" height="180" viewBox="0 0 180 180" className="w-[160px] h-[160px] md:w-[200px] md:h-[200px]">
+          <div className="flex items-center justify-center mb-5 md:mb-6">
+            <svg width="200" height="200" viewBox="0 0 200 200" className="w-[180px] h-[180px] md:w-[240px] md:h-[240px]">
               <defs>
                 <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor={subjectConfig.gradientFrom} />
@@ -269,50 +269,50 @@ function TimerSection() {
                 </linearGradient>
               </defs>
               {/* 背景圆 */}
-              <circle cx="90" cy="90" r={radius} fill="none" stroke="oklch(0.93 0.01 270)" strokeWidth="8" strokeLinecap="round" />
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="oklch(0.93 0.01 270)" strokeWidth="8" strokeLinecap="round" />
               {/* 进度圆 */}
               <circle
-                cx="90" cy="90" r={radius}
+                cx="100" cy="100" r={radius}
                 fill="none"
                 stroke={`url(#${gradientId})`}
                 strokeWidth="8"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
-                transform="rotate(-90 90 90)"
+                transform="rotate(-90 100 100)"
                 className="transition-all duration-1000 ease-linear"
                 style={{ opacity: mode === 'countdown' ? 1 : 0.2 }}
               />
               {/* 时间文字 */}
               <text
-                x="90" y="85"
+                x="100" y="100"
                 textAnchor="middle"
                 fill="oklch(0.15 0.02 270)"
-                fontSize="36"
-                fontFamily="'DM Mono', 'JetBrains Mono', ui-monospace, monospace"
-                fontWeight="500"
-                letterSpacing="-1"
+                fontSize="52"
+                fontFamily="'Space Grotesk', system-ui, sans-serif"
+                fontWeight="700"
+                letterSpacing="-2"
               >
                 {formatTimerDisplay(displaySeconds)}
               </text>
               {/* 状态文字 */}
               {isRunning && (
-                <text x="90" y="110" textAnchor="middle" fill={subjectConfig.gradientFrom} fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="130" textAnchor="middle" fill={subjectConfig.gradientFrom} fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   进行中
                 </text>
               )}
               {isPaused && (
-                <text x="90" y="110" textAnchor="middle" fill="#D97706" fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="130" textAnchor="middle" fill="#D97706" fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   已暂停
                 </text>
               )}
               {isFinished && (
-                <text x="90" y="110" textAnchor="middle" fill="#059669" fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="130" textAnchor="middle" fill="#059669" fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   已完成
                 </text>
               )}
               {!isRunning && !isPaused && !isFinished && (
-                <text x="90" y="110" textAnchor="middle" fill="oklch(0.45 0.02 270)" fontSize="11" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="130" textAnchor="middle" fill="oklch(0.45 0.02 270)" fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   {mode === 'countdown' ? `${presetMinutes} 分钟` : '正计时'}
                 </text>
               )}
