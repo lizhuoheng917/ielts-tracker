@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays, differenceInDays } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Flame, CalendarDays, Star, BookOpen } from 'lucide-react'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
@@ -34,6 +34,8 @@ export default function Dashboard() {
   const practiceRecords = usePracticeStore((s) => s.records)
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
+  const addExecution = usePlanStore((s) => s.addExecution)
+  const updateExecution = usePlanStore((s) => s.updateExecution)
   const diaryEntries = useDiaryStore((s) => s.entries)
   const unlockedBadges = useAchievementStore((s) => s.unlockedBadges)
   const achievementStore = useAchievementStore()
@@ -88,9 +90,21 @@ export default function Dashboard() {
         id: plan.id,
         title: plan.title,
         completed: exec?.isCompleted ?? false,
+        execId: exec?.id,
       }
     })
   }, [plans, executions, today])
+
+  const togglePlanComplete = (planId: string, execId?: string) => {
+    if (execId) {
+      const exec = executions.find((e) => e.id === execId)
+      if (exec) {
+        updateExecution(execId, { isCompleted: !exec.isCompleted })
+      }
+    } else {
+      addExecution({ planId, date: today, isCompleted: true })
+    }
+  }
 
   // ===== 考试倒计时 =====
   const examCountdown = useMemo(() => {
@@ -241,23 +255,31 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {todayPlans.length === 0 ? (
-              <p className="text-sm text-muted-foreground">今天没有待办任务</p>
-            ) : (
-              <ul className="space-y-2">
-                {todayPlans.map((plan) => (
-                  <li key={plan.id} className="flex items-center gap-2 text-sm">
-                    <CheckCircle
-                      className={`h-4 w-4 shrink-0 ${
-                        plan.completed ? 'text-green-500' : 'text-muted-foreground/40'
-                      }`}
-                    />
-                    <span className={plan.completed ? 'line-through text-muted-foreground' : ''}>
-                      {plan.title}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <p className="text-sm text-muted-foreground">今天没有待办任务</p>
+          ) : (
+            <div className="space-y-2">
+              {todayPlans.map((plan) => (
+                <button
+                  key={plan.id}
+                  onClick={() => togglePlanComplete(plan.id, plan.execId)}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-all ${
+                    plan.completed
+                      ? 'bg-green-50 dark:bg-green-950/20'
+                      : 'hover:bg-accent'
+                  }`}
+                >
+                  {plan.completed ? (
+                    <CheckCircle className="h-4 w-4 shrink-0 text-green-500" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className={plan.completed ? 'line-through text-muted-foreground' : ''}>
+                    {plan.title}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
             <Link
               to="/plans"
               className="text-sm text-primary hover:underline mt-3 inline-block"

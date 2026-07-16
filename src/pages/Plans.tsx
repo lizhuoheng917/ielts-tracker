@@ -49,6 +49,8 @@ export default function Plans() {
   const addPlan = usePlanStore((s) => s.addPlan)
   const updatePlan = usePlanStore((s) => s.updatePlan)
   const deletePlan = usePlanStore((s) => s.deletePlan)
+  const addExecution = usePlanStore((s) => s.addExecution)
+  const updateExecution = usePlanStore((s) => s.updateExecution)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -78,16 +80,27 @@ export default function Plans() {
     })
   }, [activePlans, dayOfWeek])
 
-  // 今日执行记录映射
+  // 今日执行记录映射（状态 + ID）
   const todayExecMap = useMemo(() => {
-    const map: Record<string, boolean> = {}
+    const map: Record<string, { completed: boolean; id: string }> = {}
     executions.forEach((e) => {
       if (e.date === today) {
-        map[e.planId] = e.isCompleted
+        map[e.planId] = { completed: e.isCompleted, id: e.id }
       }
     })
     return map
   }, [executions, today])
+
+  const togglePlanComplete = (planId: string) => {
+    const exec = todayExecMap[planId]
+    if (exec) {
+      // 已有记录，切换状态
+      updateExecution(exec.id, { isCompleted: !exec.completed })
+    } else {
+      // 没有记录，创建完成状态
+      addExecution({ planId, date: today, isCompleted: true })
+    }
+  }
 
   const openAdd = () => {
     setEditingId(null)
@@ -165,11 +178,12 @@ export default function Plans() {
           ) : (
             <div className="space-y-2">
               {todayPlans.map((plan) => {
-                const isCompleted = todayExecMap[plan.id] ?? false
+                const exec = todayExecMap[plan.id]
+                const isCompleted = exec?.completed ?? false
                 return (
                   <button
                     key={plan.id}
-                    onClick={() => {}}
+                    onClick={() => togglePlanComplete(plan.id)}
                     className={cn(
                       'flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all',
                       isCompleted
