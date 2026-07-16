@@ -5,6 +5,12 @@ import { zhCN } from 'date-fns/locale'
 import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
@@ -48,7 +54,7 @@ export default function Dashboard() {
   const lastCheckinDate = useSettingsStore((s) => s.lastCheckinDate)
   const checkIn = useSettingsStore((s) => s.checkIn)
   const [checkedIn, setCheckedIn] = useState(false)
-  const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week')
+  const [reportOpen, setReportOpen] = useState(false)
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -151,8 +157,6 @@ export default function Dashboard() {
       completedTasks: monthCompletedTasks,
     }
   }, [wordRecords, practiceRecords, timerRecords, executions])
-
-  const reportData = reportPeriod === 'week' ? weekReport : monthReport
 
   // ===== 今日待办 =====
   const todayPlans = useMemo(() => {
@@ -355,55 +359,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
-
-      {/* ===== 周报/月报摘要 ===== */}
-      <Card>
-        <CardContent className="pt-4 pb-3 px-3 md:px-4">
-          <div className="flex items-center justify-between mb-3">
-            <CardTitle className="text-[15px] md:text-base flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-indigo-500" />
-              学习进度
-            </CardTitle>
-            <div className="flex bg-muted rounded-md p-0.5">
-              <button
-                className={cn(
-                  'px-2.5 py-1 text-xs font-medium rounded-md transition-all',
-                  reportPeriod === 'week' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-                onClick={() => setReportPeriod('week')}
-              >
-                本周
-              </button>
-              <button
-                className={cn(
-                  'px-2.5 py-1 text-xs font-medium rounded-md transition-all',
-                  reportPeriod === 'month' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-                onClick={() => setReportPeriod('month')}
-              >
-                本月
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {/* 背词量 */}
-            <div className="text-center">
-              <p className="text-xl md:text-2xl font-bold">{reportData.words}</p>
-              <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">背词数量</p>
-            </div>
-            {/* 学习时长 */}
-            <div className="text-center">
-              <p className="text-xl md:text-2xl font-bold">{reportData.minutes}<span className="text-sm font-normal">min</span></p>
-              <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">学习时长</p>
-            </div>
-            {/* 完成任务 */}
-            <div className="text-center">
-              <p className="text-xl md:text-2xl font-bold">{reportData.completedTasks}</p>
-              <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">完成任务</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* ===== 3. 今日概览 ===== */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -619,6 +574,77 @@ export default function Dashboard() {
           </Link>
         </CardContent>
       </Card>
+
+      {/* ===== 8. 学习报告 ===== */}
+      <Card
+        className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99]"
+        onClick={() => setReportOpen(true)}
+      >
+        <CardContent className="flex items-center justify-between py-4 px-4 md:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/50">
+              <BarChart3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">学习报告</p>
+              <p className="text-[13px] text-muted-foreground">查看本周/本月的学习数据</p>
+            </div>
+          </div>
+          <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
+        </CardContent>
+      </Card>
+
+      {/* 学习报告弹窗 */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              学习报告
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* 本周数据 */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">本周</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-3 text-center">
+                  <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{weekReport.words}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">背词</p>
+                </div>
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 text-center">
+                  <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{weekReport.minutes}<span className="text-xs font-normal">min</span></p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">时长</p>
+                </div>
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{weekReport.completedTasks}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">完成任务</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 本月数据 */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">本月</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-3 text-center">
+                  <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{monthReport.words}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">背词</p>
+                </div>
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 text-center">
+                  <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{monthReport.minutes}<span className="text-xs font-normal">min</span></p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">时长</p>
+                </div>
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{monthReport.completedTasks}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">完成任务</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
