@@ -22,7 +22,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { Plus, CheckCircle, Circle, Pencil, Trash2, ListTodo } from 'lucide-react'
+import { Plus, CheckCircle, Circle, Pencil, Trash2, ListTodo, Play, Pause } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -69,6 +69,12 @@ export default function Plans() {
   // 活跃计划（按创建时间倒序）
   const activePlans = useMemo(
     () => plans.filter((p) => p.isActive).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [plans]
+  )
+
+  // 已暂停计划
+  const pausedPlans = useMemo(
+    () => plans.filter((p) => !p.isActive).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [plans]
   )
 
@@ -275,6 +281,63 @@ export default function Plans() {
           ))
         )}
       </div>
+
+      {/* 已暂停计划 */}
+      {pausedPlans.length > 0 && (
+        <div className="space-y-2 md:space-y-3">
+          <h3 className="text-[15px] md:text-base font-semibold flex items-center gap-2 text-muted-foreground">
+            <Pause className="h-4 w-4" />
+            已暂停计划 ({pausedPlans.length})
+          </h3>
+          {pausedPlans.map((plan, index) => (
+            <Card
+              key={plan.id}
+              className={`animate-stagger-up stagger-${(index % 8) + 1} group/card opacity-75 hover:opacity-100 transition-all`}
+            >
+              <CardContent className="flex items-center gap-2 md:gap-3 py-2.5 px-3 md:px-4">
+                <span className="shrink-0 inline-block w-2 h-2 rounded-full bg-muted-foreground/30" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-muted-foreground">{plan.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <Badge variant="outline" className="text-[12px] md:text-xs">
+                      {FREQUENCY_LABELS[plan.frequency]}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => updatePlan(plan.id, { isActive: true })}
+                    className="h-8 w-8 text-green-500 hover:text-green-600"
+                    title="重新启用"
+                  >
+                    <Play className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => openEdit(plan)}
+                    className="h-8 w-8"
+                    title="编辑"
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setDeleteId(plan.id)}
+                    className="h-8 w-8"
+                    title="删除"
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* 添加/编辑弹窗 */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
