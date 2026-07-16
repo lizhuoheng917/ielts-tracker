@@ -164,11 +164,11 @@ export default function Settings() {
   }
 
   const handleClearAll = () => {
-    useWordStore.getState().records = []
-    usePracticeStore.getState().records = []
-    usePlanStore.getState().plans = []
-    usePlanStore.getState().executions = []
-    useDiaryStore.getState().entries = []
+    // 使用 setState 通过 set() 方法重置，确保 persist middleware 正确触发
+    useWordStore.setState({ records: [] })
+    usePracticeStore.setState({ records: [] })
+    usePlanStore.setState({ plans: [], executions: [] })
+    useDiaryStore.setState({ entries: [] })
     useAchievementStore.setState({
       totalXP: 0,
       level: 1,
@@ -178,10 +178,12 @@ export default function Settings() {
       currentStreak: 0,
       longestStreak: 0,
       heatmapData: {},
+      lastActiveDate: undefined,
     })
-    clearExamDate()
-    clearPassword()
-    setTheme('light')
+
+    // 清除 localStorage 中所有持久化数据
+    useSettingsStore.getState().clearAllData()
+
     setClearDialogOpen(false)
     alert('所有数据已清空')
     window.location.reload()
