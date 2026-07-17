@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, User, Sparkles, AlertCircle } from 'lucide-react'
+import { Send, Bot, User, Sparkles, AlertCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { AILoadingState } from './AILoadingState'
+import { useChatStore } from '@/stores/chatStore'
 import { AIConfirmCard, type AIAction } from './AIConfirmCard'
 import { streamAIChat, type AIMessage } from '@/lib/aiService'
 import ReactMarkdown from 'react-markdown'
@@ -25,6 +26,8 @@ interface AIChatPanelProps {
   className?: string
   initialQuery?: string
   suggestions?: string[]
+  /** 用于区分不同页面的对话上下文，如 'plans'、'practice' */
+  chatContext?: string
 }
 
 export function AIChatPanel({
@@ -36,11 +39,51 @@ export function AIChatPanel({
   className,
   initialQuery,
   suggestions,
+  chatContext,
 }: AIChatPanelProps) {
+  const chatKey = chatContext || 'default'
+  const getStoreMessages = useChatStore((s) => s.getMessages)
+  const chatSetMessages = useChatStore((s) => s.setMessages)
+  const chatClearMessages = useChatStore((s) => s.clearMessages)
+
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const isHydrated = useRef(false)
+
+  // 首次挂载时从 store 恢复历史消息（等 zustand persist 水合完成）
+  useEffect(() => {
+    if (!isHydrated.current) {
+      const stored = getStoreMessages(chatKey)
+      if (stored.length > 0) {
+        isHydrated.current = true
+        setMessages(stored.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+        })))
+      } else {
+        isHydrated.current = true
+      }
+    }
+  }, [chatKey, getStoreMessages])
+
+  // 消息变化时同步到 store
+  useEffect(() => {
+    if (isHydrated.current && messages.length > 0) {
+      chatSetMessages(
+        chatKey,
+        messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          createdAt: new Date().toISOString(),
+        }))
+      )
+    }
+  }, [messages, chatKey, chatSetMessages])
+
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isUserScrolledUp = useRef(false)
@@ -153,7 +196,7 @@ export function AIChatPanel({
   // 自动发送初始查询
   const hasAutoSent = useRef(false)
   useEffect(() => {
-    if (initialQuery && !hasAutoSent.current && messages.length === 0) {
+    if (initialQuery && !hasAutoSent.current && isHydrated.current && messages.length === 0) {
       hasAutoSent.current = true
       sendMessage(initialQuery)
     }
@@ -181,6 +224,23 @@ export function AIChatPanel({
     <div className={cn('flex flex-col flex-1 min-h-0', className)}>
       {/* 消息列表 */}
       <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-1">
+        {/* 历史消息提示 */}
+        {getStoreMessages(chatKey).length > 0 && messages.length > 0 && !isLoading && (
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <span className="text-[10px] text-muted-foreground/60">已恢复历史对话</span>
+            <button
+              onClick={() => {
+                chatClearMessages(chatKey)
+                setMessages([])
+                isHydrated.current = false
+              }}
+              className="text-[10px] text-muted-foreground/40 hover:text-destructive/70 transition-colors flex items-center gap-0.5"
+            >
+              <Trash2 className="h-2.5 w-2.5" />
+              清除
+            </button>
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
             <Sparkles className="h-8 w-8 mb-2 text-indigo-400" />

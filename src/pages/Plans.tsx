@@ -583,6 +583,7 @@ time:21:00
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."
+              chatContext="plans"
               initialQuery={reportContext
                 ? '请根据上面的学习分析报告，为我生成针对性的个性化学习计划。每个计划独立一条，包含分类、频率、星期和时间。'
                 : undefined}

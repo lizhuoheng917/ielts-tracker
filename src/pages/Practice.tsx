@@ -562,6 +562,7 @@ function TabPanel({ type }: { type: PracticeType }) {
               <AIChatPanel
                 systemPrompt={writingSystemPrompt}
                 placeholder="粘贴你的雅思作文（大作文/小作文），AI 将按评分标准批改..."
+                chatContext="practice"
               />
             </div>
           </DialogContent>
