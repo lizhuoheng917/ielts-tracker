@@ -269,7 +269,7 @@ function TimerSection() {
                 </linearGradient>
               </defs>
               {/* 背景圆 */}
-              <circle cx="100" cy="100" r={radius} fill="none" stroke="oklch(0.93 0.01 270)" strokeWidth="8" strokeLinecap="round" />
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="currentColor" className="text-border" strokeWidth="8" strokeLinecap="round" />
               {/* 进度圆 */}
               <circle
                 cx="100" cy="100" r={radius}
@@ -287,7 +287,8 @@ function TimerSection() {
               <text
                 x="100" y="96"
                 textAnchor="middle"
-                fill="oklch(0.15 0.02 270)"
+                fill="currentColor"
+                className="text-foreground"
                 fontSize="44"
                 fontFamily="'Space Grotesk', system-ui, sans-serif"
                 fontWeight="700"
@@ -312,7 +313,7 @@ function TimerSection() {
                 </text>
               )}
               {!isRunning && !isPaused && !isFinished && (
-                <text x="100" y="124" textAnchor="middle" fill="oklch(0.45 0.02 270)" fontSize="13" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="124" textAnchor="middle" fill="currentColor" className="text-muted-foreground" fontSize="13" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   {mode === 'countdown' ? `${presetMinutes} 分钟` : '正计时'}
                 </text>
               )}
