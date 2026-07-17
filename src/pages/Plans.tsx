@@ -83,11 +83,14 @@ ${JSON.stringify(data, null, 2)}
 - 每个标记块内必须包含以下信息，每行一个字段：
   - 第1行：计划标题
   - 第2行起：计划描述（可多行）
-  - 最后三行分别是：分类、频率、时间
+  - 后续行分别是：分类、频率、星期、时间
 
 ## 可用字段值
 - 分类（category）：reading | listening | writing | speaking | vocabulary | general
 - 频率（frequency）：daily | weekly
+- 星期（weekdays）：用逗号分隔的数字，0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
+  - daily 频率不需要此项（留空或省略）
+  - weekly 频率**必须**指定此项，例如：1,3,5 表示周一、周三、周五
 - 时间（time）：HH:mm 格式（24小时制，如 08:00、19:30）
 
 ## 格式示例
@@ -105,6 +108,7 @@ time:08:00
 每周一三五阅读一篇经济学人文章并做笔记
 category:reading
 frequency:weekly
+weekdays:1,3,5
 time:21:00
 [/ACTION]
 
@@ -562,12 +566,14 @@ time:21:00
                   let category: string = 'general'
                   let frequency: string = 'daily'
                   let targetTime: string | undefined
+                  let weekDays: number[] | undefined
                   const descLines: string[] = []
 
                   for (const line of lines.slice(1)) {
                     const catMatch = line.match(/^category:(.+)/i)
                     const freqMatch = line.match(/^frequency:(.+)/i)
                     const timeMatch = line.match(/^time:(.+)/i)
+                    const wdMatch = line.match(/^weekdays:(.+)/i)
                     if (catMatch) {
                       const val = catMatch[1].trim().toLowerCase()
                       if (['reading', 'listening', 'writing', 'speaking', 'vocabulary', 'general'].includes(val)) {
@@ -580,6 +586,11 @@ time:21:00
                       }
                     } else if (timeMatch) {
                       targetTime = timeMatch[1].trim()
+                    } else if (wdMatch) {
+                      weekDays = wdMatch[1]
+                        .split(',')
+                        .map((s) => parseInt(s.trim(), 10))
+                        .filter((n) => !isNaN(n) && n >= 0 && n <= 6)
                     } else {
                       descLines.push(line)
                     }
@@ -598,6 +609,7 @@ time:21:00
                     category: category as 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general',
                     frequency: frequency as 'daily' | 'weekly',
                     targetTime: targetTime || undefined,
+                    weekDays: frequency === 'weekly' ? (weekDays && weekDays.length > 0 ? weekDays : undefined) : undefined,
                     isActive: true,
                   })
                   alert('计划已创建！')
