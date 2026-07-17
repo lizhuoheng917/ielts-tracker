@@ -72,7 +72,7 @@ function IeltsScoreSlider({
       {/* 滑轨：容器+轨道层+滑块层，确保轨道在所有浏览器中可见 */}
       <div className="relative h-7 flex items-center">
         {/* 轨道背景（独立层，确保始终可见） */}
-        <div className="absolute inset-x-0 h-1.5 rounded-full bg-muted-foreground/20 dark:bg-white/15" />
+        <div className="absolute inset-x-0 h-1.5 rounded-full bg-muted-foreground/20 dark:bg-white/20" />
         {/* 输入滑块（透明背景，只显示拖拽按钮） */}
         <input
           type="range"
@@ -103,8 +103,8 @@ function IeltsScoreSlider({
 
       {/* 端点提示 */}
       <div className="flex justify-between -mt-1">
-        <span className="text-[11px] text-muted-foreground/60 dark:text-white/40">未评分</span>
-        <span className="text-[11px] text-muted-foreground/60 dark:text-white/40">9</span>
+        <span className="text-[11px] text-muted-foreground/60 dark:text-white/50">未评分</span>
+        <span className="text-[11px] text-muted-foreground/60 dark:text-white/50">9</span>
       </div>
     </div>
   )
