@@ -52,7 +52,7 @@ export default function Plans() {
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const reportContext = searchParams.get('report') || ''
   const reports = useReportStore((s) => s.reports)
   const updatePlan = usePlanStore((s) => s.updatePlan)
@@ -71,6 +71,14 @@ export default function Plans() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(reportContext ? true : false)
+
+  // 关闭 AI 对话框时清除 URL 中的 report 参数，避免重复触发 initialQuery
+  const handleAiOpenChange = (open: boolean) => {
+    setAiOpen(open)
+    if (!open && searchParams.get('report')) {
+      setSearchParams({}, { replace: true })
+    }
+  }
 
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
@@ -571,7 +579,7 @@ time:21:00
       </Dialog>
 
       {/* AI 生成计划弹窗 */}
-      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+      <Dialog open={aiOpen} onOpenChange={handleAiOpenChange}>
         <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-4 pt-4 pb-2">
             <DialogTitle className="flex items-center gap-2">
@@ -579,7 +587,7 @@ time:21:00
               AI 生成学习计划
             </DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
+          <div className="flex flex-col flex-1 min-h-0 px-4 pb-4">
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."
@@ -649,7 +657,7 @@ time:21:00
                     weekDays: frequency === 'weekly' ? (weekDays && weekDays.length > 0 ? weekDays : undefined) : undefined,
                     isActive: true,
                   })
-                  alert('计划已创建！')
+                  setAiOpen(false)
                 }
               }}
             />

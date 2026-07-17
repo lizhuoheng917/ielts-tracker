@@ -111,7 +111,7 @@ export interface AIStreamCallbacks {
 export async function streamAIChat(
   messages: AIMessage[],
   callbacks: AIStreamCallbacks,
-  options?: { temperature?: number; max_tokens?: number }
+  options?: { temperature?: number; max_tokens?: number; signal?: AbortSignal }
 ) {
   const { apiKey, baseURL, model } = useAIStore.getState()
 
@@ -127,6 +127,7 @@ export async function streamAIChat(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
+      signal: options?.signal,
       body: JSON.stringify({
         model,
         messages,
@@ -199,6 +200,8 @@ export async function streamAIChat(
 
     callbacks.onDone?.()
   } catch (error) {
+    // 组件卸载触发的 abort 不视为错误，静默忽略
+    if (error instanceof DOMException && error.name === 'AbortError') return
     callbacks.onError?.(error instanceof Error ? error.message : '网络请求失败')
   }
 }

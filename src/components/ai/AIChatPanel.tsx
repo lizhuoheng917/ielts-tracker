@@ -51,6 +51,17 @@ export function AIChatPanel({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const isHydrated = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // 组件卸载时中止进行中的流式请求并清理定时器
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+      clearTimeout(syncTimeoutRef.current)
+    }
+  }, [])
 
   // 首次挂载时从 store 恢复历史消息（等 zustand persist 水合完成）
   useEffect(() => {
@@ -69,20 +80,30 @@ export function AIChatPanel({
     }
   }, [chatKey, getStoreMessages])
 
-  // 消息变化时同步到 store
+  // 消息变化时同步到 store（防抖：流式生成期间不频繁写入 localStorage）
   useEffect(() => {
     if (isHydrated.current && messages.length > 0) {
-      chatSetMessages(
-        chatKey,
-        messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          createdAt: new Date().toISOString(),
-        }))
-      )
+      clearTimeout(syncTimeoutRef.current)
+      const doSync = () => {
+        chatSetMessages(
+          chatKey,
+          messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: new Date().toISOString(),
+          }))
+        )
+      }
+      // 非加载状态立即同步；加载中（流式生成）延迟 500ms
+      if (isLoading) {
+        syncTimeoutRef.current = setTimeout(doSync, 500)
+      } else {
+        doSync()
+      }
     }
-  }, [messages, chatKey, chatSetMessages])
+    return () => clearTimeout(syncTimeoutRef.current)
+  }, [messages, chatKey, chatSetMessages, isLoading])
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -157,6 +178,11 @@ export function AIChatPanel({
 
     let fullContent = ''
 
+    // 创建新的 AbortController 并在开始前中止上一次的
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     await streamAIChat(apiMessages, {
       onContent: (content) => {
         fullContent = content
@@ -169,6 +195,7 @@ export function AIChatPanel({
       onError: (err) => {
         setError(err)
         setIsLoading(false)
+        abortRef.current = null
       },
       onDone: () => {
         setIsLoading(false)
@@ -186,21 +213,25 @@ export function AIChatPanel({
           )
         }
       },
-    })
+    }, { signal: controller.signal })
   }, [isLoading, messages, systemPrompt, onReportGenerated])
 
   const handleSend = useCallback(() => {
     sendMessage(input)
   }, [input, sendMessage])
 
-  // 自动发送初始查询
-  const hasAutoSent = useRef(false)
+  // 自动发送初始查询：仅在 chatStore 中没有任何历史消息时才发送
+  // 这样关闭对话框再重新打开时，因为 store 已有消息，不会重复发送
   useEffect(() => {
-    if (initialQuery && !hasAutoSent.current && isHydrated.current && messages.length === 0) {
-      hasAutoSent.current = true
+    if (
+      initialQuery &&
+      isHydrated.current &&
+      messages.length === 0 &&
+      getStoreMessages(chatKey).length === 0
+    ) {
       sendMessage(initialQuery)
     }
-  }, [initialQuery, messages.length, sendMessage])
+  }, [initialQuery, messages.length, sendMessage, chatKey, getStoreMessages])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -223,7 +254,7 @@ export function AIChatPanel({
   return (
     <div className={cn('flex flex-col flex-1 min-h-0', className)}>
       {/* 消息列表 */}
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-1">
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-scroll space-y-4 px-1" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }} tabIndex={0}>
         {/* 历史消息提示 */}
         {getStoreMessages(chatKey).length > 0 && messages.length > 0 && !isLoading && (
           <div className="flex items-center justify-center gap-2 pt-1">
@@ -232,7 +263,6 @@ export function AIChatPanel({
               onClick={() => {
                 chatClearMessages(chatKey)
                 setMessages([])
-                isHydrated.current = false
               }}
               className="text-[10px] text-muted-foreground/40 hover:text-destructive/70 transition-colors flex items-center gap-0.5"
             >
@@ -280,7 +310,7 @@ export function AIChatPanel({
               {msg.role === 'assistant' ? (
                 msg.content ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
-                    <ReactMarkdown>{stripActionTags(msg.content)}</ReactMarkdown>
+                    <ReactMarkdown>{stripActionTags(msg.content, isLoading)}</ReactMarkdown>
                   </div>
                 ) : (
                   <AILoadingState text={loadingText} />
@@ -360,12 +390,17 @@ export function AIChatPanel({
 
 // 从 AI 回复中解析建议操作（简化版：查找 [ACTION:...] 标记）
 /** 从 AI 回复中剥离 [ACTION:...]...[/ACTION] 标签，避免在消息气泡中显示原始标记 */
-function stripActionTags(content: string): string {
-  return content
+function stripActionTags(content: string, streaming = false): string {
+  let result = content
     // 先移除完整的 [ACTION:...]...[/ACTION] 标签
     .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
-    // 再移除未关闭的 [ACTION:...] 标签（流式生成中可能出现）
-    .replace(/\[ACTION:\w+\][\s\S]*/g, '')
+  // 流式生成期间不移除未关闭的标签，避免正常内容被误删导致闪烁
+  if (!streaming) {
+    result = result
+      // 再移除未关闭的 [ACTION:...] 标签
+      .replace(/\[ACTION:\w+\][\s\S]*/g, '')
+  }
+  return result
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
