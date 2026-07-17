@@ -21,6 +21,7 @@ interface AIChatPanelProps {
   placeholder?: string
   onActionConfirm?: (action: AIAction) => void
   className?: string
+  initialQuery?: string
 }
 
 export function AIChatPanel({
@@ -28,6 +29,7 @@ export function AIChatPanel({
   placeholder = '输入消息...',
   onActionConfirm,
   className,
+  initialQuery,
 }: AIChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -58,8 +60,8 @@ export function AIChatPanel({
     }
   }, [input])
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim()
+  const sendMessage = useCallback(async (content: string) => {
+    const trimmed = content.trim()
     if (!trimmed || isLoading) return
 
     const userMsg: ChatMessage = {
@@ -73,10 +75,11 @@ export function AIChatPanel({
     setIsLoading(true)
     setError('')
 
-    // 构建 API 消息
+    // 构建 API 消息（基于最新状态）
+    const currentMessages = messages
     const apiMessages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...messages.map((m) => ({ role: m.role, content: m.content }) as AIMessage),
+      ...currentMessages.map((m) => ({ role: m.role, content: m.content }) as AIMessage),
       { role: 'user', content: trimmed },
     ]
 
@@ -114,7 +117,20 @@ export function AIChatPanel({
         }
       },
     })
-  }, [input, isLoading, messages, systemPrompt])
+  }, [isLoading, messages, systemPrompt])
+
+  const handleSend = useCallback(() => {
+    sendMessage(input)
+  }, [input, sendMessage])
+
+  // 自动发送初始查询
+  const hasAutoSent = useRef(false)
+  useEffect(() => {
+    if (initialQuery && !hasAutoSent.current && messages.length === 0) {
+      hasAutoSent.current = true
+      sendMessage(initialQuery)
+    }
+  }, [initialQuery, messages.length, sendMessage])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -126,9 +142,11 @@ export function AIChatPanel({
   const handleActionConfirm = (msgId: string, action: AIAction) => {
     onActionConfirm?.(action)
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId ? { ...m, actionsConfirmed: true } : m
-      )
+      prev.map((m) => {
+        if (m.id !== msgId || !m.actions) return m
+        const remaining = m.actions.filter((a) => a.id !== action.id)
+        return { ...m, actions: remaining.length > 0 ? remaining : undefined }
+      })
     )
   }
 

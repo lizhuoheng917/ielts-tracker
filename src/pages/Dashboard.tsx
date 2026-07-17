@@ -62,33 +62,27 @@ export default function Dashboard() {
   // ===== AI 系统提示 =====
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    return `你是 IELTS Tracker 的 AI 智能学习助手。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
+    return `你是 IELTS Tracker 的 AI 智能学习分析师。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
 
 ## 用户学习数据
 ${JSON.stringify(data, null, 2)}
 
 ## 你的职责
 1. 分析用户的学习数据，找出强项和弱项
-2. 给出具体的、可操作的学习建议
-3. 如果用户需要，可以建议创建学习计划
+2. 评估当前计划完成进度，指出完成情况
+3. 给出具体的、可操作的学习建议
+4. 如果用户数据很少（刚开始使用），给出入门建议
 
-## 建议创建计划时的格式
-如果你想建议用户创建学习计划，请在回复末尾使用以下格式：
-[ACTION:create_plan]
-计划标题
-计划描述（具体的学习内容和方法）
-目标日期（YYYY-MM-DD格式）
-科目分类（reading/listening/writing/speaking/general之一）
-[/ACTION]
+## 重要限制
+- 你只负责分析和建议，不负责创建学习计划
+- 如果用户想要创建学习计划，请引导他们去「学习计划」页面使用 AI 生成功能
+- 不要在回复中使用 [ACTION:create_plan] 标记
 
 ## 风格要求
 - 用中文回复
 - 语气友好、鼓励但不失专业
 - 建议要具体，避免空泛的"多练习"
-- 如果用户数据很少（刚开始使用），给出入门建议
 - 回复使用 Markdown 格式` }, [])
-
-  const addPlan = usePlanStore((s) => s.addPlan)
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -660,17 +654,7 @@ ${JSON.stringify(data, null, 2)}
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="问我关于你的学习分析..."
-              onActionConfirm={(action) => {
-                if (action.type === 'create_plan') {
-                  const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)
-                  const title = lines[0] || 'AI 建议计划'
-                  const description = lines.slice(1).join('\n') || ''
-                  const categoryLine = lines.find((l) => /reading|listening|writing|speaking|general/.test(l))
-                  const category = (categoryLine?.match(/(reading|listening|writing|speaking|general)/)?.[0] || 'general') as 'reading' | 'listening' | 'writing' | 'speaking' | 'general'
-                  addPlan({ title, description, category, frequency: 'daily', isActive: true })
-                  alert('计划已创建！')
-                }
-              }}
+              initialQuery="请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。"
             />
           </div>
         </DialogContent>

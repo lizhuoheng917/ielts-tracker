@@ -74,14 +74,23 @@ export default function Plans() {
 ${JSON.stringify(data, null, 2)}
 
 ## 你的职责
-根据用户的学习数据，为其生成个性化的学习计划建议。
+根据用户的学习数据，为其生成个性化的学习计划建议。你可以一次生成多个计划，每个计划对应不同的学习安排和时间。
 
-## 建议创建计划时的格式
-如果你想建议用户创建学习计划，请在回复末尾使用以下格式：
+## 建议创建计划时的格式（重要）
+- 每个计划必须单独使用一个 [ACTION:create_plan] 标记
+- 如果建议多个计划，请使用多个独立的标记块
+- 格式示例：
+
 [ACTION:create_plan]
-计划标题
-计划描述（具体的学习内容和方法）
-科目分类（reading/listening/writing/speaking/general之一）
+早晨听力训练
+每天早 8:00 完成一套剑桥听力真题，重点精听 Section 3
+listening
+[/ACTION]
+
+[ACTION:create_plan]
+晚间阅读积累
+每天晚 9:00 阅读一篇经济学人文章并做笔记
+reading
 [/ACTION]
 
 ## 风格要求
@@ -195,7 +204,7 @@ ${JSON.stringify(data, null, 2)}
           <h1 className="text-[22px] md:text-2xl font-bold">学习计划</h1>
           <p className="mt-1 text-[15px] text-muted-foreground">管理你的每日学习任务</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => setAiOpen(true)} className="w-full sm:w-auto">
             <Sparkles className="h-4 w-4 mr-1 text-violet-500" />
             AI 生成
