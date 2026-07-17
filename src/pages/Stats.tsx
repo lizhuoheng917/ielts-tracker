@@ -4,8 +4,8 @@ import { format, subDays, startOfWeek, eachDayOfInterval } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -16,9 +16,11 @@ import {
   Radar,
   PolarGrid,
   PolarAngleAxis,
+  PolarRadiusAxis,
   PieChart,
   Pie,
   Cell,
+  Legend,
 } from 'recharts'
 import { Flame, Trophy, CalendarDays, Sparkles, FileText, Save, Trash2, Clock, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,20 +46,18 @@ import type { PracticeType } from '@/lib/types'
 import ReactMarkdown, { type Components } from 'react-markdown'
 
 // ===== 颜色常量 =====
-const INDIGO_COLORS = {
-  100: '#EEF2FF',
-  200: '#E0E7FF',
-  300: '#A5B4FC',
-  400: '#818CF8',
-  500: '#6366F1',
-  600: '#4F46E5',
-}
-
-const SKILL_COLORS: Record<PracticeType, string> = {
-  reading: '#3B82F6',
-  listening: '#8B5CF6',
-  writing: '#F59E0B',
-  speaking: '#10B981',
+const CHART_COLORS = {
+  primary: '#6366F1',
+  primaryLight: '#A5B4FC',
+  primaryLighter: '#E0E7FF',
+  gradient: ['#818CF8', '#6366F1', '#4F46E5'],
+  skill: {
+    reading: '#3B82F6',
+    listening: '#8B5CF6',
+    writing: '#F59E0B',
+    speaking: '#10B981',
+  },
+  pie: ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#F97316', '#14B8A6'],
 }
 
 const SKILL_LABELS: Record<PracticeType, string> = {
@@ -66,8 +66,6 @@ const SKILL_LABELS: Record<PracticeType, string> = {
   writing: '写作',
   speaking: '口语',
 }
-
-const PIE_COLORS = [INDIGO_COLORS[500], INDIGO_COLORS[400], INDIGO_COLORS[300], INDIGO_COLORS[200], INDIGO_COLORS[600]]
 
 // ===== 工具函数 =====
 function formatDate(date: Date): string {
@@ -103,13 +101,15 @@ function CustomTooltip({
   if (!active || !payload?.length) return null
   return (
     <div
-      className="rounded-lg border px-3 py-2 shadow-sm text-xs md:text-sm"
+      className="rounded-xl border px-3 py-2.5 shadow-lg backdrop-blur-sm text-xs"
       style={{ backgroundColor: bgColor, borderColor }}
     >
-      <p className="font-medium">{label}</p>
+      <p className="font-medium text-foreground/90 mb-1">{label}</p>
       {payload.map((item, i) => (
-        <p key={i} style={{ color: item.color }}>
-          {item.name}: {item.value}
+        <p key={i} className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+          <span className="text-muted-foreground">{item.name}:</span>
+          <span className="font-medium">{item.value}</span>
         </p>
       ))}
     </div>
@@ -423,7 +423,7 @@ ${JSON.stringify(data, null, 2)}
         subject: SKILL_LABELS[type],
         fullMark: 9,
         score: Math.round(avgScore * 10) / 10,
-        color: SKILL_COLORS[type],
+        color: CHART_COLORS.skill[type],
       }
     })
   }, [practiceRecords])
@@ -643,35 +643,47 @@ ${JSON.stringify(data, null, 2)}
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-5">
         {/* 单词背诵趋势 */}
         <Card className="lg:col-span-3">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-[15px] md:text-base">单词背诵趋势（近30天）</CardTitle>
           </CardHeader>
           <CardContent>
             {wordTrend.some((d) => d.count > 0) ? (
-              <div className="h-[200px] md:h-[250px]">
+              <div className="h-[220px] md:h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={wordTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                  <AreaChart data={wordTrend}>
+                    <defs>
+                      <linearGradient id="wordGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
+                        <stop offset="100%" stopColor={CHART_COLORS.primary} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 11, fill: chartColors.tick }}
+                      angle={0}
                       interval={6}
+                      axisLine={false}
+                      tickLine={false}
                     />
                     <YAxis
                       tick={{ fontSize: 11, fill: chartColors.tick }}
                       allowDecimals={false}
+                      axisLine={false}
+                      tickLine={false}
                     />
                     <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="count"
                       name="背诵量"
-                      stroke={INDIGO_COLORS[500]}
-                      strokeWidth={2}
+                      stroke={CHART_COLORS.primary}
+                      strokeWidth={2.5}
+                      fill="url(#wordGradient)"
                       dot={false}
-                      activeDot={{ r: 4, fill: INDIGO_COLORS[500] }}
+                      activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2, fill: CHART_COLORS.primary }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             ) : (
@@ -682,31 +694,41 @@ ${JSON.stringify(data, null, 2)}
 
         {/* 学习时长分布 */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-[15px] md:text-base">学习时长分布（近7天）</CardTitle>
           </CardHeader>
           <CardContent>
             {hasDurationData ? (
-              <div className="h-[200px] md:h-[250px]">
+              <div className="h-[220px] md:h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={durationData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                  <BarChart data={durationData} barCategoryGap="20%">
+                    <defs>
+                      <linearGradient id="durationGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={CHART_COLORS.primary} />
+                        <stop offset="100%" stopColor={CHART_COLORS.gradient[2]} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 11, fill: chartColors.tick }}
+                      axisLine={false}
+                      tickLine={false}
                     />
                     <YAxis
                       tick={{ fontSize: 11, fill: chartColors.tick }}
                       allowDecimals={false}
                       unit="分"
+                      axisLine={false}
+                      tickLine={false}
                     />
                     <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
                     <Bar
                       dataKey="duration"
                       name="时长（分钟）"
-                      fill={INDIGO_COLORS[500]}
-                      radius={[6, 6, 0, 0]}
-                      barSize={32}
+                      fill="url(#durationGradient)"
+                      radius={[8, 8, 0, 0]}
+                      barSize={28}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -722,26 +744,28 @@ ${JSON.stringify(data, null, 2)}
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-5">
         {/* 四科能力雷达图 */}
         <Card className="lg:col-span-3">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-[15px] md:text-base">四科能力雷达图</CardTitle>
           </CardHeader>
           <CardContent>
             {hasRadarData ? (
               <div className="h-[260px] md:h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
+                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                     <PolarGrid stroke={chartColors.grid} />
                     <PolarAngleAxis
                       dataKey="subject"
-                      tick={{ fontSize: 11, fill: chartColors.label }}
+                      tick={{ fontSize: 12, fill: chartColors.label, fontWeight: 500 }}
                     />
+                    <PolarRadiusAxis angle={90} domain={[0, 9]} tick={false} axisLine={false} />
                     <Radar
                       name="平均分"
                       dataKey="score"
-                      stroke={INDIGO_COLORS[500]}
-                      fill={INDIGO_COLORS[300]}
-                      fillOpacity={0.5}
-                      strokeWidth={2}
+                      stroke={CHART_COLORS.primary}
+                      fill={CHART_COLORS.primaryLight}
+                      fillOpacity={0.4}
+                      strokeWidth={2.5}
+                      dot={{ r: 4, fill: CHART_COLORS.primary, stroke: '#fff', strokeWidth: 1.5 }}
                     />
                     <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
                   </RadarChart>
@@ -755,38 +779,47 @@ ${JSON.stringify(data, null, 2)}
 
         {/* 单词分类饼图 */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-[15px] md:text-base">单词分类占比</CardTitle>
           </CardHeader>
           <CardContent>
             {hasPieData ? (
-              <div className="h-[240px] md:h-[300px]">
+              <div className="h-[260px] md:h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={categoryPieData}
-                      cx="50%"
+                      cx="40%"
                       cy="50%"
-                      innerRadius={40}
-                      outerRadius={70}
-                      paddingAngle={3}
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={2}
                       dataKey="value"
                       nameKey="name"
-                      label={({ name, percent }) =>
-                        `${name} ${(percent && typeof percent === 'number' ? percent * 100 : 0).toFixed(0)}%`
-                      }
-                      labelLine={{ stroke: chartColors.label }}
                     >
                       {categoryPieData.map((_, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          fill={CHART_COLORS.pie[index % CHART_COLORS.pie.length]}
+                          stroke="none"
                         />
                       ))}
                     </Pie>
                     <Tooltip
                       content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />}
-                      formatter={(value) => [`${value} 个`, '']}
+                      formatter={(value) => [`${value} 个`, '数量']}
+                    />
+                    <Legend
+                      content={({ payload }) => (
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center mt-2">
+                          {payload?.map((entry, i) => (
+                            <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                              <span>{entry.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     />
                   </PieChart>
                 </ResponsiveContainer>
