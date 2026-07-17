@@ -61,6 +61,7 @@ export default function Plans() {
   const [formCategory, setFormCategory] = useState<string>('general')
   const [formFreq, setFormFreq] = useState<'daily' | 'weekly'>('daily')
   const [formWeekDays, setFormWeekDays] = useState<number[]>([])
+  const [formTime, setFormTime] = useState('')
   const [formActive, setFormActive] = useState(true)
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -79,18 +80,32 @@ ${JSON.stringify(data, null, 2)}
 ## 建议创建计划时的格式（重要）
 - 每个计划必须单独使用一个 [ACTION:create_plan] 标记
 - 如果建议多个计划，请使用多个独立的标记块
-- 格式示例：
+- 每个标记块内必须包含以下信息，每行一个字段：
+  - 第1行：计划标题
+  - 第2行起：计划描述（可多行）
+  - 最后三行分别是：分类、频率、时间
+
+## 可用字段值
+- 分类（category）：reading | listening | writing | speaking | vocabulary | general
+- 频率（frequency）：daily | weekly
+- 时间（time）：HH:mm 格式（24小时制，如 08:00、19:30）
+
+## 格式示例
 
 [ACTION:create_plan]
 早晨听力训练
 每天早 8:00 完成一套剑桥听力真题，重点精听 Section 3
-listening
+category:listening
+frequency:daily
+time:08:00
 [/ACTION]
 
 [ACTION:create_plan]
 晚间阅读积累
-每天晚 9:00 阅读一篇经济学人文章并做笔记
-reading
+每周一三五阅读一篇经济学人文章并做笔记
+category:reading
+frequency:weekly
+time:21:00
 [/ACTION]
 
 ## 风格要求
@@ -152,6 +167,7 @@ reading
     setFormCategory('general')
     setFormFreq('daily')
     setFormWeekDays([])
+    setFormTime('')
     setFormActive(true)
     setFormOpen(true)
   }
@@ -162,6 +178,7 @@ reading
     setFormCategory(plan.category)
     setFormFreq(plan.frequency as 'daily' | 'weekly')
     setFormWeekDays(plan.weekDays || [])
+    setFormTime(plan.targetTime || '')
     setFormActive(plan.isActive)
     setFormOpen(true)
   }
@@ -173,6 +190,7 @@ reading
       category: formCategory as 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general',
       frequency: formFreq as 'daily' | 'weekly',
       weekDays: formFreq === 'weekly' ? formWeekDays : undefined,
+      targetTime: formTime || undefined,
       isActive: formActive,
     }
     if (editingId) {
@@ -258,9 +276,16 @@ reading
                     >
                       {plan.title}
                     </span>
-                    <Badge variant="outline" className="text-[12px] md:text-xs shrink-0">
-                      {FREQUENCY_LABELS[plan.frequency]}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {plan.targetTime && (
+                        <span className="text-[12px] text-indigo-500 dark:text-indigo-400 font-medium">
+                          {plan.targetTime}
+                        </span>
+                      )}
+                      <Badge variant="outline" className="text-[12px] md:text-xs shrink-0">
+                        {FREQUENCY_LABELS[plan.frequency]}
+                      </Badge>
+                    </div>
                   </button>
                 )
               })}
@@ -295,6 +320,11 @@ reading
                       <Badge variant="outline" className="text-[12px] md:text-xs">
                         {FREQUENCY_LABELS[plan.frequency]}
                       </Badge>
+                      {plan.targetTime && (
+                        <Badge variant="outline" className="text-[12px] md:text-xs text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
+                          {plan.targetTime}
+                        </Badge>
+                      )}
                       {plan.frequency === 'weekly' && plan.weekDays && (
                         <span className="text-[12px] md:text-xs text-muted-foreground">
                           周{plan.weekDays.map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label).join('、')}
@@ -455,6 +485,16 @@ reading
               </div>
             )}
 
+            <div className="space-y-2">
+              <Label>完成时间（可选）</Label>
+              <Input
+                type="time"
+                value={formTime}
+                onChange={(e) => setFormTime(e.target.value)}
+                className="w-full"
+              />
+            </div>
+
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -517,10 +557,49 @@ reading
                 if (action.type === 'create_plan') {
                   const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)
                   const title = lines[0] || 'AI 建议计划'
-                  const description = lines.slice(1).join('\n') || ''
-                  const categoryLine = lines.find((l) => /reading|listening|writing|speaking|general/.test(l))
-                  const category = (categoryLine?.match(/(reading|listening|writing|speaking|general)/)?.[0] || 'general') as 'reading' | 'listening' | 'writing' | 'speaking' | 'general'
-                  addPlan({ title, description, category, frequency: 'daily', isActive: true })
+
+                  // 提取元数据字段
+                  let category: string = 'general'
+                  let frequency: string = 'daily'
+                  let targetTime: string | undefined
+                  const descLines: string[] = []
+
+                  for (const line of lines.slice(1)) {
+                    const catMatch = line.match(/^category:(.+)/i)
+                    const freqMatch = line.match(/^frequency:(.+)/i)
+                    const timeMatch = line.match(/^time:(.+)/i)
+                    if (catMatch) {
+                      const val = catMatch[1].trim().toLowerCase()
+                      if (['reading', 'listening', 'writing', 'speaking', 'vocabulary', 'general'].includes(val)) {
+                        category = val
+                      }
+                    } else if (freqMatch) {
+                      const val = freqMatch[1].trim().toLowerCase()
+                      if (['daily', 'weekly'].includes(val)) {
+                        frequency = val
+                      }
+                    } else if (timeMatch) {
+                      targetTime = timeMatch[1].trim()
+                    } else {
+                      descLines.push(line)
+                    }
+                  }
+
+                  // 兼容旧格式：从描述行中查找分类关键词
+                  if (category === 'general') {
+                    const catLine = lines.find((l) => /^(reading|listening|writing|speaking|general)$/i.test(l))
+                    if (catLine) category = catLine.toLowerCase()
+                  }
+
+                  const description = descLines.join('\n') || ''
+                  addPlan({
+                    title,
+                    description,
+                    category: category as 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general',
+                    frequency: frequency as 'daily' | 'weekly',
+                    targetTime: targetTime || undefined,
+                    isActive: true,
+                  })
                   alert('计划已创建！')
                 }
               }}

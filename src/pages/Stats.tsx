@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { format, subDays, startOfWeek, eachDayOfInterval } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import {
@@ -19,9 +19,17 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Flame, Trophy, CalendarDays } from 'lucide-react'
+import { Flame, Trophy, CalendarDays, Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { AIChatPanel } from '@/components/ai/AIChatPanel'
+import { getAllLearningData } from '@/lib/aiService'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
@@ -141,6 +149,31 @@ export default function Stats() {
       tooltipBorder: isDark ? 'oklch(1 0 0 / 10%)' : '#e5e7eb',
     }
   }, [theme])
+
+  const [aiOpen, setAiOpen] = useState(false)
+  const aiSystemPrompt = useMemo(() => {
+    const data = getAllLearningData()
+    return `你是 IELTS Tracker 的 AI 智能学习分析师。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
+
+## 用户学习数据
+${JSON.stringify(data, null, 2)}
+
+## 你的职责
+1. 分析用户的学习数据，找出强项和弱项
+2. 评估当前计划完成进度，指出完成情况
+3. 给出具体的、可操作的学习建议
+4. 如果用户数据很少（刚开始使用），给出入门建议
+
+## 重要限制
+- 你只负责分析和建议，不负责创建学习计划
+- 如果用户想要创建学习计划，请引导他们去「学习计划」页面使用 AI 生成功能
+- 不要在回复中使用 [ACTION:create_plan] 标记
+
+## 风格要求
+- 用中文回复
+- 语气友好、鼓励但不失专业
+- 建议要具体，避免空泛的"多练习"
+- 回复使用 Markdown 格式` }, [])
 
   // --- 热力图数据（最近12周，CSS Grid）---
   // 生成最近 12 周 (84 天) 的所有日期，从周一开始排列
@@ -621,6 +654,34 @@ export default function Stats() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI 智能分析浮动按钮 */}
+      <button
+        onClick={() => setAiOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
+        aria-label="AI 智能分析"
+      >
+        <Sparkles className="h-5 w-5 md:h-6 md:w-6" />
+      </button>
+
+      {/* AI 智能分析弹窗 */}
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500" />
+              AI 智能分析
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
+            <AIChatPanel
+              systemPrompt={aiSystemPrompt}
+              placeholder="问我关于你的学习分析..."
+              initialQuery="请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

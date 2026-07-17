@@ -2,9 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3, Sparkles } from 'lucide-react'
-import { AIChatPanel } from '@/components/ai/AIChatPanel'
-import { getAllLearningData } from '@/lib/aiService'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -57,32 +55,6 @@ export default function Dashboard() {
   const checkIn = useSettingsStore((s) => s.checkIn)
   const [checkedIn, setCheckedIn] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
-  const [aiOpen, setAiOpen] = useState(false)
-
-  // ===== AI 系统提示 =====
-  const aiSystemPrompt = useMemo(() => {
-    const data = getAllLearningData()
-    return `你是 IELTS Tracker 的 AI 智能学习分析师。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
-
-## 用户学习数据
-${JSON.stringify(data, null, 2)}
-
-## 你的职责
-1. 分析用户的学习数据，找出强项和弱项
-2. 评估当前计划完成进度，指出完成情况
-3. 给出具体的、可操作的学习建议
-4. 如果用户数据很少（刚开始使用），给出入门建议
-
-## 重要限制
-- 你只负责分析和建议，不负责创建学习计划
-- 如果用户想要创建学习计划，请引导他们去「学习计划」页面使用 AI 生成功能
-- 不要在回复中使用 [ACTION:create_plan] 标记
-
-## 风格要求
-- 用中文回复
-- 语气友好、鼓励但不失专业
-- 建议要具体，避免空泛的"多练习"
-- 回复使用 Markdown 格式` }, [])
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -603,25 +575,6 @@ ${JSON.stringify(data, null, 2)}
         </CardContent>
       </Card>
 
-      {/* ===== AI 智能分析 ===== */}
-      <Card
-        className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99] border-l-4 border-l-violet-500"
-        onClick={() => setAiOpen(true)}
-      >
-        <CardContent className="flex items-center justify-between py-4 px-4 md:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/50">
-              <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">AI 智能分析</p>
-              <p className="text-[13px] text-muted-foreground">让 AI 分析你的学习数据并给出建议</p>
-            </div>
-          </div>
-          <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
-        </CardContent>
-      </Card>
-
       {/* ===== 学习报告 ===== */}
       <Card
         className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99]"
@@ -640,25 +593,6 @@ ${JSON.stringify(data, null, 2)}
           <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
         </CardContent>
       </Card>
-
-      {/* AI 智能分析弹窗 */}
-      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-500" />
-              AI 智能分析
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
-            <AIChatPanel
-              systemPrompt={aiSystemPrompt}
-              placeholder="问我关于你的学习分析..."
-              initialQuery="请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* 学习报告弹窗 */}
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>

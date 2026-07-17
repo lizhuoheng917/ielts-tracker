@@ -21,6 +21,7 @@ export interface StudyPlan {
   category: PlanCategory
   frequency: PlanFrequency
   weekDays?: number[] // 0=Sunday, 1=Monday, ... 6=Saturday
+  targetTime?: string // HH:mm 格式，计划完成时间
   targetDuration?: number // 分钟
   targetCount?: number
   isActive: boolean
