@@ -29,15 +29,84 @@ import {
 import { PlusIcon, PencilIcon, TrashIcon } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 
-// ===== 雅思分数选项（1-9，支持 0.5 分增量） =====
-const IELTS_SCORE_OPTIONS = [
-  { value: 0, label: '未评分' },
-  ...Array.from({ length: 17 }, (_, i) => {
-    const score = 1 + i * 0.5
-    const label = Number.isInteger(score) ? score.toString() : score.toFixed(1)
-    return { value: score, label }
-  }),
-]
+// ===== 雅思分数滑轴组件 =====
+function IeltsScoreSlider({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (score: number) => void
+}) {
+  // 内部步进值：0~18 对应分数 0, 1, 1.5, 2, 2.5 ... 9
+  const stepIndex = value === 0 ? 0 : Math.round((value - 1) * 2) + 1
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const idx = parseInt(e.target.value, 10)
+    if (idx === 0) {
+      onChange(0)
+    } else {
+      onChange(1 + (idx - 1) * 0.5)
+    }
+  }
+
+  const displayScore = value > 0 ? (Number.isInteger(value) ? value.toString() : value.toFixed(1)) : '未评分'
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* 当前分数显示 */}
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] text-muted-foreground">滑动选择分数</span>
+        <span
+          className={cn(
+            'text-sm font-semibold px-2.5 py-0.5 rounded-md',
+            value > 0
+              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+              : 'bg-muted text-muted-foreground'
+          )}
+        >
+          {displayScore}
+        </span>
+      </div>
+
+      {/* 滑轴 */}
+      <div className="relative pt-1 pb-2">
+        <input
+          type="range"
+          min={0}
+          max={18}
+          step={1}
+          value={stepIndex}
+          onChange={handleChange}
+          className="w-full h-2 rounded-full appearance-none cursor-pointer
+            bg-muted accent-indigo-600 dark:accent-indigo-400
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:bg-indigo-600 dark:[&::-webkit-slider-thumb]:bg-indigo-400
+            [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white dark:[&::-webkit-slider-thumb]:border-slate-800
+            [&::-webkit-slider-thumb]:shadow-md
+            [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110
+            [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5
+            [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:bg-indigo-600 dark:[&::-moz-range-thumb]:bg-indigo-400
+            [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white dark:[&::-moz-range-thumb]:border-slate-800
+            [&::-moz-range-thumb]:shadow-md
+            [&::-moz-range-thumb]:cursor-pointer"
+        />
+
+        {/* 刻度标签 */}
+        <div className="flex justify-between mt-1.5 px-0.5">
+          <span className="text-[10px] text-muted-foreground">未评分</span>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+            <span key={n} className="text-[10px] text-muted-foreground tabular-nums">
+              {n}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ===== 科目颜色映射 =====
 const TYPE_COLOR_MAP: Record<PracticeType, string> = {
@@ -253,26 +322,10 @@ function PracticeFormDialog({
             />
           </div>
 
-          {/* 评分：下拉选择雅思分数 */}
+          {/* 评分：滑轴选择雅思分数 */}
           <div className="flex flex-col gap-1.5">
             <Label>雅思分数</Label>
-            <Select
-              value={String(score)}
-              onValueChange={(v) => setScore(v ? parseFloat(v) : 0)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {score > 0 ? `雅思 ${formatScore(score)}` : '未评分'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {IELTS_SCORE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={String(opt.value)}>
-                    {opt.value > 0 ? `雅思 ${opt.label}` : opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <IeltsScoreSlider value={score} onChange={setScore} />
           </div>
 
           {/* 备注 */}
