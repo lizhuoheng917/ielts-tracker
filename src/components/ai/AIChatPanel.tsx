@@ -20,6 +20,8 @@ interface AIChatPanelProps {
   systemPrompt: string
   placeholder?: string
   onActionConfirm?: (action: AIAction) => void
+  onReportGenerated?: (content: string) => void
+  loadingText?: string
   className?: string
   initialQuery?: string
   suggestions?: string[]
@@ -29,6 +31,8 @@ export function AIChatPanel({
   systemPrompt,
   placeholder = '输入消息...',
   onActionConfirm,
+  onReportGenerated,
+  loadingText,
   className,
   initialQuery,
   suggestions,
@@ -125,6 +129,10 @@ export function AIChatPanel({
       },
       onDone: () => {
         setIsLoading(false)
+        // 如果内容长度超过100字符，通知父组件生成了报告
+        if (fullContent.length > 100 && onReportGenerated) {
+          onReportGenerated(fullContent)
+        }
         // 尝试解析 actions（简化版：从内容中提取 [ACTION:...] 标记）
         const actions = parseActionsFromContent(fullContent)
         if (actions.length > 0) {
@@ -136,7 +144,7 @@ export function AIChatPanel({
         }
       },
     })
-  }, [isLoading, messages, systemPrompt])
+  }, [isLoading, messages, systemPrompt, onReportGenerated])
 
   const handleSend = useCallback(() => {
     sendMessage(input)
@@ -215,7 +223,7 @@ export function AIChatPanel({
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                   </div>
                 ) : (
-                  <AILoadingState />
+                  <AILoadingState text={loadingText} />
                 )
               ) : (
                 <p className="whitespace-pre-wrap">{msg.content}</p>

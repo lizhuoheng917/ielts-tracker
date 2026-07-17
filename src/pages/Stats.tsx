@@ -19,8 +19,10 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Flame, Trophy, CalendarDays, Sparkles } from 'lucide-react'
+import { Flame, Trophy, CalendarDays, Sparkles, FileText, Save, ArrowLeft, Trash2, Clock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   Dialog,
@@ -35,8 +37,10 @@ import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
 import { useTimerStore } from '@/stores/timerStore'
+import { useReportStore } from '@/stores/reportStore'
 import { WEEKDAY_LABELS } from '@/lib/constants'
 import type { PracticeType } from '@/lib/types'
+import ReactMarkdown from 'react-markdown'
 
 // ===== 颜色常量 =====
 const INDIGO_COLORS = {
@@ -150,6 +154,15 @@ export default function Stats() {
     }
   }, [theme])
 
+  // --- 报告相关状态 ---
+  const [viewMode, setViewMode] = useState<'chat' | 'report'>('chat')
+  const [currentReport, setCurrentReport] = useState<string | null>(null)
+  const [savedReportId, setSavedReportId] = useState<string | null>(null)
+  const [viewingHistoryReport, setViewingHistoryReport] = useState(false)
+  const reports = useReportStore((s) => s.reports)
+  const addReport = useReportStore((s) => s.addReport)
+  const deleteReport = useReportStore((s) => s.deleteReport)
+
   const [aiOpen, setAiOpen] = useState(false)
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
@@ -174,6 +187,37 @@ ${JSON.stringify(data, null, 2)}
 - 语气友好、鼓励但不失专业
 - 建议要具体，避免空泛的"多练习"
 - 回复使用 Markdown 格式` }, [])
+
+  // --- 报告相关回调 ---
+  const handleReportGenerated = (content: string) => {
+    setCurrentReport(content)
+    setSavedReportId(null)
+    setViewingHistoryReport(false)
+    setViewMode('report')
+  }
+
+  const handleSaveReport = () => {
+    if (!currentReport) return
+    const id = addReport({
+      title: '学习分析报告',
+      content: currentReport,
+      createdAt: new Date().toISOString(),
+    })
+    setSavedReportId(id)
+  }
+
+  const handleOpenHistoryReport = (content: string) => {
+    setCurrentReport(content)
+    setSavedReportId(null)
+    setViewingHistoryReport(true)
+    setViewMode('report')
+    setAiOpen(true)
+  }
+
+  const handleDeleteReport = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    deleteReport(id)
+  }
 
   // --- 热力图数据（最近12周，CSS Grid）---
   // 生成最近 12 周 (84 天) 的所有日期，从周一开始排列
@@ -657,7 +701,13 @@ ${JSON.stringify(data, null, 2)}
 
       {/* AI 智能分析浮动按钮 */}
       <button
-        onClick={() => setAiOpen(true)}
+        onClick={() => {
+          setViewMode('chat')
+          setCurrentReport(null)
+          setSavedReportId(null)
+          setViewingHistoryReport(false)
+          setAiOpen(true)
+        }}
         className="fixed bottom-6 right-6 z-40 flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
         aria-label="AI 智能分析"
       >
@@ -665,23 +715,140 @@ ${JSON.stringify(data, null, 2)}
       </button>
 
       {/* AI 智能分析弹窗 */}
-      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+      <Dialog open={aiOpen} onOpenChange={(open) => {
+        if (!open) {
+          setViewMode('chat')
+          setCurrentReport(null)
+          setSavedReportId(null)
+          setViewingHistoryReport(false)
+        }
+        setAiOpen(open)
+      }}>
         <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-500" />
-              AI 智能分析
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
-            <AIChatPanel
-              systemPrompt={aiSystemPrompt}
-              placeholder="问我关于你的学习分析..."
-              initialQuery="请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。"
-            />
-          </div>
+          {viewMode === 'chat' ? (
+            <>
+              <DialogHeader className="px-4 pt-4 pb-2">
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-violet-500" />
+                  AI 智能分析
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
+                <AIChatPanel
+                  systemPrompt={aiSystemPrompt}
+                  placeholder="问我关于你的学习分析..."
+                  initialQuery="请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。"
+                  loadingText="AI 正在深度分析你的学习数据，请耐心等待"
+                  onReportGenerated={handleReportGenerated}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader className="px-4 pt-4 pb-2">
+                <DialogTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-violet-500" />
+                  {viewingHistoryReport ? '历史分析报告' : '学习分析报告'}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                {/* 报告内容 */}
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 bg-white dark:bg-background">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      {viewingHistoryReport && currentReport
+                        ? '历史报告'
+                        : `生成于 ${new Date().toLocaleString('zh-CN')}`}
+                    </span>
+                  </div>
+                  <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:text-lg prose-p:text-base">
+                    <ReactMarkdown>{currentReport || ''}</ReactMarkdown>
+                  </div>
+                </div>
+                {/* 底部按钮 */}
+                <div className="border-t px-4 py-3 flex items-center gap-2">
+                  {!viewingHistoryReport && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setViewMode('chat')
+                        setCurrentReport(null)
+                        setSavedReportId(null)
+                      }}
+                      className="gap-1.5"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      返回对话
+                    </Button>
+                  )}
+                  <div className="flex-1" />
+                  {!viewingHistoryReport && (
+                    <Button
+                      size="sm"
+                      onClick={handleSaveReport}
+                      disabled={!!savedReportId}
+                      className="gap-1.5"
+                    >
+                      <Save className="h-4 w-4" />
+                      {savedReportId ? '已保存' : '保存报告'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* 历史分析报告 */}
+      {reports.length > 0 && (
+        <Card className="ring-1 ring-indigo-500/15">
+          <CardHeader>
+            <CardTitle className="text-[15px] md:text-base flex items-center gap-2">
+              <div className="h-1.5 w-6 rounded-full bg-gradient-to-r from-violet-400 to-indigo-400" />
+              历史分析报告
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {reports.map((report) => (
+                <div
+                  key={report.id}
+                  onClick={() => handleOpenHistoryReport(report.content)}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-accent/50 cursor-pointer transition-colors group"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/30 shrink-0">
+                    <FileText className="h-4 w-4 text-indigo-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{report.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(report.createdAt).toLocaleString('zh-CN', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="text-[10px] shrink-0">
+                    AI 分析
+                  </Badge>
+                  <button
+                    onClick={(e) => handleDeleteReport(e, report.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    aria-label="删除报告"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
