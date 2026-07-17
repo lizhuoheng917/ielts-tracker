@@ -888,7 +888,7 @@ ${JSON.stringify(data, null, 2)}
                 </div>
                 {/* 底部按钮 */}
                 <div className="border-t px-5 py-3 flex items-center gap-2">
-                  {reportState === 'report' && (
+                  {(reportState === 'report' || reportState === 'history') && (
                     <Button
                       size="sm"
                       variant="outline"

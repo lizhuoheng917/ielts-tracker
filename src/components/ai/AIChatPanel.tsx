@@ -301,7 +301,13 @@ export function AIChatPanel({
 // 从 AI 回复中解析建议操作（简化版：查找 [ACTION:...] 标记）
 /** 从 AI 回复中剥离 [ACTION:...]...[/ACTION] 标签，避免在消息气泡中显示原始标记 */
 function stripActionTags(content: string): string {
-  return content.replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '').replace(/\n{3,}/g, '\n\n').trim()
+  return content
+    // 先移除完整的 [ACTION:...]...[/ACTION] 标签
+    .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
+    // 再移除未关闭的 [ACTION:...] 标签（流式生成中可能出现）
+    .replace(/\[ACTION:\w+\][\s\S]*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function parseActionsFromContent(content: string): AIAction[] {
