@@ -22,6 +22,7 @@ interface AIChatPanelProps {
   onActionConfirm?: (action: AIAction) => void
   className?: string
   initialQuery?: string
+  suggestions?: string[]
 }
 
 export function AIChatPanel({
@@ -30,6 +31,7 @@ export function AIChatPanel({
   onActionConfirm,
   className,
   initialQuery,
+  suggestions,
 }: AIChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -159,6 +161,20 @@ export function AIChatPanel({
             <Sparkles className="h-8 w-8 mb-2 text-indigo-400" />
             <p className="text-sm">AI 助手已就绪</p>
             <p className="text-xs mt-1">开始对话吧</p>
+            {suggestions && suggestions.length > 0 && (
+              <div className="mt-4 w-full max-w-[90%] space-y-2">
+                <p className="text-xs text-muted-foreground/70 text-center">试试这样问：</p>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => sendMessage(s)}
+                    className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/50 bg-background hover:bg-accent hover:border-accent transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

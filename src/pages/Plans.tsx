@@ -557,6 +557,13 @@ time:21:00
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."
+              suggestions={[
+                '帮我制定一个为期四周的听力提升计划',
+                '根据我的基础，每天应该怎么安排学习？',
+                '我阅读比较弱，帮我设计一个阅读专项训练',
+                '我想每天早上和晚上各安排一个任务',
+                '帮我规划周末的集中练习时间',
+              ]}
               onActionConfirm={(action) => {
                 if (action.type === 'create_plan') {
                   const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)
