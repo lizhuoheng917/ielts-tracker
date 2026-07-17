@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { format, subDays, startOfWeek, eachDayOfInterval } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import {
@@ -190,6 +191,7 @@ const reportMarkdownComponents: Components = {
 
 // ===== 主组件 =====
 export default function Stats() {
+  const navigate = useNavigate()
   // --- 统计页面访问计数（成就系统）---
   useEffect(() => {
     // 动态导入避免循环依赖
@@ -886,6 +888,20 @@ ${JSON.stringify(data, null, 2)}
                 </div>
                 {/* 底部按钮 */}
                 <div className="border-t px-5 py-3 flex items-center gap-2">
+                  {reportState === 'report' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-violet-600 border-violet-300 hover:bg-violet-50 dark:text-violet-400 dark:border-violet-800 dark:hover:bg-violet-900/20"
+                      onClick={() => {
+                        setAiOpen(false)
+                        navigate(`/plans?report=${encodeURIComponent(reportContent)}`)
+                      }}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      生成学习计划
+                    </Button>
+                  )}
                   <div className="flex-1" />
                   {reportState === 'report' && (
                     <Button

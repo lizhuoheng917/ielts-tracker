@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router'
 import type { StudyPlan } from '@/lib/types'
 import { usePlanStore } from '@/stores/planStore'
+import { useReportStore } from '@/stores/reportStore'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -50,6 +52,9 @@ export default function Plans() {
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
+  const [searchParams] = useSearchParams()
+  const reportContext = searchParams.get('report') || ''
+  const reports = useReportStore((s) => s.reports)
   const updatePlan = usePlanStore((s) => s.updatePlan)
   const deletePlan = usePlanStore((s) => s.deletePlan)
   const addExecution = usePlanStore((s) => s.addExecution)
@@ -69,31 +74,52 @@ export default function Plans() {
 
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
+    let reportSection = ''
+    if (reportContext) {
+      reportSection = `
+## 最新学习分析报告
+${reportContext}
+
+请根据以上分析报告中的建议，有针对性地生成学习计划。`
+    } else if (reports.length > 0) {
+      const latest = reports[reports.length - 1]
+      reportSection = `
+## 最新学习分析报告（摘要）
+${latest.content.length > 2000 ? latest.content.slice(0, 2000) + '...(已截断)' : latest.content}
+
+请根据以上分析报告中的建议，有针对性地生成学习计划。`
+    }
     return `你是 IELTS Tracker 的 AI 学习计划助手。你是一位经验丰富的雅思备考教练。
 
 ## 用户学习数据
 ${JSON.stringify(data, null, 2)}
+${reportSection}
 
 ## 你的职责
-根据用户的学习数据，为其生成个性化的学习计划建议。你可以一次生成多个计划，每个计划对应不同的学习安排和时间。
+根据用户的学习数据${reportContext ? '和分析报告' : ''}，为其生成个性化的学习计划建议。
 
-## 建议创建计划时的格式（重要）
-- 每个计划必须单独使用一个 [ACTION:create_plan] 标记
-- 如果建议多个计划，请使用多个独立的标记块
-- 每个标记块内必须包含以下信息，每行一个字段：
-  - 第1行：计划标题
-  - 第2行起：计划描述（可多行）
-  - 后续行分别是：分类、频率、星期、时间
+## ⚠️ 格式要求（极其重要，必须严格遵守）
+- 每个计划**必须且只能**使用一个独立的 [ACTION:create_plan]...[/ACTION] 标记
+- **绝对不要**在一个标记内放入多个计划
+- **绝对不要**把多个计划的标题放在同一个标记内
+- 每个标记块的格式严格如下：
+
+第1行：计划标题（简洁，不超过20字）
+第2行起：计划描述（具体内容）
+倒数第4行：category:分类值
+倒数第3行：frequency:频率值
+倒数第2行：weekdays:星期数字（仅weekly需要）
+倒数第1行：time:HH:mm
 
 ## 可用字段值
 - 分类（category）：reading | listening | writing | speaking | vocabulary | general
 - 频率（frequency）：daily | weekly
-- 星期（weekdays）：用逗号分隔的数字，0=周日, 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六
-  - daily 频率不需要此项（留空或省略）
-  - weekly 频率**必须**指定此项，例如：1,3,5 表示周一、周三、周五
+- 星期（weekdays）：逗号分隔数字，0=周日 1=周一 2=周二 3=周三 4=周四 5=周五 6=周六
+  - daily 频率不需要此项
+  - weekly 频率**必须**指定，如 1,3,5 = 周一三五
 - 时间（time）：HH:mm 格式（24小时制，如 08:00、19:30）
 
-## 格式示例
+## 正确示例（每个标记只包含一个计划）
 
 [ACTION:create_plan]
 早晨听力训练
@@ -117,7 +143,7 @@ time:21:00
 - 语气友好、鼓励但不失专业
 - 建议要具体，避免空泛的"多练习"
 - 回复使用 Markdown 格式`
-  }, [])
+  }, [reportContext, reports])
 
   const today = getTodayStr()
   const dayOfWeek = new Date().getDay()
@@ -557,6 +583,9 @@ time:21:00
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."
+              initialQuery={reportContext
+                ? '请根据上面的学习分析报告，为我生成针对性的个性化学习计划。每个计划独立一条，包含分类、频率、星期和时间。'
+                : undefined}
               suggestions={[
                 '帮我制定一个为期四周的听力提升计划',
                 '根据我的基础，每天应该怎么安排学习？',

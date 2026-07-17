@@ -220,7 +220,7 @@ export function AIChatPanel({
               {msg.role === 'assistant' ? (
                 msg.content ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown>{stripActionTags(msg.content)}</ReactMarkdown>
                   </div>
                 ) : (
                   <AILoadingState text={loadingText} />
@@ -299,6 +299,11 @@ export function AIChatPanel({
 }
 
 // 从 AI 回复中解析建议操作（简化版：查找 [ACTION:...] 标记）
+/** 从 AI 回复中剥离 [ACTION:...]...[/ACTION] 标签，避免在消息气泡中显示原始标记 */
+function stripActionTags(content: string): string {
+  return content.replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 function parseActionsFromContent(content: string): AIAction[] {
   const actions: AIAction[] = []
   const regex = /\[ACTION:(\w+)\]([\s\S]*?)\[\/ACTION\]/g
