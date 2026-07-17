@@ -2,11 +2,22 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { STORAGE_PREFIX } from '@/lib/constants'
 
+export interface ChatActionRecord {
+  id: string
+  type: string
+  title: string
+  description: string
+}
+
 export interface ChatMessageRecord {
   id: string
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  /** AI 消息的状态 */
+  status?: 'streaming' | 'done' | 'error'
+  /** 解析出的 AI 建议操作 */
+  actions?: ChatActionRecord[]
 }
 
 interface ChatStore {

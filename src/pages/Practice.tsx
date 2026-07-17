@@ -558,7 +558,7 @@ function TabPanel({ type }: { type: PracticeType }) {
                 AI 写作批改
               </DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
+            <div className="flex flex-col flex-1 min-h-0 px-4 pb-4">
               <AIChatPanel
                 systemPrompt={writingSystemPrompt}
                 placeholder="粘贴你的雅思作文（大作文/小作文），AI 将按评分标准批改..."

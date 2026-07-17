@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, User, Sparkles, AlertCircle, Trash2 } from 'lucide-react'
+import { Send, Bot, User, Sparkles, AlertCircle, Trash2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { AILoadingState } from './AILoadingState'
-import { useChatStore } from '@/stores/chatStore'
+import { useChatStore, type ChatMessageRecord } from '@/stores/chatStore'
 import { AIConfirmCard, type AIAction } from './AIConfirmCard'
 import { streamAIChat, type AIMessage } from '@/lib/aiService'
 import ReactMarkdown from 'react-markdown'
@@ -15,6 +15,8 @@ export interface ChatMessage {
   content: string
   actions?: AIAction[]
   actionsConfirmed?: boolean
+  /** 消息状态：undefined=正常 done，'error'=生成失败 */
+  status?: 'error'
 }
 
 interface AIChatPanelProps {
@@ -63,7 +65,7 @@ export function AIChatPanel({
     }
   }, [])
 
-  // 首次挂载时从 store 恢复历史消息（等 zustand persist 水合完成）
+  // 首次挂载时从 store 恢复历史消息
   useEffect(() => {
     if (!isHydrated.current) {
       const stored = getStoreMessages(chatKey)
@@ -73,6 +75,15 @@ export function AIChatPanel({
           id: m.id,
           role: m.role,
           content: m.content,
+          // 恢复 actions
+          actions: m.actions?.map((a) => ({
+            id: a.id,
+            type: a.type as AIAction['type'],
+            title: a.title,
+            description: a.description,
+          })),
+          // streaming 状态说明上次生成未完成，标记为 error；error 直接保留
+          status: m.status === 'error' || m.status === 'streaming' ? 'error' : undefined,
         })))
       } else {
         isHydrated.current = true
@@ -85,15 +96,20 @@ export function AIChatPanel({
     if (isHydrated.current && messages.length > 0) {
       clearTimeout(syncTimeoutRef.current)
       const doSync = () => {
-        chatSetMessages(
-          chatKey,
-          messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            createdAt: new Date().toISOString(),
-          }))
-        )
+        const records: ChatMessageRecord[] = messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          createdAt: new Date().toISOString(),
+          status: isLoading && m.role === 'assistant' && !m.content ? 'streaming' : 'done',
+          actions: m.actions?.map((a) => ({
+            id: a.id,
+            type: a.type,
+            title: a.title,
+            description: a.description,
+          })),
+        }))
+        chatSetMessages(chatKey, records)
       }
       // 非加载状态立即同步；加载中（流式生成）延迟 500ms
       if (isLoading) {
@@ -196,6 +212,14 @@ export function AIChatPanel({
         setError(err)
         setIsLoading(false)
         abortRef.current = null
+        // 标记消息为生成失败
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: m.content || '', status: 'error' }
+              : m
+          )
+        )
       },
       onDone: () => {
         setIsLoading(false)
@@ -221,7 +245,6 @@ export function AIChatPanel({
   }, [input, sendMessage])
 
   // 自动发送初始查询：仅在 chatStore 中没有任何历史消息时才发送
-  // 这样关闭对话框再重新打开时，因为 store 已有消息，不会重复发送
   useEffect(() => {
     if (
       initialQuery &&
@@ -312,6 +335,11 @@ export function AIChatPanel({
                   <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
                     <ReactMarkdown>{stripActionTags(msg.content, isLoading)}</ReactMarkdown>
                   </div>
+                ) : msg.status === 'error' ? (
+                  <div className="flex items-center gap-1.5 text-destructive text-xs">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>生成失败，请重试</span>
+                  </div>
                 ) : (
                   <AILoadingState text={loadingText} />
                 )
@@ -388,8 +416,7 @@ export function AIChatPanel({
   )
 }
 
-// 从 AI 回复中解析建议操作（简化版：查找 [ACTION:...] 标记）
-/** 从 AI 回复中剥离 [ACTION:...]...[/ACTION] 标签，避免在消息气泡中显示原始标记 */
+// 从 AI 回复中剥离 [ACTION:...]...[/ACTION] 标签，避免在消息气泡中显示原始标记
 function stripActionTags(content: string, streaming = false): string {
   let result = content
     // 先移除完整的 [ACTION:...]...[/ACTION] 标签

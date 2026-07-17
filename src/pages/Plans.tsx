@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router'
 import type { StudyPlan } from '@/lib/types'
 import { usePlanStore } from '@/stores/planStore'
 import { useReportStore } from '@/stores/reportStore'
@@ -52,8 +51,6 @@ export default function Plans() {
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
-  const [searchParams, setSearchParams] = useSearchParams()
-  const reportContext = searchParams.get('report') || ''
   const reports = useReportStore((s) => s.reports)
   const updatePlan = usePlanStore((s) => s.updatePlan)
   const deletePlan = usePlanStore((s) => s.deletePlan)
@@ -70,26 +67,12 @@ export default function Plans() {
   const [formActive, setFormActive] = useState(true)
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [aiOpen, setAiOpen] = useState(reportContext ? true : false)
-
-  // 关闭 AI 对话框时清除 URL 中的 report 参数，避免重复触发 initialQuery
-  const handleAiOpenChange = (open: boolean) => {
-    setAiOpen(open)
-    if (!open && searchParams.get('report')) {
-      setSearchParams({}, { replace: true })
-    }
-  }
+  const [aiOpen, setAiOpen] = useState(false)
 
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
     let reportSection = ''
-    if (reportContext) {
-      reportSection = `
-## 最新学习分析报告
-${reportContext}
-
-请根据以上分析报告中的建议，有针对性地生成学习计划。`
-    } else if (reports.length > 0) {
+    if (reports.length > 0) {
       const latest = reports[reports.length - 1]
       reportSection = `
 ## 最新学习分析报告（摘要）
@@ -104,7 +87,7 @@ ${JSON.stringify(data, null, 2)}
 ${reportSection}
 
 ## 你的职责
-根据用户的学习数据${reportContext ? '和分析报告' : ''}，为其生成个性化的学习计划建议。
+根据用户的学习数据，为其生成个性化的学习计划建议。
 
 ## ⚠️ 格式要求（极其重要，必须严格遵守）
 - 每个计划**必须且只能**使用一个独立的 [ACTION:create_plan]...[/ACTION] 标记
@@ -151,7 +134,7 @@ time:21:00
 - 语气友好、鼓励但不失专业
 - 建议要具体，避免空泛的"多练习"
 - 回复使用 Markdown 格式`
-  }, [reportContext, reports])
+  }, [reports])
 
   const today = getTodayStr()
   const dayOfWeek = new Date().getDay()
@@ -579,7 +562,7 @@ time:21:00
       </Dialog>
 
       {/* AI 生成计划弹窗 */}
-      <Dialog open={aiOpen} onOpenChange={handleAiOpenChange}>
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
         <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-4 pt-4 pb-2">
             <DialogTitle className="flex items-center gap-2">
@@ -592,9 +575,6 @@ time:21:00
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."
               chatContext="plans"
-              initialQuery={reportContext
-                ? '请根据上面的学习分析报告，为我生成针对性的个性化学习计划。每个计划独立一条，包含分类、频率、星期和时间。'
-                : undefined}
               suggestions={[
                 '帮我制定一个为期四周的听力提升计划',
                 '根据我的基础，每天应该怎么安排学习？',
