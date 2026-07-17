@@ -123,9 +123,11 @@ export const useTimerStore = create<TimerStore>()(
         // XP: 每30分钟 +15 XP（和模考一致）
         const minutes = Math.floor(data.duration / 60)
         if (minutes > 0) {
-          import('@/lib/achievementService').then(({ addXP }) => {
+          import('@/lib/achievementService').then(({ addXP, checkPracticeBadges }) => {
             const xp = Math.floor((minutes / 30) * 15)
             if (xp > 0) addXP(xp)
+            // 检测全科覆盖徽章（计时练习的科目也计入）
+            checkPracticeBadges()
           })
         }
       },
@@ -136,10 +138,25 @@ export const useTimerStore = create<TimerStore>()(
             r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r
           ),
         }))
+
+        // 科目变化时检查徽章
+        if (data.subject) {
+          import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+            checkPracticeBadges()
+          })
+        }
       },
 
       deleteRecord: (id) => {
+        const record = get().records.find((r) => r.id === id)
         set((state) => ({ records: state.records.filter((r) => r.id !== id) }))
+
+        // 删除有科目的记录时重新检查徽章
+        if (record && record.subject !== 'general') {
+          import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+            checkPracticeBadges()
+          })
+        }
       },
 
       getRecordsByDateRange: (start, end) => {

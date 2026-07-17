@@ -2,6 +2,7 @@ import { useAchievementStore } from '@/stores/achievementStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
+import { useTimerStore } from '@/stores/timerStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { XP_RULES } from '@/lib/constants'
 
@@ -48,15 +49,24 @@ export function checkWordBadges() {
 }
 
 /**
- * 检测练习相关徽章
+ * 检测练习相关徽章（模考 + 计时练习合并检测）
  */
 export function checkPracticeBadges() {
-  const records = usePracticeStore.getState().records
+  const examRecords = usePracticeStore.getState().records
+  const timerRecords = useTimerStore.getState().records
   const { unlockBadge } = useAchievementStore.getState()
-  const hasWriting = records.some((r) => r.type === 'writing')
-  const hasSpeaking = records.some((r) => r.type === 'speaking')
-  const hasReading = records.some((r) => r.type === 'reading')
-  const hasListening = records.some((r) => r.type === 'listening')
+  const hasWriting =
+    examRecords.some((r) => r.type === 'writing') ||
+    timerRecords.some((r) => r.subject === 'writing')
+  const hasSpeaking =
+    examRecords.some((r) => r.type === 'speaking') ||
+    timerRecords.some((r) => r.subject === 'speaking')
+  const hasReading =
+    examRecords.some((r) => r.type === 'reading') ||
+    timerRecords.some((r) => r.subject === 'reading')
+  const hasListening =
+    examRecords.some((r) => r.type === 'listening') ||
+    timerRecords.some((r) => r.subject === 'listening')
   if (hasWriting) unlockBadge('first-writing')
   if (hasSpeaking) unlockBadge('first-speaking')
   if (hasWriting && hasSpeaking && hasReading && hasListening) unlockBadge('all-practice')
