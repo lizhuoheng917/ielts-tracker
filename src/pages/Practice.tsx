@@ -349,50 +349,46 @@ function RecordItem({
   const color = TYPE_COLOR_MAP[record.type]
 
   return (
-    <Card size="sm" className={cn('group/card', className)}>
-      <CardContent className="py-2.5 md:py-3 px-3 md:px-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span
-                className="inline-block w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-[13px] text-muted-foreground">{record.date}</span>
-              {record.topic && (
-                <span className="text-[15px] font-medium truncate">{record.topic}</span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-              <span className="text-[13px] text-muted-foreground">
-                时长：{record.duration}分钟
-              </span>
-              {record.score !== undefined && record.score > 0 && (
-                <span className="text-[13px] font-medium" style={{ color }}>
-                  雅思 {formatScore(record.score)}
-                </span>
-              )}
-            </div>
-
-            {record.note && (
-              <p className="text-[13px] text-muted-foreground mt-2 line-clamp-2">
-                {record.note}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon-xs" onClick={onEdit} aria-label="编辑" className="h-8 w-8">
-              <PencilIcon className="size-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon-xs" onClick={onDelete} aria-label="删除" className="h-8 w-8">
-              <TrashIcon className="size-3.5 text-destructive" />
-            </Button>
-          </div>
+    <div className={cn('group/row flex items-start justify-between gap-3 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors', className)}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+          <span
+            className="inline-block w-2 h-2 rounded-full shrink-0"
+            style={{ backgroundColor: color }}
+          />
+          <span className="text-[13px] text-muted-foreground">{record.date}</span>
+          {record.topic && (
+            <span className="text-[15px] font-medium truncate">{record.topic}</span>
+          )}
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+          <span className="text-[13px] text-muted-foreground">
+            时长：{record.duration}分钟
+          </span>
+          {record.score !== undefined && record.score > 0 && (
+            <span className="text-[13px] font-medium" style={{ color }}>
+              雅思 {formatScore(record.score)}
+            </span>
+          )}
+        </div>
+
+        {record.note && (
+          <p className="text-[13px] text-muted-foreground mt-1.5 line-clamp-2">
+            {record.note}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+        <Button variant="ghost" size="icon-xs" onClick={onEdit} aria-label="编辑" className="h-8 w-8">
+          <PencilIcon className="size-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon-xs" onClick={onDelete} aria-label="删除" className="h-8 w-8">
+          <TrashIcon className="size-3.5 text-destructive" />
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -443,17 +439,18 @@ function TabPanel({ type }: { type: PracticeType }) {
           description="开始你的第一次练习吧，勤加练习才能稳步提升"
         />
       ) : (
-        <div className="flex flex-col gap-2">
-          {records.map((record, index) => (
-            <RecordItem
-              key={record.id}
-              record={record}
-              onEdit={() => handleEdit(record)}
-              onDelete={() => handleDeleteClick(record)}
-              className={`animate-stagger-up stagger-${(index % 8) + 1}`}
-            />
-          ))}
-        </div>
+        <Card className="py-0">
+          <div className="divide-y divide-border">
+            {records.map((record) => (
+              <RecordItem
+                key={record.id}
+                record={record}
+                onEdit={() => handleEdit(record)}
+                onDelete={() => handleDeleteClick(record)}
+              />
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* 编辑弹窗 */}

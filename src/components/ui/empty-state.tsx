@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
  */
 
 // SVG 插画场景定义
-type Scene = 'tasks' | 'words' | 'practice' | 'diary' | 'achievements' | 'plans' | 'generic'
+type Scene = 'tasks' | 'words' | 'practice' | 'diary' | 'achievements' | 'plans' | 'generic' | 'wordTrend' | 'durationChart' | 'radarChart' | 'pieChart'
 
 interface EmptyStateProps {
   scene?: Scene
@@ -172,6 +172,102 @@ function Illustration({ scene }: { scene: Scene }) {
         <circle cx="100" cy="70" r="3" fill="#FDE68A" opacity="0.5" />
       </svg>
     ),
+    // 单词背诵趋势：上升趋势线 + 散点
+    wordTrend: (
+      <svg viewBox="0 0 120 100" className="w-28 h-24 md:w-32 md:h-28 mx-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* 坐标轴 */}
+        <line x1="25" y1="20" x2="25" y2="78" stroke="#C7D2FE" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="25" y1="78" x2="100" y2="78" stroke="#C7D2FE" strokeWidth="1.5" strokeLinecap="round" />
+        {/* 网格虚线 */}
+        <line x1="25" y1="49" x2="100" y2="49" stroke="#E0E7FF" strokeWidth="1" strokeDasharray="3 4" />
+        <line x1="25" y1="20" x2="100" y2="20" stroke="#E0E7FF" strokeWidth="1" strokeDasharray="3 4" />
+        {/* 上升趋势线 */}
+        <path d="M32 65 L48 55 L60 50 L75 38 L92 25" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 3" />
+        {/* 散点 */}
+        <circle cx="32" cy="65" r="3.5" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1.5" />
+        <circle cx="48" cy="55" r="3.5" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1.5" />
+        <circle cx="60" cy="50" r="3.5" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1.5" />
+        <circle cx="75" cy="38" r="3.5" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1.5" />
+        <circle cx="92" cy="25" r="3.5" fill="#6366F1" stroke="#6366F1" strokeWidth="1.5" />
+        {/* 上升箭头 */}
+        <path d="M96 22 L100 18 M100 18 L96 14" stroke="#6366F1" strokeWidth="1.5" strokeLinecap="round" />
+        {/* 装饰 */}
+        <circle cx="110" cy="30" r="3" fill="#C7D2FE" opacity="0.4" />
+      </svg>
+    ),
+    // 学习时长分布：柱状图
+    durationChart: (
+      <svg viewBox="0 0 120 100" className="w-28 h-24 md:w-32 md:h-28 mx-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* 坐标轴 */}
+        <line x1="25" y1="15" x2="25" y2="80" stroke="#C7D2FE" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="25" y1="80" x2="105" y2="80" stroke="#C7D2FE" strokeWidth="1.5" strokeLinecap="round" />
+        {/* 柱状图 */}
+        <rect x="32" y="55" width="10" height="25" rx="3" fill="#E0E7FF" />
+        <rect x="50" y="35" width="10" height="45" rx="3" fill="#C7D2FE" />
+        <rect x="68" y="45" width="10" height="35" rx="3" fill="#A5B4FC" />
+        <rect x="86" y="25" width="10" height="55" rx="3" fill="#818CF8" />
+        {/* 柱顶标签线 */}
+        <line x1="37" y1="52" x2="37" y2="48" stroke="#A5B4FC" strokeWidth="1" strokeLinecap="round" />
+        <line x1="55" y1="32" x2="55" y2="28" stroke="#A5B4FC" strokeWidth="1" strokeLinecap="round" />
+        <line x1="91" y1="22" x2="91" y2="18" stroke="#A5B4FC" strokeWidth="1" strokeLinecap="round" />
+        {/* 时钟图标 */}
+        <circle cx="105" cy="18" r="6" fill="none" stroke="#F59E0B" strokeWidth="1.5" />
+        <line x1="105" y1="18" x2="105" y2="15" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="105" y1="18" x2="108" y2="19" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" />
+        {/* 装饰 */}
+        <circle cx="15" cy="30" r="3" fill="#FDE68A" opacity="0.4" />
+      </svg>
+    ),
+    // 四科能力雷达图：五边形轮廓 + 能力点
+    radarChart: (
+      <svg viewBox="0 0 120 100" className="w-28 h-24 md:w-32 md:h-28 mx-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* 外五边形轮廓 */}
+        <polygon points="60,15 100,38 88,78 32,78 20,38" fill="#EEF2FF" stroke="#C7D2FE" strokeWidth="1" />
+        {/* 中五边形轮廓 */}
+        <polygon points="60,30 82,43 75,65 45,65 38,43" fill="none" stroke="#E0E7FF" strokeWidth="0.8" />
+        {/* 内五边形轮廓 */}
+        <polygon points="60,45 65,48 62,53 58,53 55,48" fill="none" stroke="#E0E7FF" strokeWidth="0.5" />
+        {/* 五个轴线 */}
+        <line x1="60" y1="15" x2="60" y2="78" stroke="#E0E7FF" strokeWidth="0.8" />
+        <line x1="20" y1="38" x2="100" y2="38" stroke="#E0E7FF" strokeWidth="0.8" />
+        <line x1="32" y1="78" x2="88" y2="78" stroke="#E0E7FF" strokeWidth="0.8" />
+        {/* 四个科目标签色点 */}
+        <circle cx="60" cy="15" r="4" fill="#3B82F6" opacity="0.5" />  {/* 阅读-顶部 */}
+        <circle cx="100" cy="38" r="4" fill="#8B5CF6" opacity="0.5" />  {/* 听力-右上 */}
+        <circle cx="88" cy="78" r="4" fill="#F59E0B" opacity="0.5" />   {/* 写作-右下 */}
+        <circle cx="32" cy="78" r="4" fill="#10B981" opacity="0.5" />   {/* 口语-左下 */}
+        <circle cx="20" cy="38" r="4" fill="#6366F1" opacity="0.5" />   {/* 综合-左上 */}
+        {/* 装饰 */}
+        <circle cx="108" cy="20" r="3" fill="#C7D2FE" opacity="0.3" />
+      </svg>
+    ),
+    // 单词分类占比：饼图切片
+    pieChart: (
+      <svg viewBox="0 0 120 100" className="w-28 h-24 md:w-32 md:h-28 mx-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* 饼图主体 */}
+        <circle cx="52" cy="50" r="30" fill="#EEF2FF" stroke="#E0E7FF" strokeWidth="1" />
+        {/* 饼图切片 */}
+        <path d="M52 50 L52 20 A30 30 0 0 1 78 35 Z" fill="#C7D2FE" opacity="0.7" />
+        <path d="M52 50 L78 35 A30 30 0 0 1 70 76 Z" fill="#A5B4FC" opacity="0.6" />
+        <path d="M52 50 L70 76 A30 30 0 0 1 34 76 Z" fill="#818CF8" opacity="0.5" />
+        <path d="M52 50 L34 76 A30 30 0 0 1 28 40 Z" fill="#6366F1" opacity="0.4" />
+        {/* 分隔线 */}
+        <line x1="52" y1="50" x2="52" y2="20" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="52" y1="50" x2="78" y2="35" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="52" y1="50" x2="70" y2="76" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="52" y1="50" x2="34" y2="76" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="52" y1="50" x2="28" y2="40" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+        {/* 中心白圆（甜甜圈效果） */}
+        <circle cx="52" cy="50" r="12" fill="white" />
+        {/* 图例小点 */}
+        <circle cx="95" cy="32" r="3" fill="#C7D2FE" />
+        <circle cx="95" cy="44" r="3" fill="#A5B4FC" />
+        <circle cx="95" cy="56" r="3" fill="#818CF8" />
+        <circle cx="95" cy="68" r="3" fill="#6366F1" />
+        {/* 装饰 */}
+        <circle cx="15" cy="25" r="3" fill="#FDE68A" opacity="0.4" />
+      </svg>
+    ),
   }
 
   return <>{illustrations[scene]}</>
@@ -186,6 +282,10 @@ const sceneBgClass: Record<Scene, string> = {
   achievements: 'bg-amber-50/80 dark:bg-amber-950/30',
   plans: 'bg-indigo-50/80 dark:bg-indigo-950/30',
   generic: 'bg-indigo-50/80 dark:bg-indigo-950/30',
+  wordTrend: 'bg-indigo-50/80 dark:bg-indigo-950/30',
+  durationChart: 'bg-indigo-50/80 dark:bg-indigo-950/30',
+  radarChart: 'bg-violet-50/80 dark:bg-violet-950/30',
+  pieChart: 'bg-indigo-50/80 dark:bg-indigo-950/30',
 }
 
 export function EmptyState({

@@ -573,10 +573,10 @@ function ListView({
   }
 
   return (
-    <div className="space-y-2 md:space-y-3">
-      {records.map((record, index) => (
-        <Card key={record.id} className={`animate-stagger-up stagger-${(index % 8) + 1} transition-[shadow,transform] hover:shadow-md active:scale-[0.99] active:bg-accent/80`}>
-          <CardContent className="flex items-center gap-3 md:gap-4 py-2.5 px-3 md:px-4">
+    <Card className="py-0">
+      <div className="divide-y divide-border">
+        {records.map((record) => (
+          <div key={record.id} className="group/row flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium">
@@ -621,10 +621,10 @@ function ListView({
                 <Trash2 className="size-3.5 text-destructive" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }
 

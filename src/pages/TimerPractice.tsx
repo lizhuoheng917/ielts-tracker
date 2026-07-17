@@ -755,42 +755,38 @@ function RecordItem({
   const config = SUBJECT_CONFIG[record.subject]
 
   return (
-    <Card size="sm" className={cn('group/card', className)}>
-      <CardContent className="py-2.5 md:py-3 px-3 md:px-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <Badge variant="secondary" className={cn('gap-1 text-xs font-medium', config.badgeClass)}>
-                {config.icon}
-                {config.label}
-              </Badge>
-              <span className="text-[13px] text-muted-foreground">{record.date}</span>
-            </div>
-
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-[13px] text-muted-foreground">
-                时长：{formatDurationMinutes(record.duration)}
-              </span>
-            </div>
-
-            {record.note && (
-              <p className="text-[13px] text-muted-foreground mt-2 line-clamp-2">
-                {record.note}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon-xs" onClick={onEdit} aria-label="编辑" className="h-8 w-8">
-              <Pencil className="size-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon-xs" onClick={onDelete} aria-label="删除" className="h-8 w-8">
-              <Trash2 className="size-3.5 text-destructive" />
-            </Button>
-          </div>
+    <div className={cn('group/row flex items-start justify-between gap-3 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors', className)}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+          <Badge variant="secondary" className={cn('gap-1 text-xs font-medium', config.badgeClass)}>
+            {config.icon}
+            {config.label}
+          </Badge>
+          <span className="text-[13px] text-muted-foreground">{record.date}</span>
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="flex items-center gap-3 mt-0.5">
+          <span className="text-[13px] text-muted-foreground">
+            时长：{formatDurationMinutes(record.duration)}
+          </span>
+        </div>
+
+        {record.note && (
+          <p className="text-[13px] text-muted-foreground mt-1.5 line-clamp-2">
+            {record.note}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+        <Button variant="ghost" size="icon-xs" onClick={onEdit} aria-label="编辑" className="h-8 w-8">
+          <Pencil className="size-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon-xs" onClick={onDelete} aria-label="删除" className="h-8 w-8">
+          <Trash2 className="size-3.5 text-destructive" />
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -836,11 +832,7 @@ function RecordList() {
 
   return (
     <>
-      <h2 className="text-base md:text-lg font-semibold mb-3 mt-6 flex items-center gap-2">
-        <span className="h-px flex-1 bg-border" />
-        <span>练习记录</span>
-        <span className="h-px flex-1 bg-border" />
-      </h2>
+      <h2 className="text-[15px] md:text-base font-semibold mb-3 mt-6">练习记录</h2>
 
       {sortedRecords.length === 0 ? (
         <EmptyState
@@ -849,17 +841,18 @@ function RecordList() {
           description="开始你的第一次计时练习吧，坚持练习才能稳步提升"
         />
       ) : (
-        <div className="flex flex-col gap-2">
-          {sortedRecords.map((record, index) => (
-            <RecordItem
-              key={record.id}
-              record={record}
-              onEdit={() => handleEdit(record)}
-              onDelete={() => handleDeleteClick(record)}
-              className={`animate-stagger-up stagger-${(index % 8) + 1}`}
-            />
-          ))}
-        </div>
+        <Card className="py-0">
+          <div className="divide-y divide-border">
+            {sortedRecords.map((record) => (
+              <RecordItem
+                key={record.id}
+                record={record}
+                onEdit={() => handleEdit(record)}
+                onDelete={() => handleDeleteClick(record)}
+              />
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* 编辑弹窗 */}

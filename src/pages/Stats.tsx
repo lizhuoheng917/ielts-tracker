@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import { Flame, Trophy, CalendarDays } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
@@ -314,51 +315,62 @@ export default function Stats() {
     <div className="space-y-5 md:space-y-6">
       {/* 标题 */}
       <div>
-        <h1 className="text-[22px] md:text-2xl font-bold">数据统计</h1>
-        <p className="mt-1 text-[13px] md:text-sm text-muted-foreground">可视化你的学习数据</p>
+        <h1 className="text-[22px] md:text-2xl font-bold tracking-tight">数据统计</h1>
+        <p className="mt-1 text-[13px] md:text-sm text-muted-foreground">可视化你的学习数据与进步趋势</p>
       </div>
 
       {/* 连续打卡统计区 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-500 dark:bg-orange-900/40 dark:text-orange-400">
-              <Flame className="h-4 w-4 md:h-5 md:w-5" />
+        {/* 当前连续天数 */}
+        <div className="relative overflow-hidden rounded-xl p-4 md:p-5 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/20 border border-orange-200/50 dark:border-orange-800/30">
+          <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-orange-200/40 dark:bg-orange-700/20 blur-lg" />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-900/40">
+              <Flame className="h-5 w-5 md:h-6 md:w-6 text-orange-500 dark:text-orange-400" />
             </div>
             <div>
-              <p className="text-[13px] md:text-sm text-muted-foreground">当前连续天数</p>
-              <p className="text-xl md:text-2xl font-bold">{streakData.currentStreak}</p>
+              <p className="text-[13px] md:text-sm text-orange-700/70 dark:text-orange-300/60">当前连续天数</p>
+              <p className="text-2xl md:text-3xl font-bold text-orange-600 dark:text-orange-400">{streakData.currentStreak}</p>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-500 dark:bg-indigo-900/40 dark:text-indigo-400">
-              <Trophy className="h-4 w-4 md:h-5 md:w-5" />
-            </div>
-            <div>
-              <p className="text-[13px] md:text-sm text-muted-foreground">最长连续天数</p>
-              <p className="text-xl md:text-2xl font-bold">{streakData.longestStreak}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-500 dark:bg-blue-900/40 dark:text-blue-400">
-              <CalendarDays className="h-4 w-4 md:h-5 md:w-5" />
+          </div>
+        </div>
+
+        {/* 最长连续天数 */}
+        <div className="relative overflow-hidden rounded-xl p-4 md:p-5 shadow-sm bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/20 border border-indigo-200/50 dark:border-indigo-800/30">
+          <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-indigo-200/40 dark:bg-indigo-700/20 blur-lg" />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/40">
+              <Trophy className="h-5 w-5 md:h-6 md:w-6 text-indigo-500 dark:text-indigo-400" />
             </div>
             <div>
-              <p className="text-[13px] md:text-sm text-muted-foreground">总学习天数</p>
-              <p className="text-xl md:text-2xl font-bold">{totalStudyDays}</p>
+              <p className="text-[13px] md:text-sm text-indigo-700/70 dark:text-indigo-300/60">最长连续天数</p>
+              <p className="text-2xl md:text-3xl font-bold text-indigo-600 dark:text-indigo-400">{streakData.longestStreak}</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* 总学习天数 */}
+        <div className="relative overflow-hidden rounded-xl p-4 md:p-5 shadow-sm bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/20 border border-blue-200/50 dark:border-blue-800/30">
+          <div className="absolute -right-3 -top-3 h-14 w-14 rounded-full bg-blue-200/40 dark:bg-blue-700/20 blur-lg" />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/40">
+              <CalendarDays className="h-5 w-5 md:h-6 md:w-6 text-blue-500 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-[13px] md:text-sm text-blue-700/70 dark:text-blue-300/60">总学习天数</p>
+              <p className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400">{totalStudyDays}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 学习热力图 */}
-      <Card>
+      <Card className="ring-1 ring-indigo-500/15">
         <CardHeader>
-          <CardTitle className="text-[15px] md:text-base">学习热力图</CardTitle>
+          <CardTitle className="text-[15px] md:text-base flex items-center gap-2">
+            <div className="h-1.5 w-6 rounded-full bg-gradient-to-r from-indigo-400 to-violet-400" />
+            学习热力图
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto -mx-1 px-1">
@@ -461,15 +473,15 @@ export default function Stats() {
       </Card>
 
       {/* 图表区域：折线图 + 柱状图 */}
-      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-5">
         {/* 单词背诵趋势 */}
-        <Card>
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="text-[15px] md:text-base">单词背诵趋势（近30天）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[200px] md:h-[250px]">
-              {wordTrend.some((d) => d.count > 0) ? (
+            {wordTrend.some((d) => d.count > 0) ? (
+              <div className="h-[200px] md:h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={wordTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
@@ -494,21 +506,21 @@ export default function Stats() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
-              ) : (
-                <EmptyChartTip text="暂无单词背诵数据，开始背单词吧" />
-              )}
-            </div>
+              </div>
+            ) : (
+              <EmptyState scene="wordTrend" title="暂无单词背诵数据" description="开始背单词，你的进步趋势将在这里展示" />
+            )}
           </CardContent>
         </Card>
 
         {/* 学习时长分布 */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-[15px] md:text-base">学习时长分布（近7天）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[200px] md:h-[250px]">
-              {hasDurationData ? (
+            {hasDurationData ? (
+              <div className="h-[200px] md:h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={durationData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
@@ -526,29 +538,29 @@ export default function Stats() {
                       dataKey="duration"
                       name="时长（分钟）"
                       fill={INDIGO_COLORS[500]}
-                      radius={[4, 4, 0, 0]}
-                      barSize={28}
+                      radius={[6, 6, 0, 0]}
+                      barSize={32}
                     />
                   </BarChart>
                 </ResponsiveContainer>
-              ) : (
-                <EmptyChartTip text="暂无学习时长数据，开始练习吧" />
-              )}
-            </div>
+              </div>
+            ) : (
+              <EmptyState scene="durationChart" title="暂无学习时长数据" description="开始练习，你的学习时长将在这里展示" />
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* 图表区域：雷达图 + 饼图 */}
-      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-5">
         {/* 四科能力雷达图 */}
-        <Card>
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="text-[15px] md:text-base">四科能力雷达图</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[240px] md:h-[300px]">
-              {hasRadarData ? (
+            {hasRadarData ? (
+              <div className="h-[260px] md:h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
                     <PolarGrid stroke={chartColors.grid} />
@@ -567,21 +579,21 @@ export default function Stats() {
                     <Tooltip content={<CustomTooltip bgColor={chartColors.tooltipBg} borderColor={chartColors.tooltipBorder} />} />
                   </RadarChart>
                 </ResponsiveContainer>
-              ) : (
-                <EmptyChartTip text="暂无评分数据，完成练习并打分后将展示" />
-              )}
-            </div>
+              </div>
+            ) : (
+              <EmptyState scene="radarChart" title="暂无评分数据" description="完成练习并打分，你的能力雷达图将在这里展示" />
+            )}
           </CardContent>
         </Card>
 
         {/* 单词分类饼图 */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-[15px] md:text-base">单词分类占比</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[240px] md:h-[300px]">
-              {hasPieData ? (
+            {hasPieData ? (
+              <div className="h-[240px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -611,10 +623,10 @@ export default function Stats() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-              ) : (
-                <EmptyChartTip text="暂无单词数据，开始背诵单词吧" />
-              )}
-            </div>
+              </div>
+            ) : (
+              <EmptyState scene="pieChart" title="暂无单词分类数据" description="开始分类背诵单词，分类占比将在这里展示" />
+            )}
           </CardContent>
         </Card>
       </div>

@@ -236,49 +236,51 @@ export default function Plans() {
             description="创建你的第一个学习计划，让每天的雅思备考更有条理"
           />
         ) : (
-          activePlans.map((plan, index) => (
-            <Card key={plan.id} className={`animate-stagger-up stagger-${(index % 8) + 1} group/card active:bg-accent/80 transition-colors`}>
-              <CardContent className="flex items-center gap-2 md:gap-3 py-2.5 px-3 md:px-4">
-                <span
-                  className={cn(
-                    'shrink-0 inline-block w-2 h-2 rounded-full',
-                    plan.isActive ? 'bg-green-500' : 'bg-muted-foreground/30'
-                  )}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{plan.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <Badge variant="outline" className="text-[12px] md:text-xs">
-                      {FREQUENCY_LABELS[plan.frequency]}
-                    </Badge>
-                    {plan.frequency === 'weekly' && plan.weekDays && (
-                      <span className="text-[12px] md:text-xs text-muted-foreground">
-                        周{plan.weekDays.map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label).join('、')}
-                      </span>
+          <Card className="py-0">
+            <div className="divide-y divide-border">
+              {activePlans.map((plan) => (
+                <div key={plan.id} className="group/row flex items-center gap-2 md:gap-3 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors">
+                  <span
+                    className={cn(
+                      'shrink-0 inline-block w-2 h-2 rounded-full',
+                      plan.isActive ? 'bg-green-500' : 'bg-muted-foreground/30'
                     )}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{plan.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <Badge variant="outline" className="text-[12px] md:text-xs">
+                        {FREQUENCY_LABELS[plan.frequency]}
+                      </Badge>
+                      {plan.frequency === 'weekly' && plan.weekDays && (
+                        <span className="text-[12px] md:text-xs text-muted-foreground">
+                          周{plan.weekDays.map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label).join('、')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => openEdit(plan)}
+                      className="h-8 w-8"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setDeleteId(plan.id)}
+                      className="h-8 w-8"
+                    >
+                      <Trash2 className="size-3.5 text-destructive" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => openEdit(plan)}
-                    className="h-8 w-8"
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setDeleteId(plan.id)}
-                    className="h-8 w-8"
-                  >
-                    <Trash2 className="size-3.5 text-destructive" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+              ))}
+            </div>
+          </Card>
         )}
       </div>
 
@@ -289,53 +291,52 @@ export default function Plans() {
             <Pause className="h-4 w-4" />
             已暂停计划 ({pausedPlans.length})
           </h3>
-          {pausedPlans.map((plan, index) => (
-            <Card
-              key={plan.id}
-              className={`animate-stagger-up stagger-${(index % 8) + 1} group/card opacity-75 hover:opacity-100 transition-all`}
-            >
-              <CardContent className="flex items-center gap-2 md:gap-3 py-2.5 px-3 md:px-4">
-                <span className="shrink-0 inline-block w-2 h-2 rounded-full bg-muted-foreground/30" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate text-muted-foreground">{plan.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <Badge variant="outline" className="text-[12px] md:text-xs">
-                      {FREQUENCY_LABELS[plan.frequency]}
-                    </Badge>
+          <Card className="py-0">
+            <div className="divide-y divide-border">
+              {pausedPlans.map((plan) => (
+                <div key={plan.id} className="group/row flex items-center gap-2 md:gap-3 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors">
+                  <span className="shrink-0 inline-block w-2 h-2 rounded-full bg-muted-foreground/30" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-muted-foreground">{plan.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <Badge variant="outline" className="text-[12px] md:text-xs">
+                        {FREQUENCY_LABELS[plan.frequency]}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => updatePlan(plan.id, { isActive: true })}
+                      className="h-8 w-8 text-green-500 hover:text-green-600"
+                      title="重新启用"
+                    >
+                      <Play className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => openEdit(plan)}
+                      className="h-8 w-8"
+                      title="编辑"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setDeleteId(plan.id)}
+                      className="h-8 w-8"
+                      title="删除"
+                    >
+                      <Trash2 className="size-3.5 text-destructive" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => updatePlan(plan.id, { isActive: true })}
-                    className="h-8 w-8 text-green-500 hover:text-green-600"
-                    title="重新启用"
-                  >
-                    <Play className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => openEdit(plan)}
-                    className="h-8 w-8"
-                    title="编辑"
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setDeleteId(plan.id)}
-                    className="h-8 w-8"
-                    title="删除"
-                  >
-                    <Trash2 className="size-3.5 text-destructive" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              ))}
+            </div>
+          </Card>
         </div>
       )}
 
