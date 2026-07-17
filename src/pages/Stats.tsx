@@ -73,15 +73,6 @@ function getHeatmapLevel(value: number): number {
   return 4
 }
 
-// ===== 空数据占位组件 =====
-function EmptyChartTip({ text }: { text: string }) {
-  return (
-    <div className="flex h-full items-center justify-center text-[13px] md:text-sm text-muted-foreground px-4 text-center">
-      {text}
-    </div>
-  )
-}
-
 // ===== 自定义 Tooltip =====
 function CustomTooltip({
   active,
