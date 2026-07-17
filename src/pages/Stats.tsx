@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, subDays, startOfWeek, eachDayOfInterval } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -187,6 +187,88 @@ const reportMarkdownComponents: Components = {
   td: ({ node, ...props }) => (
     <td className="border-b border-border px-3 py-2" {...props} />
   ),
+}
+
+// ===== 可拖动浮动按钮 =====
+function DraggableFloatButton({ onClick }: { onClick: () => void }) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const posRef = useRef({ x: 0, y: 0 })
+  const draggingRef = useRef(false)
+  const movedRef = useRef(false)
+  const startRef = useRef({ x: 0, y: 0 })
+
+  const handleStart = useCallback((clientX: number, clientY: number) => {
+    if (!btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    posRef.current = { x: rect.left, y: rect.top }
+    startRef.current = { x: clientX - rect.left, y: clientY - rect.top }
+    draggingRef.current = true
+    movedRef.current = false
+    btnRef.current.style.transition = 'none'
+  }, [])
+
+  const handleMove = useCallback((clientX: number, clientY: number) => {
+    if (!draggingRef.current || !btnRef.current) return
+    const x = clientX - startRef.current.x
+    const y = clientY - startRef.current.y
+    const btnW = btnRef.current.offsetWidth
+    const btnH = btnRef.current.offsetHeight
+    const maxX = window.innerWidth - btnW
+    const maxY = window.innerHeight - btnH
+    const cx = Math.max(0, Math.min(x, maxX))
+    const cy = Math.max(0, Math.min(y, maxY))
+    posRef.current = { x: cx, y: cy }
+    btnRef.current.style.left = cx + 'px'
+    btnRef.current.style.top = cy + 'px'
+    btnRef.current.style.right = 'auto'
+    btnRef.current.style.bottom = 'auto'
+    const dist = Math.abs(cx - (clientX - startRef.current.x)) + Math.abs(cy - (clientY - startRef.current.y))
+    if (dist > 5) movedRef.current = true
+  }, [])
+
+  const handleEnd = useCallback(() => {
+    if (!btnRef.current) return
+    draggingRef.current = false
+    btnRef.current.style.transition = ''
+  }, [])
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => handleStart(e.clientX, e.clientY)
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY)
+    const onMouseUp = () => handleEnd()
+    const onTouchStart = (e: TouchEvent) => { if (e.touches.length === 1) handleStart(e.touches[0].clientX, e.touches[0].clientY) }
+    const onTouchMove = (e: TouchEvent) => { if (e.touches.length === 1) handleMove(e.touches[0].clientX, e.touches[0].clientY) }
+    const onTouchEnd = () => handleEnd()
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('touchmove', onTouchMove)
+    window.addEventListener('touchend', onTouchEnd)
+
+    const btn = btnRef.current
+    btn?.addEventListener('mousedown', onMouseDown)
+    btn?.addEventListener('touchstart', onTouchStart)
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+      btn?.removeEventListener('mousedown', onMouseDown)
+      btn?.removeEventListener('touchstart', onTouchStart)
+    }
+  }, [handleStart, handleMove, handleEnd])
+
+  return (
+    <button
+      ref={btnRef}
+      onClick={() => { if (!movedRef.current) onClick() }}
+      className="fixed bottom-6 right-6 z-40 flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105 active:scale-95 transition-all duration-200 cursor-grab active:cursor-grabbing touch-none select-none"
+      aria-label="AI 智能分析"
+    >
+      <Sparkles className="h-5 w-5 md:h-6 md:w-6 pointer-events-none" />
+    </button>
+  )
 }
 
 // ===== 主组件 =====
@@ -831,22 +913,16 @@ ${JSON.stringify(data, null, 2)}
         </Card>
       </div>
 
-      {/* AI 智能分析浮动按钮 */}
-      <button
-        onClick={() => {
-          setReportState('loading')
-          setReportContent('')
-          setReportError('')
-          setSavedReportId(null)
-          setReportCreatedAt(new Date().toISOString())
-          setAiOpen(true)
-          generateReport()
-        }}
-        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
-        aria-label="AI 智能分析"
-      >
-        <Sparkles className="h-5 w-5 md:h-6 md:w-6" />
-      </button>
+      {/* AI 智能分析浮动按钮（可拖动） */}
+      <DraggableFloatButton onClick={() => {
+        setReportState('loading')
+        setReportContent('')
+        setReportError('')
+        setSavedReportId(null)
+        setReportCreatedAt(new Date().toISOString())
+        setAiOpen(true)
+        generateReport()
+      }} />
 
       {/* AI 智能分析弹窗 */}
       <Dialog open={aiOpen} onOpenChange={(open) => {
@@ -921,7 +997,7 @@ ${JSON.stringify(data, null, 2)}
                 </div>
                 {/* 底部按钮 */}
                 <div className="border-t px-5 py-3 flex items-center gap-2">
-                  {(reportState === 'report' || reportState === 'history') && (
+                  {reportState === 'history' && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -998,7 +1074,7 @@ ${JSON.stringify(data, null, 2)}
                   </Badge>
                   <button
                     onClick={(e) => handleDeleteReport(e, report.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    className="shrink-0 p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive dark:text-muted-foreground dark:hover:text-destructive transition-colors"
                     aria-label="删除报告"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
