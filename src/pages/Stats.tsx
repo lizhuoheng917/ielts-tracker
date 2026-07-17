@@ -19,7 +19,7 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Flame, Trophy, CalendarDays, Sparkles, FileText, Save, ArrowLeft, Trash2, Clock } from 'lucide-react'
+import { Flame, Trophy, CalendarDays, Sparkles, FileText, Save, Trash2, Clock, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,8 +30,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { AIChatPanel } from '@/components/ai/AIChatPanel'
-import { getAllLearningData } from '@/lib/aiService'
+import { AILoadingState } from '@/components/ai/AILoadingState'
+import { getAllLearningData, streamAIChat, type AIMessage } from '@/lib/aiService'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useWordStore } from '@/stores/wordStore'
@@ -40,7 +40,7 @@ import { useTimerStore } from '@/stores/timerStore'
 import { useReportStore } from '@/stores/reportStore'
 import { WEEKDAY_LABELS } from '@/lib/constants'
 import type { PracticeType } from '@/lib/types'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 
 // ===== 颜色常量 =====
 const INDIGO_COLORS = {
@@ -115,6 +115,79 @@ function CustomTooltip({
   )
 }
 
+// ===== 报告 Markdown 自定义渲染器（卡片式美化）=====
+const reportMarkdownComponents: Components = {
+  h1: ({ node, ...props }) => (
+    <h1
+      className="text-2xl font-bold mt-6 mb-4 pb-2 bg-[linear-gradient(to_right,#8b5cf6,#6366f1)] bg-[length:100%_2px] bg-no-repeat bg-bottom"
+      {...props}
+    />
+  ),
+  h2: ({ node, ...props }) => (
+    <h2
+      className="text-xl font-bold mt-6 mb-3 pl-3 border-l-4 border-violet-500"
+      {...props}
+    />
+  ),
+  h3: ({ node, ...props }) => (
+    <h3 className="text-base font-bold mt-4 mb-2 text-foreground" {...props} />
+  ),
+  p: ({ node, ...props }) => (
+    <p className="text-sm leading-[1.8] my-3 text-foreground/90" {...props} />
+  ),
+  ul: ({ node, ...props }) => (
+    <ul className="my-3 ml-5 list-disc space-y-1.5 text-sm leading-[1.8] text-foreground/90" {...props} />
+  ),
+  ol: ({ node, ...props }) => (
+    <ol className="my-3 ml-5 list-decimal space-y-1.5 text-sm leading-[1.8] text-foreground/90" {...props} />
+  ),
+  blockquote: ({ node, ...props }) => (
+    <blockquote
+      className="my-4 pl-4 pr-3 py-2 border-l-4 border-violet-400 bg-violet-50/60 dark:bg-violet-950/20 rounded-r text-sm italic text-muted-foreground"
+      {...props}
+    />
+  ),
+  pre: ({ node, ...props }) => (
+    <pre className="my-3 p-3 rounded-lg bg-muted overflow-x-auto text-[0.85em] leading-relaxed font-mono" {...props} />
+  ),
+  code: ({ node, className, children, ...props }) => {
+    // 含 language- 类名的是代码块（已被 pre 包裹）
+    if (className && className.startsWith('language-')) {
+      return (
+        <code className={`font-mono ${className}`} {...props}>
+          {children}
+        </code>
+      )
+    }
+    // 行内代码
+    return (
+      <code
+        className="px-1.5 py-0.5 rounded bg-muted/70 text-violet-600 dark:text-violet-400 text-[0.85em] font-mono"
+        {...props}
+      >
+        {children}
+      </code>
+    )
+  },
+  strong: ({ node, ...props }) => (
+    <strong className="font-bold text-violet-600 dark:text-violet-400" {...props} />
+  ),
+  table: ({ node, ...props }) => (
+    <div className="my-4 overflow-x-auto rounded-lg border border-border">
+      <table className="w-full border-collapse text-sm" {...props} />
+    </div>
+  ),
+  thead: ({ node, ...props }) => (
+    <thead className="bg-muted/50" {...props} />
+  ),
+  th: ({ node, ...props }) => (
+    <th className="border-b border-border px-3 py-2 text-left font-semibold" {...props} />
+  ),
+  td: ({ node, ...props }) => (
+    <td className="border-b border-border px-3 py-2" {...props} />
+  ),
+}
+
 // ===== 主组件 =====
 export default function Stats() {
   // --- 统计页面访问计数（成就系统）---
@@ -155,10 +228,11 @@ export default function Stats() {
   }, [theme])
 
   // --- 报告相关状态 ---
-  const [viewMode, setViewMode] = useState<'chat' | 'report'>('chat')
-  const [currentReport, setCurrentReport] = useState<string | null>(null)
+  const [reportState, setReportState] = useState<'idle' | 'loading' | 'report' | 'history'>('idle')
+  const [reportContent, setReportContent] = useState('')
+  const [reportError, setReportError] = useState('')
   const [savedReportId, setSavedReportId] = useState<string | null>(null)
-  const [viewingHistoryReport, setViewingHistoryReport] = useState(false)
+  const [reportCreatedAt, setReportCreatedAt] = useState(() => new Date().toISOString())
   const reports = useReportStore((s) => s.reports)
   const addReport = useReportStore((s) => s.addReport)
   const deleteReport = useReportStore((s) => s.deleteReport)
@@ -188,29 +262,52 @@ ${JSON.stringify(data, null, 2)}
 - 建议要具体，避免空泛的"多练习"
 - 回复使用 Markdown 格式` }, [])
 
-  // --- 报告相关回调 ---
-  const handleReportGenerated = (content: string) => {
-    setCurrentReport(content)
+  // --- 生成报告（直接调用 streamAIChat，不通过 AIChatPanel）---
+  const generateReport = async () => {
+    setReportState('loading')
+    setReportContent('')
+    setReportError('')
     setSavedReportId(null)
-    setViewingHistoryReport(false)
-    setViewMode('report')
+    setReportCreatedAt(new Date().toISOString())
+
+    const messages: AIMessage[] = [
+      { role: 'system', content: aiSystemPrompt },
+      { role: 'user', content: '请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。' },
+    ]
+
+    let fullContent = ''
+    await streamAIChat(messages, {
+      onContent: (content) => {
+        fullContent = content
+      },
+      onError: (err) => {
+        setReportError(err)
+        setReportState('idle')
+      },
+      onDone: () => {
+        setReportContent(fullContent)
+        setReportState('report')
+      },
+    })
   }
 
+  // --- 报告相关回调 ---
   const handleSaveReport = () => {
-    if (!currentReport) return
+    if (!reportContent) return
     const id = addReport({
       title: '学习分析报告',
-      content: currentReport,
-      createdAt: new Date().toISOString(),
+      content: reportContent,
+      createdAt: reportCreatedAt,
     })
     setSavedReportId(id)
   }
 
-  const handleOpenHistoryReport = (content: string) => {
-    setCurrentReport(content)
+  const handleOpenHistoryReport = (content: string, createdAt: string) => {
+    setReportContent(content)
+    setReportCreatedAt(createdAt)
     setSavedReportId(null)
-    setViewingHistoryReport(true)
-    setViewMode('report')
+    setReportError('')
+    setReportState('history')
     setAiOpen(true)
   }
 
@@ -702,11 +799,13 @@ ${JSON.stringify(data, null, 2)}
       {/* AI 智能分析浮动按钮 */}
       <button
         onClick={() => {
-          setViewMode('chat')
-          setCurrentReport(null)
+          setReportState('loading')
+          setReportContent('')
+          setReportError('')
           setSavedReportId(null)
-          setViewingHistoryReport(false)
+          setReportCreatedAt(new Date().toISOString())
           setAiOpen(true)
+          generateReport()
         }}
         className="fixed bottom-6 right-6 z-40 flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
         aria-label="AI 智能分析"
@@ -717,74 +816,78 @@ ${JSON.stringify(data, null, 2)}
       {/* AI 智能分析弹窗 */}
       <Dialog open={aiOpen} onOpenChange={(open) => {
         if (!open) {
-          setViewMode('chat')
-          setCurrentReport(null)
+          setReportState('idle')
+          setReportContent('')
+          setReportError('')
           setSavedReportId(null)
-          setViewingHistoryReport(false)
         }
         setAiOpen(open)
       }}>
-        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
-          {viewMode === 'chat' ? (
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
+          {reportState === 'loading' && (
             <>
-              <DialogHeader className="px-4 pt-4 pb-2">
+              <DialogHeader className="px-5 pt-5 pb-2">
                 <DialogTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-violet-500" />
                   AI 智能分析
                 </DialogTitle>
               </DialogHeader>
-              <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
-                <AIChatPanel
-                  systemPrompt={aiSystemPrompt}
-                  placeholder="问我关于你的学习分析..."
-                  initialQuery="请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。"
-                  loadingText="AI 正在深度分析你的学习数据，请耐心等待"
-                  onReportGenerated={handleReportGenerated}
-                />
+              <div className="flex flex-col items-center justify-center px-5 py-16 gap-4">
+                <AILoadingState text="AI 正在生成你的学习分析报告" className="text-base" />
+                <p className="text-sm text-muted-foreground">
+                  正在分析你的学习数据，这可能需要 10-20 秒
+                </p>
               </div>
             </>
-          ) : (
+          )}
+
+          {reportState === 'idle' && reportError && (
             <>
-              <DialogHeader className="px-4 pt-4 pb-2">
+              <DialogHeader className="px-5 pt-5 pb-2">
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  生成失败
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col items-center justify-center px-5 py-12 gap-4">
+                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{reportError}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setAiOpen(false)}>
+                  关闭
+                </Button>
+              </div>
+            </>
+          )}
+
+          {(reportState === 'report' || reportState === 'history') && (
+            <>
+              <DialogHeader className="px-5 pt-5 pb-2">
                 <DialogTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-violet-500" />
-                  {viewingHistoryReport ? '历史分析报告' : '学习分析报告'}
+                  {reportState === 'history' ? '历史分析报告' : '学习分析报告'}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                 {/* 报告内容 */}
-                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 bg-white dark:bg-background">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-3 bg-white dark:bg-background">
                   <div className="flex items-center gap-2 mb-4">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="text-xs text-muted-foreground">
-                      {viewingHistoryReport && currentReport
-                        ? '历史报告'
-                        : `生成于 ${new Date().toLocaleString('zh-CN')}`}
+                      生成于 {new Date(reportCreatedAt).toLocaleString('zh-CN')}
                     </span>
                   </div>
-                  <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:text-lg prose-p:text-base">
-                    <ReactMarkdown>{currentReport || ''}</ReactMarkdown>
+                  <div className="prose prose-lg dark:prose-invert max-w-none">
+                    <ReactMarkdown components={reportMarkdownComponents}>
+                      {reportContent}
+                    </ReactMarkdown>
                   </div>
                 </div>
                 {/* 底部按钮 */}
-                <div className="border-t px-4 py-3 flex items-center gap-2">
-                  {!viewingHistoryReport && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setViewMode('chat')
-                        setCurrentReport(null)
-                        setSavedReportId(null)
-                      }}
-                      className="gap-1.5"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      返回对话
-                    </Button>
-                  )}
+                <div className="border-t px-5 py-3 flex items-center gap-2">
                   <div className="flex-1" />
-                  {!viewingHistoryReport && (
+                  {reportState === 'report' && (
                     <Button
                       size="sm"
                       onClick={handleSaveReport}
@@ -795,6 +898,14 @@ ${JSON.stringify(data, null, 2)}
                       {savedReportId ? '已保存' : '保存报告'}
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAiOpen(false)}
+                    className="gap-1.5"
+                  >
+                    关闭
+                  </Button>
                 </div>
               </div>
             </>
@@ -816,7 +927,7 @@ ${JSON.stringify(data, null, 2)}
               {reports.map((report) => (
                 <div
                   key={report.id}
-                  onClick={() => handleOpenHistoryReport(report.content)}
+                  onClick={() => handleOpenHistoryReport(report.content, report.createdAt)}
                   className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-accent/50 cursor-pointer transition-colors group"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/30 shrink-0">
