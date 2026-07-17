@@ -39,18 +39,34 @@ export function AIChatPanel({
   const [error, setError] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isUserScrolledUp = useRef(false)
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (force = false) => {
     const container = messagesContainerRef.current
     if (container) {
+      if (force) {
+        isUserScrolledUp.current = false
+      }
       requestAnimationFrame(() => {
         container.scrollTop = container.scrollHeight
       })
     }
   }
 
+  // 检测用户是否手动向上滚动
+  const handleScroll = () => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    const threshold = 60
+    isUserScrolledUp.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight > threshold
+  }
+
   useEffect(() => {
-    scrollToBottom()
+    // 仅在用户未手动上滑时自动滚动
+    if (!isUserScrolledUp.current) {
+      scrollToBottom()
+    }
   }, [messages])
 
   // 自动调整 textarea 高度
@@ -76,6 +92,7 @@ export function AIChatPanel({
     setInput('')
     setIsLoading(true)
     setError('')
+    scrollToBottom(true) // 用户发消息时强制滚到底
 
     // 构建 API 消息（基于最新状态）
     const currentMessages = messages
@@ -155,7 +172,7 @@ export function AIChatPanel({
   return (
     <div className={cn('flex flex-col flex-1 min-h-0', className)}>
       {/* 消息列表 */}
-      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-1">
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-1">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
             <Sparkles className="h-8 w-8 mb-2 text-indigo-400" />
@@ -193,9 +210,13 @@ export function AIChatPanel({
                 : 'bg-muted text-foreground'
             )}>
               {msg.role === 'assistant' ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
-                  <ReactMarkdown>{msg.content || '...'}</ReactMarkdown>
-                </div>
+                msg.content ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <AILoadingState />
+                )
               ) : (
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               )}
@@ -231,10 +252,6 @@ export function AIChatPanel({
             )}
           </div>
         ))}
-
-        {isLoading && messages[messages.length - 1]?.role === 'user' && (
-          <AILoadingState />
-        )}
 
         {error && (
           <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">

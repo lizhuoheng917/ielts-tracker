@@ -376,3 +376,14 @@
   .stagger-11 { animation-delay: 0.44s; }
   .stagger-12 { animation-delay: 0.48s; }
 }
+
+@keyframes loading-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
