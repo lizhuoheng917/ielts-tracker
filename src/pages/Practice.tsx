@@ -69,43 +69,42 @@ function IeltsScoreSlider({
         </span>
       </div>
 
-      {/* 滑轨 */}
-      <input
-        type="range"
-        min={0}
-        max={18}
-        step={1}
-        value={stepIndex}
-        onChange={handleChange}
-        className="w-full h-7 appearance-none cursor-pointer bg-transparent
-          [&::-webkit-slider-container]:h-7
-          [&::-webkit-slider-track]:h-1.5
-          [&::-webkit-slider-track]:rounded-full
-          [&::-webkit-slider-track]:bg-muted-foreground/20 dark:[&::-webkit-slider-track]:bg-muted-foreground/30
-          [&::-webkit-slider-thumb]:appearance-none
-          [&::-webkit-slider-thumb]:relative
-          [&::-webkit-slider-thumb]:-mt-3.5
-          [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6
-          [&::-webkit-slider-thumb]:rounded-full
-          [&::-webkit-slider-thumb]:bg-indigo-600 dark:[&::-webkit-slider-thumb]:bg-indigo-400
-          [&::-webkit-slider-thumb]:border-[3px] [&::-webkit-slider-thumb]:border-white dark:[&::-webkit-slider-thumb]:border-slate-900
-          [&::-webkit-slider-thumb]:shadow-[0_2px_8px_rgba(79,70,229,0.35)]
-          [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
-          [&::-moz-range-track]:h-1.5
-          [&::-moz-range-track]:rounded-full
-          [&::-moz-range-track]:bg-muted-foreground/20 dark:[&::-moz-range-track]:bg-muted-foreground/30
-          [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6
-          [&::-moz-range-thumb]:rounded-full
-          [&::-moz-range-thumb]:bg-indigo-600 dark:[&::-moz-range-thumb]:bg-indigo-400
-          [&::-moz-range-thumb]:border-[3px] [&::-moz-range-thumb]:border-white dark:[&::-moz-range-thumb]:border-slate-900
-          [&::-moz-range-thumb]:shadow-[0_2px_8px_rgba(79,70,229,0.35)]
-          [&::-moz-range-thumb]:cursor-pointer"
-      />
+      {/* 滑轨：容器+轨道层+滑块层，确保轨道在所有浏览器中可见 */}
+      <div className="relative h-7 flex items-center">
+        {/* 轨道背景（独立层，确保始终可见） */}
+        <div className="absolute inset-x-0 h-1.5 rounded-full bg-muted-foreground/20 dark:bg-white/15" />
+        {/* 输入滑块（透明背景，只显示拖拽按钮） */}
+        <input
+          type="range"
+          min={0}
+          max={18}
+          step={1}
+          value={stepIndex}
+          onChange={handleChange}
+          className="relative w-full h-7 appearance-none cursor-pointer bg-transparent z-10
+            [&::-webkit-slider-container]:h-7 [&::-webkit-slider-container]:flex [&::-webkit-slider-container]:items-center
+            [&::-webkit-slider-track]:h-0 [&::-webkit-slider-track]:bg-transparent
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:bg-indigo-600 dark:[&::-webkit-slider-thumb]:bg-indigo-400
+            [&::-webkit-slider-thumb]:border-[3px] [&::-webkit-slider-thumb]:border-white dark:[&::-webkit-slider-thumb]:border-slate-900
+            [&::-webkit-slider-thumb]:shadow-[0_2px_8px_rgba(79,70,229,0.35)]
+            [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
+            [&::-moz-range-track]:h-0 [&::-moz-range-track]:bg-transparent
+            [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6
+            [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:bg-indigo-600 dark:[&::-moz-range-thumb]:bg-indigo-400
+            [&::-moz-range-thumb]:border-[3px] [&::-moz-range-thumb]:border-white dark:[&::-moz-range-thumb]:border-slate-900
+            [&::-moz-range-thumb]:shadow-[0_2px_8px_rgba(79,70,229,0.35)]
+            [&::-moz-range-thumb]:cursor-pointer"
+        />
+      </div>
 
       {/* 端点提示 */}
       <div className="flex justify-between -mt-1">
-        <span className="text-[11px] text-muted-foreground/60 dark:text-muted-foreground/50">未评分</span>
-        <span className="text-[11px] text-muted-foreground/60 dark:text-muted-foreground/50">9</span>
+        <span className="text-[11px] text-muted-foreground/60 dark:text-white/40">未评分</span>
+        <span className="text-[11px] text-muted-foreground/60 dark:text-white/40">9</span>
       </div>
     </div>
   )
