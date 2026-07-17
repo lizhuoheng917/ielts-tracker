@@ -285,10 +285,10 @@ function TimerSection() {
               />
               {/* 时间文字 */}
               <text
-                x="100" y="100"
+                x="100" y="96"
                 textAnchor="middle"
                 fill="oklch(0.15 0.02 270)"
-                fontSize="52"
+                fontSize="44"
                 fontFamily="'Space Grotesk', system-ui, sans-serif"
                 fontWeight="700"
                 letterSpacing="-2"
@@ -297,22 +297,22 @@ function TimerSection() {
               </text>
               {/* 状态文字 */}
               {isRunning && (
-                <text x="100" y="130" textAnchor="middle" fill={subjectConfig.gradientFrom} fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="124" textAnchor="middle" fill={subjectConfig.gradientFrom} fontSize="13" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   进行中
                 </text>
               )}
               {isPaused && (
-                <text x="100" y="130" textAnchor="middle" fill="#D97706" fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="124" textAnchor="middle" fill="#D97706" fontSize="13" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   已暂停
                 </text>
               )}
               {isFinished && (
-                <text x="100" y="130" textAnchor="middle" fill="#059669" fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="124" textAnchor="middle" fill="#059669" fontSize="13" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   已完成
                 </text>
               )}
               {!isRunning && !isPaused && !isFinished && (
-                <text x="100" y="130" textAnchor="middle" fill="oklch(0.45 0.02 270)" fontSize="15" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
+                <text x="100" y="124" textAnchor="middle" fill="oklch(0.45 0.02 270)" fontSize="13" fontFamily="'Space Grotesk', system-ui, sans-serif" fontWeight="500">
                   {mode === 'countdown' ? `${presetMinutes} 分钟` : '正计时'}
                 </text>
               )}

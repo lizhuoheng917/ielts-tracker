@@ -28,12 +28,9 @@ export const useSettingsStore = create<SettingsStore>()(
         if (get().lastCheckinDate === today) return false
         set({ lastCheckinDate: today })
 
-        // 记录活动到热力图 + XP
-        import('@/stores/streakStore').then(({ useStreakStore }) => {
-          useStreakStore.getState().recordActivity(today)
-        })
-        import('@/lib/achievementService').then(({ addXP }) => {
-          addXP(10)
+        // 调用成就系统的打卡联动（包含热力图、XP、首次打卡徽章、连续打卡徽章）
+        import('@/lib/achievementService').then(({ handleCheckinCompleted }) => {
+          handleCheckinCompleted()
         })
 
         return true
