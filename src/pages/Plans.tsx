@@ -70,7 +70,7 @@ export default function Plans() {
   const [formActive, setFormActive] = useState(true)
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [aiOpen, setAiOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(reportContext ? true : false)
 
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
