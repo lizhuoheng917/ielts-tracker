@@ -22,8 +22,10 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { Plus, CheckCircle, Circle, Pencil, Trash2, ListTodo, Play, Pause } from 'lucide-react'
+import { Plus, CheckCircle, Circle, Pencil, Trash2, ListTodo, Play, Pause, Sparkles } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { AIChatPanel } from '@/components/ai/AIChatPanel'
+import { getAllLearningData } from '@/lib/aiService'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: '每日',
@@ -62,6 +64,32 @@ export default function Plans() {
   const [formActive, setFormActive] = useState(true)
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [aiOpen, setAiOpen] = useState(false)
+
+  const aiSystemPrompt = useMemo(() => {
+    const data = getAllLearningData()
+    return `你是 IELTS Tracker 的 AI 学习计划助手。你是一位经验丰富的雅思备考教练。
+
+## 用户学习数据
+${JSON.stringify(data, null, 2)}
+
+## 你的职责
+根据用户的学习数据，为其生成个性化的学习计划建议。
+
+## 建议创建计划时的格式
+如果你想建议用户创建学习计划，请在回复末尾使用以下格式：
+[ACTION:create_plan]
+计划标题
+计划描述（具体的学习内容和方法）
+科目分类（reading/listening/writing/speaking/general之一）
+[/ACTION]
+
+## 风格要求
+- 用中文回复
+- 语气友好、鼓励但不失专业
+- 建议要具体，避免空泛的"多练习"
+- 回复使用 Markdown 格式`
+  }, [])
 
   const today = getTodayStr()
   const dayOfWeek = new Date().getDay()
@@ -167,10 +195,16 @@ export default function Plans() {
           <h1 className="text-[22px] md:text-2xl font-bold">学习计划</h1>
           <p className="mt-1 text-[15px] text-muted-foreground">管理你的每日学习任务</p>
         </div>
-        <Button onClick={openAdd} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4" />
-          添加计划
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setAiOpen(true)} className="w-full sm:w-auto">
+            <Sparkles className="h-4 w-4 mr-1 text-violet-500" />
+            AI 生成
+          </Button>
+          <Button onClick={openAdd} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4" />
+            添加计划
+          </Button>
+        </div>
       </div>
 
       {/* 今日待办 */}
@@ -454,6 +488,35 @@ export default function Plans() {
               删除
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI 生成计划弹窗 */}
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500" />
+              AI 生成学习计划
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden px-4 pb-4 min-h-[400px]">
+            <AIChatPanel
+              systemPrompt={aiSystemPrompt}
+              placeholder="让 AI 根据你的学习数据生成计划..."
+              onActionConfirm={(action) => {
+                if (action.type === 'create_plan') {
+                  const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)
+                  const title = lines[0] || 'AI 建议计划'
+                  const description = lines.slice(1).join('\n') || ''
+                  const categoryLine = lines.find((l) => /reading|listening|writing|speaking|general/.test(l))
+                  const category = (categoryLine?.match(/(reading|listening|writing|speaking|general)/)?.[0] || 'general') as 'reading' | 'listening' | 'writing' | 'speaking' | 'general'
+                  addPlan({ title, description, category, frequency: 'daily', isActive: true })
+                  alert('计划已创建！')
+                }
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

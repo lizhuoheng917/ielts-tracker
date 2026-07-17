@@ -33,7 +33,16 @@ import {
   AlertTriangle,
   Moon,
   Sun,
+  Sparkles,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Link as LinkIcon,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
+import { useAIStore } from '@/stores/aiStore'
+import { testAIConnection } from '@/lib/aiService'
 
 export default function Settings() {
   // --- 核心状态 ---
@@ -48,6 +57,36 @@ export default function Settings() {
   const [examDateInput, setExamDateInput] = useState(examDate || '')
   const [themeInput, setThemeInput] = useState<'light' | 'dark'>(theme)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+
+  // --- AI 配置 ---
+  const aiApiKey = useAIStore((s) => s.apiKey)
+  const aiBaseURL = useAIStore((s) => s.baseURL)
+  const aiModel = useAIStore((s) => s.model)
+  const setAiApiKey = useAIStore((s) => s.setApiKey)
+  const setAiBaseURL = useAIStore((s) => s.setBaseURL)
+  const setAiModel = useAIStore((s) => s.setModel)
+  const clearAiConfig = useAIStore((s) => s.clearConfig)
+
+  const [aiKeyInput, setAiKeyInput] = useState(aiApiKey)
+  const [aiUrlInput, setAiUrlInput] = useState(aiBaseURL)
+  const [aiModelInput, setAiModelInput] = useState(aiModel)
+  const [showAiKey, setShowAiKey] = useState(false)
+  const [aiTestStatus, setAiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [aiTestMessage, setAiTestMessage] = useState('')
+
+  const handleTestAI = async () => {
+    setAiTestStatus('testing')
+    const result = await testAIConnection()
+    setAiTestStatus(result.ok ? 'success' : 'error')
+    setAiTestMessage(result.message)
+  }
+
+  const handleSaveAI = () => {
+    setAiApiKey(aiKeyInput)
+    setAiBaseURL(aiUrlInput)
+    setAiModel(aiModelInput)
+    alert('AI 配置已保存')
+  }
 
   // --- 考试倒计时 ---
   const daysUntilExam = useMemo(() => {
@@ -310,6 +349,117 @@ export default function Settings() {
               <Moon className="h-4 w-4" />
               深色
             </button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI 智能助手配置 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm md:text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
+            AI 智能助手
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* API Key */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+              API Key
+            </label>
+            <div className="relative">
+              <Input
+                type={showAiKey ? 'text' : 'password'}
+                value={aiKeyInput}
+                onChange={(e) => setAiKeyInput(e.target.value)}
+                placeholder="输入你的 Agnes AI API Key"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAiKey(!showAiKey)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showAiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Base URL */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+              <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+              API 地址
+            </label>
+            <Input
+              value={aiUrlInput}
+              onChange={(e) => setAiUrlInput(e.target.value)}
+              placeholder="https://api.hub.agnes-ai.com/v1"
+            />
+          </div>
+
+          {/* Model */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">模型</label>
+            <Input
+              value={aiModelInput}
+              onChange={(e) => setAiModelInput(e.target.value)}
+              placeholder="agnes-2.5-flash"
+            />
+          </div>
+
+          {/* 操作按钮 */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={handleTestAI}
+              disabled={aiTestStatus === 'testing' || !aiKeyInput}
+              className="w-full sm:w-auto"
+            >
+              {aiTestStatus === 'testing' ? (
+                <span className="animate-pulse">检测中...</span>
+              ) : aiTestStatus === 'success' ? (
+                <>
+                  <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />
+                  连接成功
+                </>
+              ) : aiTestStatus === 'error' ? (
+                <>
+                  <XCircle className="mr-1 h-4 w-4 text-destructive" />
+                  连接失败
+                </>
+              ) : (
+                <>检测连接</>
+              )}
+            </Button>
+            <Button onClick={handleSaveAI} className="w-full sm:w-auto">
+              保存配置
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                clearAiConfig()
+                setAiKeyInput('')
+                setAiUrlInput('https://api.hub.agnes-ai.com/v1')
+                setAiModelInput('agnes-2.5-flash')
+                setAiTestStatus('idle')
+              }}
+              className="w-full sm:w-auto"
+            >
+              重置
+            </Button>
+          </div>
+
+          {/* 连接状态提示 */}
+          {aiTestStatus === 'error' && (
+            <p className="text-sm text-destructive">{aiTestMessage}</p>
+          )}
+
+          {/* 隐私提示 */}
+          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground mb-1">隐私说明</p>
+            <p>API Key 仅存储在你的本地浏览器中，不会上传到任何服务器。所有 AI 交互通过你的 Key 直接发送到 Agnes AI。</p>
           </div>
         </CardContent>
       </Card>

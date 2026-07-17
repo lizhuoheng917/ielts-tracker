@@ -26,8 +26,9 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { PlusIcon, PencilIcon, TrashIcon } from 'lucide-react'
+import { PlusIcon, PencilIcon, TrashIcon, Sparkles } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { AIChatPanel } from '@/components/ai/AIChatPanel'
 
 // ===== 雅思分数滑轴组件（方案 B：极简 + 端点提示） =====
 function IeltsScoreSlider({
@@ -454,6 +455,7 @@ function TabPanel({ type }: { type: PracticeType }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PracticeRecord | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
 
   const deleteRecord = usePracticeStore((s) => s.deleteRecord)
 
@@ -483,9 +485,31 @@ function TabPanel({ type }: { type: PracticeType }) {
     setDeleteTarget(null)
   }
 
+  const writingSystemPrompt = useMemo(() => {
+    return "你是 IELTS Tracker 的 AI 写作批改助手。你是一位经验丰富的雅思写作考官，熟悉雅思写作评分标准（Task Response / Task Achievement, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy）。\n\n## 你的职责\n1. 按照雅思写作评分标准对用户的作文进行评分（满分 9 分）\n2. 逐段给出详细的修改建议和评语\n3. 指出语法、词汇、逻辑等方面的问题\n4. 给出改进后的范文或修改建议\n\n## 评分格式\n请在回复中明确给出四项评分和总分：\n- TR/TA: X 分\n- CC: X 分\n- LR: X 分\n- GRA: X 分\n- 总分: X 分\n\n## 风格要求\n- 用中文回复（但可以引用原文中的英文表达）\n- 语气专业但鼓励\n- 具体指出问题所在，避免泛泛而谈\n- 回复使用 Markdown 格式"
+  }, [])
+
   return (
     <>
       <StatsSummary type={type} />
+
+      {/* 写作 Tab AI 批改入口 */}
+      {type === 'writing' && (
+        <Card className="mb-4 border-l-4 border-l-amber-400 cursor-pointer hover:shadow-md transition-all active:scale-[0.99]" onClick={() => setAiOpen(true)}>
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/50">
+                <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">AI 写作批改</p>
+                <p className="text-[13px] text-muted-foreground">粘贴你的雅思作文，AI 按评分标准批改</p>
+              </div>
+            </div>
+            <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
+          </CardContent>
+        </Card>
+      )}
 
       {records.length === 0 ? (
         <EmptyState
@@ -523,6 +547,26 @@ function TabPanel({ type }: { type: PracticeType }) {
         onConfirm={handleDeleteConfirm}
         recordTitle={deleteTarget?.topic || deleteTarget?.date || '该条记录'}
       />
+
+      {/* AI 写作批改弹窗 */}
+      {type === 'writing' && (
+        <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+          <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
+            <DialogHeader className="px-4 pt-4 pb-2">
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                AI 写作批改
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden px-4 pb-4 min-h-[400px]">
+              <AIChatPanel
+                systemPrompt={writingSystemPrompt}
+                placeholder="粘贴你的雅思作文（大作文/小作文），AI 将按评分标准批改..."
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   )
 }

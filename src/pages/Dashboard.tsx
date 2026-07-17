@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3 } from 'lucide-react'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3, Sparkles } from 'lucide-react'
+import { AIChatPanel } from '@/components/ai/AIChatPanel'
+import { getAllLearningData } from '@/lib/aiService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -55,6 +57,38 @@ export default function Dashboard() {
   const checkIn = useSettingsStore((s) => s.checkIn)
   const [checkedIn, setCheckedIn] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+
+  // ===== AI 系统提示 =====
+  const aiSystemPrompt = useMemo(() => {
+    const data = getAllLearningData()
+    return `你是 IELTS Tracker 的 AI 智能学习助手。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
+
+## 用户学习数据
+${JSON.stringify(data, null, 2)}
+
+## 你的职责
+1. 分析用户的学习数据，找出强项和弱项
+2. 给出具体的、可操作的学习建议
+3. 如果用户需要，可以建议创建学习计划
+
+## 建议创建计划时的格式
+如果你想建议用户创建学习计划，请在回复末尾使用以下格式：
+[ACTION:create_plan]
+计划标题
+计划描述（具体的学习内容和方法）
+目标日期（YYYY-MM-DD格式）
+科目分类（reading/listening/writing/speaking/general之一）
+[/ACTION]
+
+## 风格要求
+- 用中文回复
+- 语气友好、鼓励但不失专业
+- 建议要具体，避免空泛的"多练习"
+- 如果用户数据很少（刚开始使用），给出入门建议
+- 回复使用 Markdown 格式` }, [])
+
+  const addPlan = usePlanStore((s) => s.addPlan)
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -575,7 +609,26 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* ===== 8. 学习报告 ===== */}
+      {/* ===== AI 智能分析 ===== */}
+      <Card
+        className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99] border-l-4 border-l-violet-500"
+        onClick={() => setAiOpen(true)}
+      >
+        <CardContent className="flex items-center justify-between py-4 px-4 md:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/50">
+              <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">AI 智能分析</p>
+              <p className="text-[13px] text-muted-foreground">让 AI 分析你的学习数据并给出建议</p>
+            </div>
+          </div>
+          <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
+        </CardContent>
+      </Card>
+
+      {/* ===== 学习报告 ===== */}
       <Card
         className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99]"
         onClick={() => setReportOpen(true)}
@@ -593,6 +646,35 @@ export default function Dashboard() {
           <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
         </CardContent>
       </Card>
+
+      {/* AI 智能分析弹窗 */}
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500" />
+              AI 智能分析
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden px-4 pb-4 min-h-[400px]">
+            <AIChatPanel
+              systemPrompt={aiSystemPrompt}
+              placeholder="问我关于你的学习分析..."
+              onActionConfirm={(action) => {
+                if (action.type === 'create_plan') {
+                  const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)
+                  const title = lines[0] || 'AI 建议计划'
+                  const description = lines.slice(1).join('\n') || ''
+                  const categoryLine = lines.find((l) => /reading|listening|writing|speaking|general/.test(l))
+                  const category = (categoryLine?.match(/(reading|listening|writing|speaking|general)/)?.[0] || 'general') as 'reading' | 'listening' | 'writing' | 'speaking' | 'general'
+                  addPlan({ title, description, category, frequency: 'daily', isActive: true })
+                  alert('计划已创建！')
+                }
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 学习报告弹窗 */}
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
