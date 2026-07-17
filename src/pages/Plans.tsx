@@ -500,7 +500,7 @@ ${JSON.stringify(data, null, 2)}
               AI 生成学习计划
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden px-4 pb-4 min-h-[400px]">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."

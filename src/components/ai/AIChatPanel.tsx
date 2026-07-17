@@ -33,11 +33,16 @@ export function AIChatPanel({
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messagesContainerRef.current
+    if (container) {
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight
+      })
+    }
   }
 
   useEffect(() => {
@@ -128,9 +133,9 @@ export function AIChatPanel({
   }
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
+    <div className={cn('flex flex-col flex-1 min-h-0', className)}>
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto space-y-4 px-1 min-h-[200px]">
+      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-1">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
             <Sparkles className="h-8 w-8 mb-2 text-indigo-400" />
@@ -203,8 +208,6 @@ export function AIChatPanel({
             <span>{error}</span>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* 输入区域 */}

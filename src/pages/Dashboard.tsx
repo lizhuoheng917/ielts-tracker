@@ -656,7 +656,7 @@ ${JSON.stringify(data, null, 2)}
               AI 智能分析
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden px-4 pb-4 min-h-[400px]">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4 pb-4">
             <AIChatPanel
               systemPrompt={aiSystemPrompt}
               placeholder="问我关于你的学习分析..."
