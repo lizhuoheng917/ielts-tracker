@@ -98,7 +98,7 @@ export interface AchievementState {
 // ===== 设置 =====
 export interface Settings {
   examDate?: string // YYYY-MM-DD
-  theme: 'light' | 'dark'
+  theme: 'light' | 'dark' | 'system'
   lastCheckinDate?: string // YYYY-MM-DD
 }
 

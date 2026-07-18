@@ -15,9 +15,25 @@ import Settings from '@/pages/Settings'
 
 function ThemeHandler() {
   const theme = useSettingsStore((s) => s.theme)
+
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
+    const applyTheme = () => {
+      let isDark = theme === 'dark'
+      if (theme === 'system') {
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      }
+      document.documentElement.classList.toggle('dark', isDark)
+    }
+
+    applyTheme()
+
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      mq.addEventListener('change', applyTheme)
+      return () => mq.removeEventListener('change', applyTheme)
+    }
   }, [theme])
+
   return null
 }
 

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { differenceInDays } from 'date-fns'
+import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
@@ -40,12 +41,13 @@ import {
   Link as LinkIcon,
   CheckCircle2,
   XCircle,
+  Monitor,
 } from 'lucide-react'
 import { useAIStore } from '@/stores/aiStore'
 import { testAIConnection } from '@/lib/aiService'
 
 export default function Settings() {
-  // --- 核心状态 ---
+  // --- 核心状态（实时同步到 store） ---
   const examDate = useSettingsStore((s) => s.examDate)
   const setExamDate = useSettingsStore((s) => s.setExamDate)
   const clearExamDate = useSettingsStore((s) => s.clearExamDate)
@@ -53,12 +55,9 @@ export default function Settings() {
   const theme = useSettingsStore((s) => s.theme)
   const setTheme = useSettingsStore((s) => s.setTheme)
 
-  // --- 本地 UI 状态 ---
-  const [examDateInput, setExamDateInput] = useState(examDate || '')
-  const [themeInput, setThemeInput] = useState<'light' | 'dark'>(theme)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
 
-  // --- AI 配置 ---
+  // --- AI 配置（实时同步到 store） ---
   const aiApiKey = useAIStore((s) => s.apiKey)
   const aiBaseURL = useAIStore((s) => s.baseURL)
   const aiModel = useAIStore((s) => s.model)
@@ -67,25 +66,16 @@ export default function Settings() {
   const setAiModel = useAIStore((s) => s.setModel)
   const clearAiConfig = useAIStore((s) => s.clearConfig)
 
-  const [aiKeyInput, setAiKeyInput] = useState(aiApiKey)
-  const [aiUrlInput, setAiUrlInput] = useState(aiBaseURL)
-  const [aiModelInput, setAiModelInput] = useState(aiModel)
   const [showAiKey, setShowAiKey] = useState(false)
   const [aiTestStatus, setAiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
   const [aiTestMessage, setAiTestMessage] = useState('')
 
   const handleTestAI = async () => {
     setAiTestStatus('testing')
+    setAiTestMessage('')
     const result = await testAIConnection()
     setAiTestStatus(result.ok ? 'success' : 'error')
-    setAiTestMessage(result.message)
-  }
-
-  const handleSaveAI = () => {
-    setAiApiKey(aiKeyInput)
-    setAiBaseURL(aiUrlInput)
-    setAiModel(aiModelInput)
-    alert('AI 配置已保存')
+    setAiTestMessage(result.ok ? '连接成功' : result.message)
   }
 
   // --- 考试倒计时 ---
@@ -117,16 +107,6 @@ export default function Settings() {
 
   // --- 事件处理 ---
 
-  const handleSave = () => {
-    if (examDateInput) {
-      setExamDate(examDateInput)
-    } else {
-      clearExamDate()
-    }
-    setTheme(themeInput)
-    alert('设置已保存')
-  }
-
   const handleExport = () => {
     const data = {
       words: useWordStore.getState().records,
@@ -147,7 +127,7 @@ export default function Settings() {
       },
       settings: {
         examDate,
-        theme: themeInput,
+        theme,
       },
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -300,8 +280,12 @@ export default function Settings() {
           <div className="flex items-center gap-3">
             <Input
               type="date"
-              value={examDateInput}
-              onChange={(e) => setExamDateInput(e.target.value)}
+              value={examDate || ''}
+              onChange={(e) => {
+                const val = e.target.value
+                if (val) setExamDate(val)
+                else clearExamDate()
+              }}
               className="w-full sm:w-auto"
             />
             {daysUntilExam !== null && (
@@ -317,38 +301,74 @@ export default function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm md:text-base flex items-center gap-2">
-            {themeInput === 'dark' ? (
-              <Moon className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
-            ) : (
-              <Sun className="h-4 w-4 md:h-5 md:w-5 text-orange-500" />
-            )}
+            <Sun className="h-4 w-4 md:h-5 md:w-5 text-orange-500" />
             主题
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setThemeInput('light')}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
-                themeInput === 'light'
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/50 ring-2 ring-indigo-500/30'
-                  : 'border-input hover:bg-accent'
-              }`}
-            >
-              <Sun className="h-4 w-4" />
-              浅色
-            </button>
-            <button
-              onClick={() => setThemeInput('dark')}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
-                themeInput === 'dark'
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/50 ring-2 ring-indigo-500/30'
-                  : 'border-input hover:bg-accent'
-              }`}
-            >
-              <Moon className="h-4 w-4" />
-              深色
-            </button>
+          <div className="flex flex-col gap-4">
+            {/* 亮暗模式 toggle */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm">{theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '深色模式' : '浅色模式') : theme === 'dark' ? '深色模式' : '浅色模式'}</span>
+              <button
+                onClick={() => {
+                  if (theme === 'system') {
+                    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+                    setTheme(isDark ? 'light' : 'dark')
+                  } else {
+                    setTheme(theme === 'light' ? 'dark' : 'light')
+                  }
+                }}
+                disabled={theme === 'system'}
+                className={cn(
+                  'relative w-[56px] h-[30px] rounded-full transition-all duration-300 ease-in-out shrink-0',
+                  theme === 'system'
+                    ? 'bg-muted opacity-50 cursor-not-allowed'
+                    : theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+                      ? 'bg-gradient-to-r from-indigo-700 to-violet-800'
+                      : 'bg-gradient-to-r from-amber-100 to-orange-100'
+                )}
+                aria-label="切换主题"
+              >
+                <span
+                  className={cn(
+                    'absolute top-[3px] w-[24px] h-[24px] rounded-full bg-white shadow-md transition-all duration-300 ease-in-out flex items-center justify-center',
+                    theme === 'system'
+                      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'left-[29px]' : 'left-[3px]')
+                      : theme === 'dark' ? 'left-[29px]' : 'left-[3px]'
+                  )}
+                >
+                  {(theme !== 'system' && theme === 'light') || (theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches) ? (
+                    <Sun className="h-3 w-3 text-orange-500" />
+                  ) : (
+                    <Moon className="h-3 w-3 text-indigo-500" />
+                  )}
+                </span>
+              </button>
+            </div>
+
+            {/* 跟随系统 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Monitor className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">跟随系统</span>
+              </div>
+              <button
+                onClick={() => setTheme(theme === 'system' ? 'light' : 'system')}
+                className={cn(
+                  'relative w-[44px] h-[24px] rounded-full transition-all duration-200 shrink-0',
+                  theme === 'system' ? 'bg-indigo-500' : 'bg-muted'
+                )}
+                aria-label="跟随系统主题"
+              >
+                <span
+                  className={cn(
+                    'absolute top-[2px] w-[20px] h-[20px] rounded-full bg-white shadow-sm transition-all duration-200',
+                    theme === 'system' ? 'left-[22px]' : 'left-[2px]'
+                  )}
+                />
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -371,8 +391,8 @@ export default function Settings() {
             <div className="relative">
               <Input
                 type={showAiKey ? 'text' : 'password'}
-                value={aiKeyInput}
-                onChange={(e) => setAiKeyInput(e.target.value)}
+                value={aiApiKey}
+                onChange={(e) => setAiApiKey(e.target.value)}
                 placeholder="输入你的 Agnes AI API Key"
                 className="pr-10"
               />
@@ -393,8 +413,8 @@ export default function Settings() {
               API 地址
             </label>
             <Input
-              value={aiUrlInput}
-              onChange={(e) => setAiUrlInput(e.target.value)}
+              value={aiBaseURL}
+              onChange={(e) => setAiBaseURL(e.target.value)}
               placeholder="https://api.hub.agnes-ai.com/v1"
             />
           </div>
@@ -403,8 +423,8 @@ export default function Settings() {
           <div className="space-y-1.5">
             <label className="text-sm font-medium">模型</label>
             <Input
-              value={aiModelInput}
-              onChange={(e) => setAiModelInput(e.target.value)}
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
               placeholder="agnes-2.5-flash"
             />
           </div>
@@ -414,36 +434,19 @@ export default function Settings() {
             <Button
               variant="outline"
               onClick={handleTestAI}
-              disabled={aiTestStatus === 'testing' || !aiKeyInput}
+              disabled={aiTestStatus === 'testing' || !aiApiKey}
               className="w-full sm:w-auto"
             >
               {aiTestStatus === 'testing' ? (
                 <span className="animate-pulse">检测中...</span>
-              ) : aiTestStatus === 'success' ? (
-                <>
-                  <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />
-                  连接成功
-                </>
-              ) : aiTestStatus === 'error' ? (
-                <>
-                  <XCircle className="mr-1 h-4 w-4 text-destructive" />
-                  连接失败
-                </>
-              ) : (
-                <>检测连接</>
-              )}
-            </Button>
-            <Button onClick={handleSaveAI} className="w-full sm:w-auto">
-              保存配置
+              ) : '检测连接'}
             </Button>
             <Button
               variant="ghost"
               onClick={() => {
                 clearAiConfig()
-                setAiKeyInput('')
-                setAiUrlInput('https://api.hub.agnes-ai.com/v1')
-                setAiModelInput('agnes-2.5-flash')
                 setAiTestStatus('idle')
+                setAiTestMessage('')
               }}
               className="w-full sm:w-auto"
             >
@@ -452,8 +455,17 @@ export default function Settings() {
           </div>
 
           {/* 连接状态提示 */}
+          {aiTestStatus === 'success' && (
+            <p className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {aiTestMessage}
+            </p>
+          )}
           {aiTestStatus === 'error' && (
-            <p className="text-sm text-destructive">{aiTestMessage}</p>
+            <p className="flex items-center gap-1.5 text-sm text-destructive">
+              <XCircle className="h-3.5 w-3.5" />
+              {aiTestMessage}
+            </p>
           )}
 
           {/* 隐私提示 */}
@@ -543,13 +555,6 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
-
-      {/* 保存按钮 */}
-      <div className="flex justify-end">
-        <Button onClick={handleSave} className="w-full sm:w-auto">
-          保存设置
-        </Button>
-      </div>
 
       {/* 清空确认弹窗 */}
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>

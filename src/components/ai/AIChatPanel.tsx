@@ -15,8 +15,8 @@ export interface ChatMessage {
   content: string
   actions?: AIAction[]
   actionsConfirmed?: boolean
-  /** 消息状态：undefined=正常 done，'error'=生成失败 */
-  status?: 'error'
+  /** 消息状态：'streaming'=正在生成中，'error'=生成失败/中断，undefined=正常完成 */
+  status?: 'streaming' | 'error'
 }
 
 interface AIChatPanelProps {
@@ -55,15 +55,37 @@ export function AIChatPanel({
   const isHydrated = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // 保存最新的 messages 快照，供卸载时同步使用
+  const messagesRef = useRef<ChatMessage[]>([])
 
-  // 组件卸载时中止进行中的流式请求并清理定时器
+  // 组件卸载时中止进行中的流式请求并清理定时器；
+  // 同时将所有 streaming 状态的消息标记为 error 并同步到 store，
+  // 保证下次打开时状态稳定（不会出现"正在思考"的假象）
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
       abortRef.current = null
       clearTimeout(syncTimeoutRef.current)
+      // 把未完成的 streaming 消息标记为 error 并同步到 store
+      const snapshot = messagesRef.current
+      if (snapshot.some((m) => m.status === 'streaming')) {
+        const fixed: ChatMessageRecord[] = snapshot.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          createdAt: new Date().toISOString(),
+          status: m.status === 'streaming' ? 'error' : (m.status === 'error' ? 'error' : 'done'),
+          actions: m.actions?.map((a) => ({
+            id: a.id,
+            type: a.type,
+            title: a.title,
+            description: a.description,
+          })),
+        }))
+        chatSetMessages(chatKey, fixed)
+      }
     }
-  }, [])
+  }, [chatKey, chatSetMessages])
 
   // 首次挂载时从 store 恢复历史消息
   useEffect(() => {
@@ -71,7 +93,7 @@ export function AIChatPanel({
       const stored = getStoreMessages(chatKey)
       if (stored.length > 0) {
         isHydrated.current = true
-        setMessages(stored.map((m) => ({
+        const restored: ChatMessage[] = stored.map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -83,8 +105,10 @@ export function AIChatPanel({
             description: a.description,
           })),
           // streaming 状态说明上次生成未完成，标记为 error；error 直接保留
-          status: m.status === 'error' || m.status === 'streaming' ? 'error' : undefined,
-        })))
+          status: (m.status === 'error' || m.status === 'streaming' ? 'error' : undefined) as ChatMessage['status'],
+        }))
+        setMessages(restored)
+        messagesRef.current = restored
       } else {
         isHydrated.current = true
       }
@@ -93,6 +117,8 @@ export function AIChatPanel({
 
   // 消息变化时同步到 store（防抖：流式生成期间不频繁写入 localStorage）
   useEffect(() => {
+    // 始终保持 ref 最新
+    messagesRef.current = messages
     if (isHydrated.current && messages.length > 0) {
       clearTimeout(syncTimeoutRef.current)
       const doSync = () => {
@@ -101,7 +127,8 @@ export function AIChatPanel({
           role: m.role,
           content: m.content,
           createdAt: new Date().toISOString(),
-          status: isLoading && m.role === 'assistant' && !m.content ? 'streaming' : 'done',
+          // 直接使用消息自身的 status，而非依赖 isLoading 推断
+          status: m.status === 'streaming' ? 'streaming' : (m.status === 'error' ? 'error' : 'done'),
           actions: m.actions?.map((a) => ({
             id: a.id,
             type: a.type,
@@ -189,7 +216,7 @@ export function AIChatPanel({
     const assistantMsgId = (Date.now() + 1).toString()
     setMessages((prev) => [
       ...prev,
-      { id: assistantMsgId, role: 'assistant', content: '' },
+      { id: assistantMsgId, role: 'assistant', content: '', status: 'streaming' },
     ])
 
     let fullContent = ''
@@ -204,7 +231,7 @@ export function AIChatPanel({
         fullContent = content
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, content } : m
+            m.id === assistantMsgId ? { ...m, content, status: 'streaming' } : m
           )
         )
       },
@@ -223,6 +250,12 @@ export function AIChatPanel({
       },
       onDone: () => {
         setIsLoading(false)
+        // 标记为完成状态（status: undefined）
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId ? { ...m, status: undefined } : m
+          )
+        )
         // 如果内容长度超过100字符，通知父组件生成了报告
         if (fullContent.length > 100 && onReportGenerated) {
           onReportGenerated(fullContent)
@@ -319,22 +352,38 @@ export function AIChatPanel({
         {messages.map((msg) => (
           <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
             {msg.role === 'assistant' && (
-              <div className="w-7 h-7 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/50 flex items-center justify-center shrink-0 mt-0.5 shadow-[0_0_8px_rgba(99,102,241,0.3)]">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
               </div>
             )}
 
             <div className={cn(
-              'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm',
+              'relative max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm',
               msg.role === 'user'
                 ? 'bg-indigo-600 text-white'
-                : 'bg-muted text-foreground'
-            )}>
+                : 'text-foreground border border-indigo-100/60 dark:border-indigo-800/40'
+            )}
+              style={msg.role === 'assistant' ? {
+                background: document.documentElement.classList.contains('dark')
+                  ? 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.12) 100%)'
+                  : 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)'
+              } : undefined}
+            >
+              {msg.role === 'assistant' && (
+                <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-indigo-400" />
+              )}
               {msg.role === 'assistant' ? (
                 msg.content ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
-                    <ReactMarkdown>{stripActionTags(msg.content, isLoading)}</ReactMarkdown>
-                  </div>
+                  <>
+                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
+                      <ReactMarkdown>{stripActionTags(msg.content, isLoading)}</ReactMarkdown>
+                    </div>
+                    {msg.status === 'streaming' && (
+                      <div className="mt-1.5">
+                        <AILoadingState text="继续生成中" />
+                      </div>
+                    )}
+                  </>
                 ) : msg.status === 'error' ? (
                   <div className="flex items-center gap-1.5 text-destructive text-xs">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -385,10 +434,34 @@ export function AIChatPanel({
             <span>{error}</span>
           </div>
         )}
+
+        {/* AI 生成中提示 */}
+        {isLoading && (
+          <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            <span className="text-[11px]">请勿离开当前页面或关闭弹窗</span>
+          </div>
+        )}
       </div>
 
       {/* 输入区域 */}
-      <div className="border-t pt-3 mt-2">
+      <div className="pt-2 mt-2">
+        {/* 建议标签胶囊（仅对话后显示，位于分隔线上方） */}
+        {suggestions && suggestions.length > 0 && messages.length > 0 && (
+          <div className="mb-2 pb-2 border-b">
+            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(s)}
+                  className="inline-flex shrink-0 items-center rounded-full border border-border/50 bg-background px-3 py-1.5 text-xs whitespace-nowrap text-muted-foreground hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:border-indigo-700/50 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
@@ -403,7 +476,7 @@ export function AIChatPanel({
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
             size="icon"
-            className="shrink-0 h-[44px] w-[44px]"
+            className="shrink-0 h-[44px] w-[44px] bg-indigo-500 hover:bg-indigo-600 text-white"
           >
             <Send className="h-4 w-4" />
           </Button>

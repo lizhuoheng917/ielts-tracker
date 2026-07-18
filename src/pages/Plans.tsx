@@ -73,12 +73,19 @@ export default function Plans() {
     const data = getAllLearningData()
     let reportSection = ''
     if (reports.length > 0) {
-      const latest = reports[reports.length - 1]
+      // 按时间倒序（reportStore 新报告在数组开头），取最近 3 份报告
+      const recentReports = reports.slice(0, 3)
       reportSection = `
-## 最新学习分析报告（摘要）
-${latest.content.length > 2000 ? latest.content.slice(0, 2000) + '...(已截断)' : latest.content}
+## 历史学习分析报告（共 ${reports.length} 份，以下展示最近 ${recentReports.length} 份）
+${recentReports.map((r, i) => {
+  const content = r.content.length > 1500 ? r.content.slice(0, 1500) + '...(已截断)' : r.content
+  return `### 报告 ${i + 1}（${r.createdAt}）\n${content}`
+}).join('\n\n---\n\n')}
 
-请根据以上分析报告中的建议，有针对性地生成学习计划。`
+请综合分析以上所有历史报告中的关键发现、薄弱环节与改进建议，有针对性地生成学习计划。重点关注：
+1. 报告中反复提到的薄弱项（多次出现的问题优先解决）
+2. 报告中给出的具体建议（转化为可执行的学习计划）
+3. 用户学习数据与报告建议之间的差距（补充缺失的练习）`
     }
     return `你是 IELTS Tracker 的 AI 学习计划助手。你是一位经验丰富的雅思备考教练。
 
@@ -87,7 +94,7 @@ ${JSON.stringify(data, null, 2)}
 ${reportSection}
 
 ## 你的职责
-根据用户的学习数据，为其生成个性化的学习计划建议。
+根据用户的学习数据${reports.length > 0 ? '和历史学习分析报告' : ''}，为其生成个性化的学习计划建议。
 
 ## ⚠️ 格式要求（极其重要，必须严格遵守）
 - 每个计划**必须且只能**使用一个独立的 [ACTION:create_plan]...[/ACTION] 标记
@@ -575,13 +582,23 @@ time:21:00
               systemPrompt={aiSystemPrompt}
               placeholder="让 AI 根据你的学习数据生成计划..."
               chatContext="plans"
-              suggestions={[
-                '帮我制定一个为期四周的听力提升计划',
-                '根据我的基础，每天应该怎么安排学习？',
-                '我阅读比较弱，帮我设计一个阅读专项训练',
-                '我想每天早上和晚上各安排一个任务',
-                '帮我规划周末的集中练习时间',
-              ]}
+              suggestions={
+                reports.length > 0
+                  ? [
+                      '根据我的历史学习报告，分析薄弱项并生成针对性的学习计划',
+                      '帮我制定一个为期四周的听力提升计划',
+                      '根据我的基础，每天应该怎么安排学习？',
+                      '我阅读比较弱，帮我设计一个阅读专项训练',
+                      '帮我规划周末的集中练习时间',
+                    ]
+                  : [
+                      '帮我制定一个为期四周的听力提升计划',
+                      '根据我的基础，每天应该怎么安排学习？',
+                      '我阅读比较弱，帮我设计一个阅读专项训练',
+                      '我想每天早上和晚上各安排一个任务',
+                      '帮我规划周末的集中练习时间',
+                    ]
+              }
               onActionConfirm={(action) => {
                 if (action.type === 'create_plan') {
                   const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)

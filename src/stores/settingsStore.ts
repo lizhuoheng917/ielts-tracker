@@ -6,7 +6,7 @@ import { STORAGE_PREFIX, DEFAULT_SETTINGS } from '@/lib/constants'
 interface SettingsStore extends Settings {
   setExamDate: (date: string) => void
   clearExamDate: () => void
-  setTheme: (theme: 'light' | 'dark') => void
+  setTheme: (theme: 'light' | 'dark' | 'system') => void
   toggleTheme: () => void
   checkIn: () => boolean // 返回是否打卡成功（false = 今天已打过卡）
   isCheckedInToday: () => boolean
