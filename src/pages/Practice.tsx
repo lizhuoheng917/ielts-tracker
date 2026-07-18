@@ -495,18 +495,18 @@ function TabPanel({ type }: { type: PracticeType }) {
 
       {/* 写作 Tab AI 批改入口 */}
       {type === 'writing' && (
-        <Card className="mb-4 border-l-4 border-l-amber-400 cursor-pointer hover:shadow-md transition-all active:scale-[0.99]" onClick={() => setAiOpen(true)}>
-          <CardContent className="flex items-center justify-between py-4">
+        <Card className="mb-4 py-0 cursor-pointer hover:border-amber-300/60 dark:hover:border-amber-700/40 hover:bg-amber-50/30 dark:hover:bg-amber-950/20 transition-all active:scale-[0.99]" onClick={() => setAiOpen(true)}>
+          <CardContent className="flex items-center justify-between py-0 px-3 md:px-4 min-h-[60px]">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/50">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
                 <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-sm font-semibold">AI 写作批改</p>
-                <p className="text-[13px] text-muted-foreground">粘贴你的雅思作文，AI 按评分标准批改</p>
+                <p className="text-xs text-muted-foreground">粘贴作文，AI 按评分标准批改</p>
               </div>
             </div>
-            <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
+            <span className="text-xs text-muted-foreground shrink-0">点击展开 →</span>
           </CardContent>
         </Card>
       )}

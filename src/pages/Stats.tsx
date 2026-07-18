@@ -941,11 +941,49 @@ ${JSON.stringify(data, null, 2)}
                   AI 智能分析
                 </DialogTitle>
               </DialogHeader>
-              <div className="flex flex-col items-center justify-center px-5 py-16 gap-4">
-                <AILoadingState text="AI 正在生成你的学习分析报告" className="text-base" />
-                <p className="text-sm text-muted-foreground">
-                  正在分析你的学习数据，这可能需要 10-20 秒
-                </p>
+              <div className="flex flex-col items-center justify-center px-5 py-12 gap-6">
+                {/* 动画区域 */}
+                <div className="relative">
+                  {/* 外圈旋转光环 */}
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-violet-400 border-r-violet-300 animate-spin" style={{ width: 96, height: 96, left: -16, top: -16 }} />
+                  {/* 内圈反方向旋转 */}
+                  <div className="absolute inset-0 rounded-full border border-transparent border-b-indigo-400 border-l-indigo-300 animate-spin" style={{ width: 80, height: 80, left: -8, top: -8, animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                  {/* 中心图标容器 */}
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-900/40 dark:to-indigo-900/40 flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.15)]">
+                    <Sparkles className="h-7 w-7 text-violet-500 animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="text-center space-y-1.5">
+                  <p className="text-[15px] font-medium text-foreground">AI 正在生成你的学习分析报告</p>
+                  <p className="text-sm text-muted-foreground">正在分析各科目练习情况、计划完成进度、连续打卡数据</p>
+                </div>
+
+                {/* 步骤指示器 */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+                    <span className="text-xs text-muted-foreground">收集数据</span>
+                  </div>
+                  <span className="text-muted-foreground/40">·</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                    <span className="text-xs text-muted-foreground/60">分析趋势</span>
+                  </div>
+                  <span className="text-muted-foreground/40">·</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                    <span className="text-xs text-muted-foreground/60">生成报告</span>
+                  </div>
+                </div>
+
+                {/* 生成警告 */}
+                <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/30 px-3 py-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span className="text-[12px] text-amber-700 dark:text-amber-400">
+                    请勿关闭弹窗或切换页面，以免生成中断
+                  </span>
+                </div>
               </div>
             </>
           )}
