@@ -18,6 +18,8 @@ export interface ChatMessageRecord {
   status?: 'streaming' | 'done' | 'error'
   /** 解析出的 AI 建议操作 */
   actions?: ChatActionRecord[]
+  /** 已确认执行的 action id 集合 */
+  actionConfirmedIds?: string[]
 }
 
 interface ChatStore {

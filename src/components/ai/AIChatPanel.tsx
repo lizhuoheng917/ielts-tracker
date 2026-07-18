@@ -83,6 +83,7 @@ export function AIChatPanel({
             title: a.title,
             description: a.description,
           })),
+          actionConfirmedIds: m.actionConfirmedIds,
         }))
         chatSetMessages(chatKey, fixed)
       }
@@ -106,6 +107,8 @@ export function AIChatPanel({
             title: a.title,
             description: a.description,
           })),
+          // 恢复 actionConfirmedIds
+          actionConfirmedIds: m.actionConfirmedIds,
           // streaming 状态说明上次生成未完成，标记为 error；error 直接保留
           status: (m.status === 'error' || m.status === 'streaming' ? 'error' : undefined) as ChatMessage['status'],
         }))
@@ -137,6 +140,7 @@ export function AIChatPanel({
             title: a.title,
             description: a.description,
           })),
+          actionConfirmedIds: m.actionConfirmedIds,
         }))
         chatSetMessages(chatKey, records)
       }
