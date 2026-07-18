@@ -359,20 +359,22 @@ export function AIChatPanel({
             )}
 
             <div className={cn(
-              'relative max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm',
+              'relative max-w-[85%] px-3.5 py-2.5 text-sm',
               msg.role === 'user'
-                ? 'bg-indigo-600 text-white'
-                : 'text-foreground border border-indigo-100/60 dark:border-indigo-800/40'
+                ? 'bg-indigo-600 text-white rounded-[20px_6px_20px_20px]'
+                : 'text-foreground rounded-[6px_20px_20px_20px]'
             )}
               style={msg.role === 'assistant' ? {
                 background: document.documentElement.classList.contains('dark')
-                  ? 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.12) 100%)'
-                  : 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)'
+                  ? 'rgba(99,102,241,0.12)'
+                  : 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)',
+                borderColor: document.documentElement.classList.contains('dark')
+                  ? 'rgba(129,140,248,0.3)'
+                  : 'rgba(165,180,252,0.5)',
+                borderWidth: '1px',
+                borderStyle: 'solid',
               } : undefined}
             >
-              {msg.role === 'assistant' && (
-                <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-indigo-400" />
-              )}
               {msg.role === 'assistant' ? (
                 msg.content ? (
                   <>
