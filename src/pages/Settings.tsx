@@ -9,6 +9,7 @@ import { usePlanStore } from '@/stores/planStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useStreakStore } from '@/stores/streakStore'
+import { useReportStore } from '@/stores/reportStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -108,12 +109,14 @@ export default function Settings() {
 
   const handleExport = () => {
     const data = {
+      version: 1,
       words: useWordStore.getState().records,
       practice: usePracticeStore.getState().records,
       timer: useTimerStore.getState().records,
       plans: usePlanStore.getState().plans,
       executions: usePlanStore.getState().executions,
       diary: useDiaryStore.getState().entries,
+      reports: useReportStore.getState().reports,
       achievements: {
         totalXP: useAchievementStore.getState().totalXP,
         level: useAchievementStore.getState().level,
@@ -127,6 +130,11 @@ export default function Settings() {
       settings: {
         examDate,
         theme,
+      },
+      aiConfig: {
+        apiKey: useAIStore.getState().apiKey,
+        baseURL: useAIStore.getState().baseURL,
+        model: useAIStore.getState().model,
       },
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -198,12 +206,14 @@ export default function Settings() {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result as string)
-        if (data.words) useWordStore.getState().records = data.words
-        if (data.practice) usePracticeStore.getState().records = data.practice
-        if (data.timer) useTimerStore.getState().records = data.timer
-        if (data.plans) usePlanStore.getState().plans = data.plans
-        if (data.executions) usePlanStore.getState().executions = data.executions
-        if (data.diary) useDiaryStore.getState().entries = data.diary
+        // 使用 setState() 确保 persist middleware 正确触发
+        if (data.words) useWordStore.setState({ records: data.words })
+        if (data.practice) usePracticeStore.setState({ records: data.practice })
+        if (data.timer) useTimerStore.setState({ records: data.timer })
+        if (data.plans) usePlanStore.setState({ plans: data.plans })
+        if (data.executions) usePlanStore.setState({ executions: data.executions })
+        if (data.diary) useDiaryStore.setState({ entries: data.diary })
+        if (data.reports) useReportStore.setState({ reports: data.reports })
         if (data.achievements) {
           useAchievementStore.setState({
             totalXP: data.achievements.totalXP,
@@ -222,6 +232,11 @@ export default function Settings() {
           if (data.settings.examDate) setExamDate(data.settings.examDate)
           if (data.settings.theme) setTheme(data.settings.theme)
         }
+        if (data.aiConfig) {
+          if (data.aiConfig.apiKey) setAiApiKey(data.aiConfig.apiKey)
+          if (data.aiConfig.baseURL) setAiBaseURL(data.aiConfig.baseURL)
+          if (data.aiConfig.model) setAiModel(data.aiConfig.model)
+        }
         alert('数据导入成功')
         window.location.reload()
       } catch (err) {
@@ -239,6 +254,7 @@ export default function Settings() {
     useTimerStore.setState({ records: [] })
     usePlanStore.setState({ plans: [], executions: [] })
     useDiaryStore.setState({ entries: [] })
+    useReportStore.setState({ reports: [] })
     useAchievementStore.setState({
       totalXP: 0,
       level: 1,
