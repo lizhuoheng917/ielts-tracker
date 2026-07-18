@@ -15,6 +15,8 @@ export interface ChatMessage {
   content: string
   actions?: AIAction[]
   actionsConfirmed?: boolean
+  /** 已被确认执行的 action id 集合 */
+  actionConfirmedIds?: string[]
   /** 消息状态：'streaming'=正在生成中，'error'=生成失败/中断，undefined=正常完成 */
   status?: 'streaming' | 'error'
 }
@@ -302,8 +304,8 @@ export function AIChatPanel({
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== msgId || !m.actions) return m
-        const remaining = m.actions.filter((a) => a.id !== action.id)
-        return { ...m, actions: remaining.length > 0 ? remaining : undefined }
+        const ids = m.actionConfirmedIds || []
+        return { ...m, actionConfirmedIds: [...ids, action.id] }
       })
     )
   }
@@ -409,6 +411,7 @@ export function AIChatPanel({
                     <AIConfirmCard
                       key={action.id}
                       action={action}
+                      confirmed={msg.actionConfirmedIds?.includes(action.id)}
                       onConfirm={() => handleActionConfirm(msg.id, action)}
                       onReject={() => {
                         setMessages((prev) =>

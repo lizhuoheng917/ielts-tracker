@@ -654,7 +654,6 @@ time:21:00
                     weekDays: frequency === 'weekly' ? (weekDays && weekDays.length > 0 ? weekDays : undefined) : undefined,
                     isActive: true,
                   })
-                  setAiOpen(false)
                 }
               }}
             />
