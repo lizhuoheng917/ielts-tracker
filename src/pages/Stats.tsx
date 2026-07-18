@@ -32,7 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { AILoadingState } from '@/components/ai/AILoadingState'
 import { getAllLearningData, streamAIChat, type AIMessage } from '@/lib/aiService'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
