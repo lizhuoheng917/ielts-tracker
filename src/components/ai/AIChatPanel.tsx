@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, User, Sparkles, AlertCircle, Trash2, AlertTriangle } from 'lucide-react'
+import { Send, User, Sparkles, AlertCircle, Trash2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
