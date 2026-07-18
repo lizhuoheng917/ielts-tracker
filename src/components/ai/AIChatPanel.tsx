@@ -250,6 +250,7 @@ export function AIChatPanel({
       },
       onDone: () => {
         setIsLoading(false)
+        abortRef.current = null
         // 标记为完成状态（status: undefined）
         setMessages((prev) =>
           prev.map((m) =>
@@ -389,8 +390,10 @@ export function AIChatPanel({
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     <span>生成失败，请重试</span>
                   </div>
-                ) : (
+                ) : msg.status === 'streaming' ? (
                   <AILoadingState text={loadingText} />
+                ) : (
+                  <span className="text-muted-foreground text-xs">（内容为空）</span>
                 )
               ) : (
                 <p className="whitespace-pre-wrap">{msg.content}</p>

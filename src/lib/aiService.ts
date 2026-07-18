@@ -200,8 +200,10 @@ export async function streamAIChat(
 
     callbacks.onDone?.()
   } catch (error) {
-    // 组件卸载触发的 abort 不视为错误，静默忽略
-    if (error instanceof DOMException && error.name === 'AbortError') return
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      callbacks.onError?.('流式生成已中断')
+      return
+    }
     callbacks.onError?.(error instanceof Error ? error.message : '网络请求失败')
   }
 }
