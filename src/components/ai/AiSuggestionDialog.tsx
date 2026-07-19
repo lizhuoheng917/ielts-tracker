@@ -18,52 +18,46 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
     const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次`
-    return `你是雅思学习助手。根据用户情况生成今日学习建议。
+    return `你是雅思学习助手。
 
-用户情况: ${brief}
+用户: ${brief}
 
-请用 [SUGGESTION] 标签包裹你的建议，格式如下：
+输出2条今日学习建议，用中文，每条一句话。
+
 [SUGGESTION]
-建议1的内容
-建议2的内容
+第1条建议
+第2条建议
 [/SUGGESTION]`
   }, [])
 
+  // 从内容中提取 [SUGGESTION] 标签内的内容
   const extractSuggestion = (text: string): string => {
-    console.log('[AI Suggestion] Raw content length:', text.length)
-    console.log('[AI Suggestion] Raw content:', text)
-    
     // 尝试提取 [SUGGESTION] 标签内容
     const tagMatch = text.match(/\[SUGGESTION\]([\s\S]*?)\[\/SUGGESTION\]/i)
-    if (tagMatch) {
-      console.log('[AI Suggestion] Found tag content:', tagMatch[1])
+    if (tagMatch && tagMatch[1].trim().length > 10) {
       return tagMatch[1].trim()
     }
     
-    console.log('[AI Suggestion] No tag found, trying Chinese extraction')
-    // 尝试提取中文内容
-    const chineseLines = text.match(/[\u4e00-\u9fff][^\n]*/g)
-    if (chineseLines) {
-      console.log('[AI Suggestion] Chinese lines found:', chineseLines)
-      const filtered = chineseLines.filter(s => s.length > 5)
-      console.log('[AI Suggestion] Filtered Chinese:', filtered)
-      if (filtered.length > 0) {
-        return filtered.join('\n')
+    // 如果标签内容太少，尝试找最后一个中文句子
+    const allChinese = text.match(/[\u4e00-\u9fff][^\n]*/g)
+    if (allChinese) {
+      // 取最后几条有意义的中文句子
+      const meaningful = allChinese.filter(s => s.length > 10)
+      if (meaningful.length >= 2) {
+        return meaningful.slice(-2).join('\n')
       }
     }
     
-    console.log('[AI Suggestion] No valid content found')
     return ''
   }
 
   const generateSuggestion = async () => {
     setIsLoading(true)
     setError('')
-    console.log('[AI Suggestion] Starting generation...')
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '生成今日学习建议' },
+      { role: 'user', content: '建议' },
     ]
 
     let fullContent = ''
@@ -71,26 +65,22 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
-        console.log('[AI Suggestion] Content chunk:', content.substring(0, 50))
       },
       onError: (err) => {
-        console.error('[AI Suggestion] Error:', err)
         setError(err)
         setIsLoading(false)
       },
       onDone: () => {
-        console.log('[AI Suggestion] Stream done. Full content:', fullContent)
         setIsLoading(false)
         const extracted = extractSuggestion(fullContent)
-        console.log('[AI Suggestion] Extracted:', extracted)
         
         if (extracted) {
           setSuggestion(extracted)
         } else {
-          setError('未收到有效内容，请重试')
+          setError('生成失败，请重试')
         }
       },
-    }, { temperature: 0.7, max_tokens: 256 })
+    }, { temperature: 0.7, max_tokens: 2048 }) // 增加到 2048 以容纳推理过程
   }
 
   return (
