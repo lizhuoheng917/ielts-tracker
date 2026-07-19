@@ -14,36 +14,42 @@ interface AiSuggestionDialogProps {
 export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }: AiSuggestionDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [rawContent, setRawContent] = useState('')
   const { suggestion, setSuggestion } = useAiSuggestionStore()
 
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    return `你是 IELTS Tracker 的 AI 学习助手。请根据用户的学习数据，给出今日学习建议。
+    // 只提取关键数据，减少 token 使用
+    const summary = {
+      today: data.today,
+      streakDays: data.streakDays,
+      totalActiveDays: data.totalActiveDays,
+      totalWords: data.totalWords,
+      totalPractice: data.totalPractice,
+      currentLevel: data.currentLevel,
+      practiceByType: data.practiceByType,
+      recentDiaries: data.recentDiaries.slice(0, 2),
+      recentPractice: data.recentPractice.slice(0, 3),
+    }
+    return `你是雅思学习助手。根据用户数据给出 2-3 条今日学习建议。
 
-## 用户学习数据
-${JSON.stringify(data, null, 2)}
+用户数据: ${JSON.stringify(summary)}
 
-## 你的任务
-根据以上数据，给出 2-3 条具体、可执行的今日学习建议。
-
-## 要求
-1. 用中文回复
-2. 语气友好、鼓励
-3. 建议要具体，避免空泛的"多练习"
-4. 根据用户今天的学习情况和薄弱项给出针对性建议
-5. 如果用户今天还没有学习，鼓励开始
-6. 如果用户今天已经学习了很多，给予肯定并建议适度休息
-7. 回复使用 Markdown 格式，使用标题和列表
-8. 控制在 200 字以内`
+要求:
+- 中文回复，200字以内
+- 建议具体可执行
+- 语气友好鼓励
+- 直接输出建议文本，不要JSON格式`
   }, [])
 
   const generateSuggestion = async () => {
     setIsLoading(true)
     setError('')
+    setRawContent('')
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '请给我今日的学习建议' },
+      { role: 'user', content: '今日学习建议' },
     ]
 
     let fullContent = ''
@@ -51,6 +57,7 @@ ${JSON.stringify(data, null, 2)}
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
+        setRawContent(content)
       },
       onError: (err) => {
         setError(err)
@@ -58,11 +65,13 @@ ${JSON.stringify(data, null, 2)}
       },
       onDone: () => {
         setIsLoading(false)
-        if (fullContent) {
-          setSuggestion(fullContent)
+        if (fullContent && fullContent.trim()) {
+          setSuggestion(fullContent.trim())
+        } else {
+          setError('未收到 AI 响应，请重试')
         }
       },
-    }, { temperature: 0.7, max_tokens: 1024 })
+    }, { temperature: 0.7, max_tokens: 512 })
   }
 
   const handleRegenerate = () => {
@@ -80,10 +89,24 @@ ${JSON.stringify(data, null, 2)}
 
       {/* 错误提示 */}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <Card size="sm" className="border-destructive">
+          <CardContent>
+            <div className="flex items-center gap-2 text-sm text-destructive mb-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="font-medium">{error}</span>
+            </div>
+            {rawContent ? (
+              <details open className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer hover:text-foreground mb-2">AI 返回的内容：</summary>
+                <pre className="p-2 bg-muted rounded-lg whitespace-pre-wrap overflow-auto max-h-[200px]">
+                  {rawContent}
+                </pre>
+              </details>
+            ) : (
+              <p className="text-xs text-muted-foreground">未收到 AI 响应</p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* 建议内容 */}
