@@ -35,14 +35,19 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         { role: 'user', content: '今日学习建议' },
       ]
 
+      console.log('[AI Suggestion] Sending request...')
       const response = await chatAI(messages, { temperature: 0.7, max_tokens: 512 })
+      console.log('[AI Suggestion] Response:', response)
       
       if (response?.content) {
+        console.log('[AI Suggestion] Content:', response.content)
         setSuggestion(response.content.trim())
       } else {
+        console.log('[AI Suggestion] Empty response, full data:', JSON.stringify(response))
         setError('AI 返回了空内容，请重试')
       }
     } catch (err) {
+      console.error('[AI Suggestion] Error:', err)
       setError(err instanceof Error ? err.message : '生成失败，请重试')
     } finally {
       setIsLoading(false)
