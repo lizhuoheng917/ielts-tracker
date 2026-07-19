@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/select'
 import { PlusIcon, PencilIcon, TrashIcon, Sparkles } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
-import { AIChatPanel } from '@/components/ai/AIChatPanel'
+import { WritingCorrection } from '@/components/ai/WritingCorrection'
 
 // ===== 雅思分数滑轴组件（方案 B：极简 + 端点提示） =====
 function IeltsScoreSlider({
@@ -485,10 +485,6 @@ function TabPanel({ type }: { type: PracticeType }) {
     setDeleteTarget(null)
   }
 
-  const writingSystemPrompt = useMemo(() => {
-    return "你是 IELTS Tracker 的 AI 写作批改助手。你是一位经验丰富的雅思写作考官，熟悉雅思写作评分标准（Task Response / Task Achievement, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy）。\n\n## 你的职责\n1. 按照雅思写作评分标准对用户的作文进行评分（满分 9 分）\n2. 逐段给出详细的修改建议和评语\n3. 指出语法、词汇、逻辑等方面的问题\n4. 给出改进后的范文或修改建议\n\n## 评分格式\n请在回复中明确给出四项评分和总分：\n- TR/TA: X 分\n- CC: X 分\n- LR: X 分\n- GRA: X 分\n- 总分: X 分\n\n## 风格要求\n- 用中文回复（但可以引用原文中的英文表达）\n- 语气专业但鼓励\n- 具体指出问题所在，避免泛泛而谈\n- 回复使用 Markdown 格式"
-  }, [])
-
   return (
     <>
       <StatsSummary type={type} />
@@ -558,12 +554,8 @@ function TabPanel({ type }: { type: PracticeType }) {
                 AI 写作批改
               </DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col flex-1 min-h-0 px-4 pb-4">
-              <AIChatPanel
-                systemPrompt={writingSystemPrompt}
-                placeholder="粘贴你的雅思作文（大作文/小作文），AI 将按评分标准批改..."
-                chatContext="practice"
-              />
+            <div className="flex flex-col flex-1 min-h-0 px-4 pb-4 overflow-y-auto">
+              <WritingCorrection onSuccess={() => setAiOpen(false)} />
             </div>
           </DialogContent>
         </Dialog>

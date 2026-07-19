@@ -7,6 +7,8 @@ export interface AnalysisReport {
   title: string
   content: string // markdown 格式的 AI 分析内容
   createdAt: string
+  type?: 'learning_analysis' | 'writing_correction' // 报告类型
+  metadata?: Record<string, unknown> // 附加元数据
 }
 
 interface ReportStore {
