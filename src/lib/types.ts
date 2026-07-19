@@ -98,6 +98,7 @@ export interface AchievementState {
 // ===== 设置 =====
 export interface Settings {
   examDate?: string // YYYY-MM-DD
+  showExamCountdown: boolean // 是否在主页显示考试倒计时
   theme: 'light' | 'dark' | 'system'
   lastCheckinDate?: string // YYYY-MM-DD
 }

@@ -40,6 +40,7 @@ const todayStr = () => format(new Date(), 'yyyy-MM-dd')
 export default function Dashboard() {
   // ===== Store selectors (stable references) =====
   const examDate = useSettingsStore((s) => s.examDate)
+  const showExamCountdown = useSettingsStore((s) => s.showExamCountdown)
   const wordRecords = useWordStore((s) => s.records)
   const practiceRecords = usePracticeStore((s) => s.records)
   const timerRecords = useTimerStore((s) => s.records)
@@ -339,7 +340,7 @@ export default function Dashboard() {
       </div>
 
       {/* ===== 2. 考试倒计时 ===== */}
-      {examCountdown && (
+      {examCountdown && showExamCountdown && (
         <Card size="sm" className="border-l-4 border-l-indigo-500">
           <CardContent>
             <div className="flex items-center justify-between">

@@ -13,6 +13,7 @@ import { useReportStore } from '@/stores/reportStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,8 @@ export default function Settings() {
   const examDate = useSettingsStore((s) => s.examDate)
   const setExamDate = useSettingsStore((s) => s.setExamDate)
   const clearExamDate = useSettingsStore((s) => s.clearExamDate)
+  const showExamCountdown = useSettingsStore((s) => s.showExamCountdown)
+  const setShowExamCountdown = useSettingsStore((s) => s.setShowExamCountdown)
 
   const theme = useSettingsStore((s) => s.theme)
   const setTheme = useSettingsStore((s) => s.setTheme)
@@ -310,6 +313,18 @@ export default function Settings() {
               </span>
             )}
           </div>
+          {examDate && (
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <div className="text-sm">
+                <p className="font-medium">在主页显示倒计时</p>
+                <p className="text-xs text-muted-foreground">关闭后主页将不显示考试倒计时卡片</p>
+              </div>
+              <Switch
+                checked={showExamCountdown}
+                onCheckedChange={setShowExamCountdown}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -6,6 +6,7 @@ import { STORAGE_PREFIX, DEFAULT_SETTINGS } from '@/lib/constants'
 interface SettingsStore extends Settings {
   setExamDate: (date: string) => void
   clearExamDate: () => void
+  setShowExamCountdown: (show: boolean) => void
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   toggleTheme: () => void
   checkIn: () => boolean // 返回是否打卡成功（false = 今天已打过卡）
@@ -21,6 +22,7 @@ export const useSettingsStore = create<SettingsStore>()(
       ...DEFAULT_SETTINGS,
       setExamDate: (date) => set({ examDate: date }),
       clearExamDate: () => set((state) => ({ ...state, examDate: undefined })),
+      setShowExamCountdown: (show) => set({ showExamCountdown: show }),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       checkIn: () => {
