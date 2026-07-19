@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react'
-import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
+import { Sparkles, RefreshCw, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { streamAIChat, type AIMessage, getAllLearningData } from '@/lib/aiService'
-import { AILoadingState } from './AILoadingState'
+import { chatAI, getAllLearningData, type AIMessage } from '@/lib/aiService'
 import { useAiSuggestionStore } from '@/stores/aiSuggestionStore'
 
 interface AiSuggestionDialogProps {
@@ -14,12 +13,10 @@ interface AiSuggestionDialogProps {
 export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }: AiSuggestionDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const [rawContent, setRawContent] = useState('')
   const { suggestion, setSuggestion } = useAiSuggestionStore()
 
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    // 只提取最简要的数据
     const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次, 等级${data.currentLevel}`
     return `你是雅思学习助手。根据用户情况给出2-3条今日学习建议。
 
@@ -31,37 +28,25 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const generateSuggestion = async () => {
     setIsLoading(true)
     setError('')
-    setRawContent('')
 
-    const messages: AIMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: '今日学习建议' },
-    ]
+    try {
+      const messages: AIMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: '今日学习建议' },
+      ]
 
-    let fullContent = ''
-    let hasReceivedAnyContent = false
-
-    await streamAIChat(messages, {
-      onContent: (content) => {
-        fullContent = content
-        hasReceivedAnyContent = true
-        setRawContent(content)
-      },
-      onError: (err) => {
-        setError(`AI 错误: ${err}`)
-        setIsLoading(false)
-      },
-      onDone: () => {
-        setIsLoading(false)
-        if (fullContent && fullContent.trim()) {
-          setSuggestion(fullContent.trim())
-        } else if (hasReceivedAnyContent) {
-          setError('AI 返回了空内容，请重试')
-        } else {
-          setError('未收到 AI 响应，请检查网络连接后重试')
-        }
-      },
-    }, { temperature: 0.7, max_tokens: 512 })
+      const response = await chatAI(messages, { temperature: 0.7, max_tokens: 512 })
+      
+      if (response?.content) {
+        setSuggestion(response.content.trim())
+      } else {
+        setError('AI 返回了空内容，请重试')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '生成失败，请重试')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleRegenerate = () => {
@@ -72,31 +57,18 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
     <div className="space-y-4">
       {/* 状态提示 */}
       {isLoading && (
-        <div className="flex items-center justify-center gap-2 py-4">
-          <AILoadingState text="正在生成学习建议" />
+        <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">正在生成学习建议...</span>
         </div>
       )}
 
       {/* 错误提示 */}
       {error && (
-        <Card size="sm" className="border-destructive">
-          <CardContent>
-            <div className="flex items-center gap-2 text-sm text-destructive mb-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span className="font-medium">{error}</span>
-            </div>
-            {rawContent ? (
-              <details open className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer hover:text-foreground mb-2">AI 返回的内容：</summary>
-                <pre className="p-2 bg-muted rounded-lg whitespace-pre-wrap overflow-auto max-h-[200px]">
-                  {rawContent}
-                </pre>
-              </details>
-            ) : (
-              <p className="text-xs text-muted-foreground">未收到 AI 响应</p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
       )}
 
       {/* 建议内容 */}
