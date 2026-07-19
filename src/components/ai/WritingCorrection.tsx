@@ -286,13 +286,13 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
       {result && (
         <div className="space-y-2">
           {/* 评分卡片 */}
-          <Card className={cn(
+          <Card size="sm" className={cn(
             'border-2 transition-colors',
             result.scores.total >= 7 ? 'border-green-200 dark:border-green-800' :
             result.scores.total >= 5 ? 'border-amber-200 dark:border-amber-800' :
             'border-red-200 dark:border-red-800'
           )}>
-            <CardContent className="py-2 px-3">
+            <CardContent>
               <button
                 onClick={() => toggleSection('scores')}
                 className="w-full flex items-center justify-between"
@@ -319,8 +319,8 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
           </Card>
 
           {/* 详细点评 */}
-          <Card>
-            <CardContent className="py-2 px-3">
+          <Card size="sm">
+            <CardContent>
               <button
                 onClick={() => toggleSection('feedback')}
                 className="w-full flex items-center justify-between"
@@ -337,8 +337,8 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
           </Card>
 
           {/* 总体建议 */}
-          <Card>
-            <CardContent className="py-2 px-3">
+          <Card size="sm">
+            <CardContent>
               <button
                 onClick={() => toggleSection('suggestions')}
                 className="w-full flex items-center justify-between"

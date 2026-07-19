@@ -567,8 +567,8 @@ function TabPanel({ type }: { type: PracticeType }) {
 
       {/* AI 写作批改报告列表 */}
       {type === 'writing' && writingReports.length > 0 && (
-        <Card className="mt-3">
-          <CardContent className="py-2 px-3">
+        <Card size="sm" className="mt-3">
+          <CardContent>
             <button
               onClick={() => setReportsExpanded(!reportsExpanded)}
               className="w-full flex items-center justify-between"
