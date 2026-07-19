@@ -15,49 +15,25 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const [error, setError] = useState('')
   const { suggestion, setSuggestion } = useAiSuggestionStore()
 
+  // 完全复制学习报告的提示词风格
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    return `你是 IELTS Tracker 的 AI 学习助手。你是一位经验丰富的雅思备考教练。
+    return `你是 IELTS Tracker 的 AI 智能学习助手。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
 
 ## 用户学习数据
 ${JSON.stringify(data, null, 2)}
 
 ## 你的任务
-根据用户今天的学习数据，给出 2-3 条具体的学习建议。
+根据用户今天的学习数据，生成今日学习建议。
 
 ## 要求
-- 用中文回复
-- 每条建议一句话，简洁明了
-- 建议要具体可执行
-- 语气友好鼓励
-- 使用 Markdown 列表格式`
+1. 给出 2-3 条具体的学习建议
+2. 用中文回复
+3. 每条建议一句话，简洁明了
+4. 建议要具体可执行，避免空泛的"多练习"
+5. 语气友好、鼓励但不失专业
+6. 使用 Markdown 列表格式`
   }, [])
-
-  // 从内容中提取建议（取最后的中文列表部分）
-  const extractSuggestion = (text: string): string => {
-    // 找到所有中文句子
-    const lines = text.split('\n')
-    const chineseLines: string[] = []
-    
-    for (const line of lines) {
-      const trimmed = line.trim()
-      // 检查是否包含中文字符且长度足够
-      if (/[\u4e00-\u9fff]/.test(trimmed) && trimmed.length > 5) {
-        // 移除 Markdown 格式符号
-        const cleaned = trimmed.replace(/^[-*]\s*/, '').replace(/^\d+[.、]\s*/, '')
-        if (cleaned.length > 5) {
-          chineseLines.push(cleaned)
-        }
-      }
-    }
-    
-    // 取最后 3 条（通常是实际建议）
-    if (chineseLines.length >= 2) {
-      return chineseLines.slice(-3).join('\n')
-    }
-    
-    return chineseLines.join('\n')
-  }
 
   const generateSuggestion = async () => {
     setIsLoading(true)
@@ -65,12 +41,12 @@ ${JSON.stringify(data, null, 2)}
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '请给出今日学习建议' },
+      { role: 'user', content: '请根据我的学习数据，给出今日的学习建议。' },
     ]
 
     let fullContent = ''
 
-    // 不限制 max_tokens，让模型自由输出（与学习报告相同）
+    // 与学习报告完全相同的方式
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
@@ -81,15 +57,13 @@ ${JSON.stringify(data, null, 2)}
       },
       onDone: () => {
         setIsLoading(false)
-        const extracted = extractSuggestion(fullContent)
-        
-        if (extracted) {
-          setSuggestion(extracted)
+        if (fullContent) {
+          setSuggestion(fullContent)
         } else {
           setError('生成失败，请重试')
         }
       },
-    })  // 不传 options，使用默认 max_tokens: 4096
+    })
   }
 
   return (
@@ -120,16 +94,9 @@ ${JSON.stringify(data, null, 2)}
               今日学习建议
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4 max-h-[300px] overflow-y-auto">
-            <div className="space-y-3">
-              {suggestion.content.split('\n').filter((line: string) => line.trim()).map((line: string, i: number) => (
-                <div key={i} className="flex items-start gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 mt-0.5">
-                    <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">{i + 1}</span>
-                  </div>
-                  <p className="text-sm leading-relaxed">{line}</p>
-                </div>
-              ))}
+          <CardContent className="pt-4 max-h-[400px] overflow-y-auto">
+            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
+              {suggestion.content}
             </div>
             <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
               <p className="text-[11px] text-muted-foreground">
