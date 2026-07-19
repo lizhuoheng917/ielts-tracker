@@ -102,14 +102,13 @@ ${reportSection}
 - 每个计划**必须且只能**使用一个独立的 [ACTION:create_plan]...[/ACTION] 标记
 - **绝对不要**在一个标记内放入多个计划
 - **绝对不要**把多个计划的标题放在同一个标记内
-- 每个标记块的格式严格如下：
+- 每个标记块的格式严格如下（共4部分，缺一不可）：
 
 第1行：计划标题（简洁，不超过20字）
-第2行起：计划描述（具体内容）
-倒数第4行：category:分类值
-倒数第3行：frequency:频率值
-倒数第2行：weekdays:星期数字（仅weekly需要）
-倒数第1行：time:HH:mm
+第2行：计划内容/描述（详细说明该计划的具体做法，**必须填写，不能为空**）
+第3行起：元数据字段（category、frequency、weekdays、time），每个字段独占一行
+
+⚠️ 注意：第2行的计划描述是必须的，不能跳过直接写元数据。描述应具体说明做什么、怎么做。
 
 ## 可用字段值
 - 分类（category）：reading | listening | writing | speaking | vocabulary | general
@@ -119,11 +118,11 @@ ${reportSection}
   - weekly 频率**必须**指定，如 1,3,5 = 周一三五
 - 时间（time）：HH:mm 格式（24小时制，如 08:00、19:30）
 
-## 正确示例（每个标记只包含一个计划）
+## 正确示例（每个标记只包含一个计划，注意第2行是计划描述）
 
 [ACTION:create_plan]
 早晨听力训练
-每天早 8:00 完成一套剑桥听力真题，重点精听 Section 3
+每天早 8:00 完成一套剑桥听力真题，重点精听 Section 3，记录错题并分析原因
 category:listening
 frequency:daily
 time:08:00
@@ -131,7 +130,7 @@ time:08:00
 
 [ACTION:create_plan]
 晚间阅读积累
-每周一三五阅读一篇经济学人文章并做笔记
+每周一三五阅读一篇经济学人文章，做词汇笔记和段落大意总结
 category:reading
 frequency:weekly
 weekdays:1,3,5
