@@ -19,27 +19,13 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    // 只提取关键数据，减少 token 使用
-    const summary = {
-      today: data.today,
-      streakDays: data.streakDays,
-      totalActiveDays: data.totalActiveDays,
-      totalWords: data.totalWords,
-      totalPractice: data.totalPractice,
-      currentLevel: data.currentLevel,
-      practiceByType: data.practiceByType,
-      recentDiaries: data.recentDiaries.slice(0, 2),
-      recentPractice: data.recentPractice.slice(0, 3),
-    }
-    return `你是雅思学习助手。根据用户数据给出 2-3 条今日学习建议。
+    // 只提取最简要的数据
+    const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次, 等级${data.currentLevel}`
+    return `你是雅思学习助手。根据用户情况给出2-3条今日学习建议。
 
-用户数据: ${JSON.stringify(summary)}
+用户: ${brief}
 
-要求:
-- 中文回复，200字以内
-- 建议具体可执行
-- 语气友好鼓励
-- 直接输出建议文本，不要JSON格式`
+要求: 中文, 150字以内, 具体可执行, 语气友好。直接输出建议。`
   }, [])
 
   const generateSuggestion = async () => {
@@ -53,22 +39,26 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
     ]
 
     let fullContent = ''
+    let hasReceivedAnyContent = false
 
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
+        hasReceivedAnyContent = true
         setRawContent(content)
       },
       onError: (err) => {
-        setError(err)
+        setError(`AI 错误: ${err}`)
         setIsLoading(false)
       },
       onDone: () => {
         setIsLoading(false)
         if (fullContent && fullContent.trim()) {
           setSuggestion(fullContent.trim())
+        } else if (hasReceivedAnyContent) {
+          setError('AI 返回了空内容，请重试')
         } else {
-          setError('未收到 AI 响应，请重试')
+          setError('未收到 AI 响应，请检查网络连接后重试')
         }
       },
     }, { temperature: 0.7, max_tokens: 512 })
