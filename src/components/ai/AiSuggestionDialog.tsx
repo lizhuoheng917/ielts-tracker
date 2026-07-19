@@ -73,10 +73,12 @@ ${JSON.stringify(data, null, 2)}
     ]
 
     let fullContent = ''
+    let hasReceivedContent = false
 
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
+        hasReceivedContent = true
       },
       onError: (err) => {
         setError(err)
@@ -88,8 +90,10 @@ ${JSON.stringify(data, null, 2)}
         
         if (extracted) {
           setSuggestion(extracted)
+        } else if (hasReceivedContent) {
+          setError('AI 返回的内容格式不正确，请重试')
         } else {
-          setError('生成失败，请重试')
+          setError('未收到 AI 响应，请检查网络连接后重试')
         }
       },
     })
@@ -154,7 +158,7 @@ ${JSON.stringify(data, null, 2)}
                   <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 mt-0.5">
                     <span className="text-[11px] font-bold text-white">{i + 1}</span>
                   </div>
-                  <p className="text-[13px] leading-relaxed text-foreground">{item}</p>
+                  <p className="text-sm leading-relaxed text-foreground">{item}</p>
                 </div>
               ))}
             </div>
