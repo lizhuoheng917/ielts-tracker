@@ -22,8 +22,24 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
 用户: ${brief}
 
-要求: 中文, 150字以内, 具体可执行, 语气友好。直接输出建议。`
+直接输出建议文本，不要思考过程。`
   }, [])
+
+  // 从内容中提取最终建议（过滤掉推理过程）
+  const extractFinalContent = (text: string): string => {
+    // 尝试找到中文内容部分
+    const chineseMatch = text.match(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef].*$/s)
+    if (chineseMatch) {
+      // 清理掉前面的英文推理部分
+      let result = chineseMatch[0]
+      // 移除常见的推理标记
+      result = result.replace(/^(Requirements|Identify|Draft|Check|Step|Analysis).*$/gm, '')
+      result = result.replace(/^-.*$/gm, '')
+      result = result.replace(/\n{3,}/g, '\n\n')
+      return result.trim()
+    }
+    return text
+  }
 
   const generateSuggestion = async () => {
     setIsLoading(true)
@@ -35,22 +51,20 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         { role: 'user', content: '今日学习建议' },
       ]
 
-      console.log('[AI Suggestion] Sending request...')
       const response = await chatAI(messages, { temperature: 0.7, max_tokens: 512 })
-      console.log('[AI Suggestion] Response:', response)
       
-      // 检查 content 或 reasoning_content（推理模型可能使用不同字段）
-      const content = response?.content || response?.reasoning_content || ''
+      // 从 content 或 reasoning_content 中提取内容
+      let content = response?.content || response?.reasoning_content || ''
+      
+      // 提取最终建议，过滤推理过程
+      content = extractFinalContent(content)
       
       if (content) {
-        console.log('[AI Suggestion] Content:', content)
         setSuggestion(content.trim())
       } else {
-        console.log('[AI Suggestion] Empty response, full data:', JSON.stringify(response))
         setError('AI 返回了空内容，请重试')
       }
     } catch (err) {
-      console.error('[AI Suggestion] Error:', err)
       setError(err instanceof Error ? err.message : '生成失败，请重试')
     } finally {
       setIsLoading(false)
@@ -82,14 +96,14 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
       {/* 建议内容 */}
       {!isLoading && suggestion && (
         <Card size="sm" className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800">
-          <CardContent>
+          <CardContent className="max-h-[300px] overflow-y-auto">
             <div className="flex items-start gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50">
                 <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <div dangerouslySetInnerHTML={{ __html: formatMarkdown(suggestion.content) }} />
+                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
+                  {suggestion.content}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-2">
                   生成于 {new Date(suggestion.createdAt).toLocaleString('zh-CN')}
@@ -132,22 +146,4 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
       </div>
     </div>
   )
-}
-
-// 简单的 Markdown 转 HTML（支持标题和列表）
-function formatMarkdown(text: string): string {
-  return text
-    // 标题
-    .replace(/^### (.+)$/gm, '<h3 class="text-sm font-semibold mb-2 mt-3">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-base font-semibold mb-2 mt-4">$1</h2>')
-    // 无序列表
-    .replace(/^- (.+)$/gm, '<li class="text-sm mb-1 ml-4 list-disc">$1</li>')
-    .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul class="mb-2">$&</ul>')
-    // 有序列表
-    .replace(/^\d+\. (.+)$/gm, '<li class="text-sm mb-1 ml-4 list-decimal">$1</li>')
-    // 粗体
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    // 换行
-    .replace(/\n\n/g, '<br><br>')
-    .replace(/\n/g, '<br>')
 }
