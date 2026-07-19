@@ -25,6 +25,15 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 要求: 只输出2条建议，每条一句话，用中文，不要任何英文或解释。`
   }, [])
 
+  // 清理内容，移除系统标签
+  const cleanContent = (text: string): string => {
+    return text
+      .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '') // 移除 system-reminder
+      .replace(/<[^>]+>/g, '') // 移除其他 HTML 标签
+      .replace(/\n{3,}/g, '\n\n') // 清理多余空行
+      .trim()
+  }
+
   const generateSuggestion = async () => {
     setIsLoading(true)
     setError('')
@@ -36,26 +45,22 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
     let fullContent = ''
 
-    console.log('[AI Suggestion] Starting stream...')
-
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
-        console.log('[AI Suggestion] Content received:', content.substring(0, 100))
       },
       onError: (err) => {
-        console.error('[AI Suggestion] Error:', err)
         setError(err)
         setIsLoading(false)
       },
       onDone: () => {
-        console.log('[AI Suggestion] Done. Full content:', fullContent)
         setIsLoading(false)
+        const cleaned = cleanContent(fullContent)
         
-        if (fullContent && fullContent.trim()) {
-          setSuggestion(fullContent.trim())
+        if (cleaned) {
+          setSuggestion(cleaned)
         } else {
-          setError('未收到内容，请重试')
+          setError('未收到有效内容，请重试')
         }
       },
     }, { temperature: 0.7, max_tokens: 256 })
