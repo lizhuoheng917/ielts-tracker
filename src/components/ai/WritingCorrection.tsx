@@ -97,6 +97,13 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
   const handleSubmit = async () => {
     if (!essayContent.trim()) return
 
+    // 检查输入长度
+    const estimatedTokens = Math.ceil((systemPrompt.length + essayContent.length) / 3)
+    if (estimatedTokens > 8000) {
+      setError(`输入内容过长（约 ${estimatedTokens} tokens），请缩减作文长度后重试。建议控制在 500 词以内。`)
+      return
+    }
+
     setIsLoading(true)
     setResult(null)
     setRawContent('')
@@ -108,10 +115,12 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
     ]
 
     let fullContent = ''
+    let hasReceivedContent = false
 
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
+        hasReceivedContent = true
         setRawContent(content)
       },
       onError: (err) => {
@@ -120,6 +129,8 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
         // 确保在错误时也显示原始内容
         if (fullContent) {
           setRawContent(fullContent)
+        } else if (!hasReceivedContent) {
+          setRawContent(`[错误] ${err}\n\n提示：可能是输入内容过长或 API 配置问题。`)
         }
       },
       onDone: () => {
@@ -275,14 +286,17 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             value={essayContent}
             onChange={(e) => setEssayContent(e.target.value)}
             placeholder={essayType === 'task1' 
-              ? '请粘贴你的小作文（图表描述/书信等）...' 
-              : '请粘贴你的大作文（议论文/讨论类等）...'}
+              ? '请粘贴你的小作文（图表描述/书信等），建议 150 词以内...' 
+              : '请粘贴你的大作文（议论文/讨论类等），建议 250 词以内...'}
             rows={8}
             className="min-h-[200px] resize-none"
           />
-          <p className="text-[11px] text-muted-foreground text-right">
-            {essayContent.length} 字符
-          </p>
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>约 {Math.ceil(essayContent.length / 5)} 词</span>
+            <span className={essayContent.length > 2500 ? 'text-destructive' : ''}>
+              {essayContent.length > 2500 ? '内容较长，建议精简' : '建议 250 词以内'}
+            </span>
+          </div>
         </div>
 
         <Button
