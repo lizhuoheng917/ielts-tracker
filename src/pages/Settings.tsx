@@ -13,7 +13,6 @@ import { useReportStore } from '@/stores/reportStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -319,10 +318,21 @@ export default function Settings() {
                 <p className="font-medium">在主页显示倒计时</p>
                 <p className="text-xs text-muted-foreground">关闭后主页将不显示考试倒计时卡片</p>
               </div>
-              <Switch
-                checked={showExamCountdown}
-                onCheckedChange={setShowExamCountdown}
-              />
+              <button
+                onClick={() => setShowExamCountdown(!showExamCountdown)}
+                className={cn(
+                  'relative w-[44px] h-[24px] rounded-full transition-all duration-200 shrink-0',
+                  showExamCountdown ? 'bg-indigo-500' : 'bg-muted'
+                )}
+                aria-label="在主页显示倒计时"
+              >
+                <span
+                  className={cn(
+                    'absolute top-[2px] w-[20px] h-[20px] rounded-full bg-white shadow-sm transition-all duration-200',
+                    showExamCountdown ? 'left-[22px]' : 'left-[2px]'
+                  )}
+                />
+              </button>
             </div>
           )}
         </CardContent>
