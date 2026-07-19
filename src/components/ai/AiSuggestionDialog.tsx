@@ -17,32 +17,46 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    return `给一个雅思初学者2条今日学习建议。
-今天是${data.today}，连续打卡${data.streakDays}天，已背词${data.totalWords}个。
-每条建议一句话，共2句话，直接输出，不要编号，不要其他内容。`
+    return `你是 IELTS Tracker 的 AI 学习助手。你是一位经验丰富的雅思备考教练。
+
+## 用户学习数据
+${JSON.stringify(data, null, 2)}
+
+## 你的任务
+根据用户今天的学习数据，给出 2-3 条具体的学习建议。
+
+## 要求
+- 用中文回复
+- 每条建议一句话，简洁明了
+- 建议要具体可执行
+- 语气友好鼓励
+- 使用 Markdown 列表格式`
   }, [])
 
-  // 提取中文建议
+  // 从内容中提取建议（取最后的中文列表部分）
   const extractSuggestion = (text: string): string => {
-    // 提取所有中文句子（至少10个字符）
-    const chineseSentences = text.match(/[\u4e00-\u9fff][\u4e00-\u9fff\w\s，。！？、；：""''（）\d]*/g)
+    // 找到所有中文句子
+    const lines = text.split('\n')
+    const chineseLines: string[] = []
     
-    if (!chineseSentences) return ''
-    
-    // 过滤出有意义的句子（长度>10）
-    const meaningful = chineseSentences
-      .filter(s => s.trim().length > 10)
-      .map(s => s.trim())
-    
-    // 去重
-    const unique = [...new Set(meaningful)]
-    
-    // 取最后2条（通常是实际建议，不是思考过程）
-    if (unique.length >= 2) {
-      return unique.slice(-2).join('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      // 检查是否包含中文字符且长度足够
+      if (/[\u4e00-\u9fff]/.test(trimmed) && trimmed.length > 5) {
+        // 移除 Markdown 格式符号
+        const cleaned = trimmed.replace(/^[-*]\s*/, '').replace(/^\d+[.、]\s*/, '')
+        if (cleaned.length > 5) {
+          chineseLines.push(cleaned)
+        }
+      }
     }
     
-    return unique.join('\n')
+    // 取最后 3 条（通常是实际建议）
+    if (chineseLines.length >= 2) {
+      return chineseLines.slice(-3).join('\n')
+    }
+    
+    return chineseLines.join('\n')
   }
 
   const generateSuggestion = async () => {
@@ -51,11 +65,12 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '给出建议' },
+      { role: 'user', content: '请给出今日学习建议' },
     ]
 
     let fullContent = ''
 
+    // 不限制 max_tokens，让模型自由输出（与学习报告相同）
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
@@ -74,7 +89,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
           setError('生成失败，请重试')
         }
       },
-    }, { temperature: 0.7, max_tokens: 2048 })
+    })  // 不传 options，使用默认 max_tokens: 4096
   }
 
   return (
