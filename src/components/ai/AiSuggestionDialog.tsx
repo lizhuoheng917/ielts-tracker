@@ -22,38 +22,44 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
 用户情况: ${brief}
 
-## 输出格式（必须严格遵守）
-
-用 [SUGGESTION] 标签包裹你的建议内容：
-
+请用 [SUGGESTION] 标签包裹你的建议，格式如下：
 [SUGGESTION]
-第1条建议内容
-第2条建议内容
-[/SUGGESTION]
-
-要求：
-- 2条建议，每条一句话
-- 全部用中文
-- 不要输出任何其他内容，只输出带标签的建议`
+建议1的内容
+建议2的内容
+[/SUGGESTION]`
   }, [])
 
-  // 从内容中提取 [SUGGESTION] 标签内的内容
   const extractSuggestion = (text: string): string => {
-    const match = text.match(/\[SUGGESTION\]([\s\S]*?)\[\/SUGGESTION\]/i)
-    if (match) {
-      return match[1].trim()
+    console.log('[AI Suggestion] Raw content length:', text.length)
+    console.log('[AI Suggestion] Raw content:', text)
+    
+    // 尝试提取 [SUGGESTION] 标签内容
+    const tagMatch = text.match(/\[SUGGESTION\]([\s\S]*?)\[\/SUGGESTION\]/i)
+    if (tagMatch) {
+      console.log('[AI Suggestion] Found tag content:', tagMatch[1])
+      return tagMatch[1].trim()
     }
-    // 如果没有标签，尝试直接提取中文内容
+    
+    console.log('[AI Suggestion] No tag found, trying Chinese extraction')
+    // 尝试提取中文内容
     const chineseLines = text.match(/[\u4e00-\u9fff][^\n]*/g)
-    if (chineseLines && chineseLines.length > 0) {
-      return chineseLines.filter(s => s.length > 5).join('\n')
+    if (chineseLines) {
+      console.log('[AI Suggestion] Chinese lines found:', chineseLines)
+      const filtered = chineseLines.filter(s => s.length > 5)
+      console.log('[AI Suggestion] Filtered Chinese:', filtered)
+      if (filtered.length > 0) {
+        return filtered.join('\n')
+      }
     }
+    
+    console.log('[AI Suggestion] No valid content found')
     return ''
   }
 
   const generateSuggestion = async () => {
     setIsLoading(true)
     setError('')
+    console.log('[AI Suggestion] Starting generation...')
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -65,14 +71,18 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
+        console.log('[AI Suggestion] Content chunk:', content.substring(0, 50))
       },
       onError: (err) => {
+        console.error('[AI Suggestion] Error:', err)
         setError(err)
         setIsLoading(false)
       },
       onDone: () => {
+        console.log('[AI Suggestion] Stream done. Full content:', fullContent)
         setIsLoading(false)
         const extracted = extractSuggestion(fullContent)
+        console.log('[AI Suggestion] Extracted:', extracted)
         
         if (extracted) {
           setSuggestion(extracted)
