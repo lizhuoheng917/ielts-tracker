@@ -19,9 +19,8 @@ export interface WritingScore {
 
 export interface WritingCorrectionResult {
   scores: WritingScore
-  paragraphFeedback: { paragraph: string; feedback: string }[]
+  feedback: string
   suggestions: string[]
-  improvedVersion?: string
 }
 
 interface WritingCorrectionProps {
@@ -38,7 +37,6 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
     scores: true,
     feedback: true,
     suggestions: true,
-    improved: false,
   })
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [error, setError] = useState('')
@@ -46,52 +44,21 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
   const addReport = useReportStore((s) => s.addReport)
 
   const systemPrompt = useMemo(() => {
-    return `你是 IELTS Tracker 的 AI 写作批改助手。你是一位经验丰富的雅思写作考官，熟悉雅思写作评分标准。
+    return `你是雅思写作批改助手。请按以下 JSON 格式输出批改结果，不要输出其他内容：
 
-## 作文类型
-用户提交的是${essayType === 'task1' ? '小作文（Task 1）' : '大作文（Task 2）'}。
-
-## 你的职责
-1. 按照雅思写作评分标准对用户的作文进行评分（满分 9 分）
-2. 逐段给出详细的修改建议和评语
-3. 指出语法、词汇、逻辑等方面的问题
-4. 给出改进后的范文或修改建议
-
-## ⚠️ 输出格式要求（极其重要，必须严格遵守）
-
-你必须只输出一个 JSON 对象，不要输出任何其他文字、解释或 markdown 格式。
-
-直接输出以下 JSON 结构（不要用 \`\`\`json 代码块包裹）：
 {
-  "scores": {
-    "tr_ta": 数字,
-    "cc": 数字,
-    "lr": 数字,
-    "gra": 数字,
-    "total": 数字
-  },
-  "paragraphFeedback": [
-    {
-      "paragraph": "原文段落内容",
-      "feedback": "该段落的详细点评"
-    }
-  ],
-  "suggestions": ["建议1", "建议2", "建议3"],
-  "improvedVersion": "改进后的范文"
+  "scores": {"tr_ta": 评分, "cc": 评分, "lr": 评分, "gra": 评分, "total": 总分},
+  "feedback": "逐段点评（将所有段落的点评合并为一段文字，用【段落1】【段落2】等标记分隔）",
+  "suggestions": ["建议1", "建议2", "建议3"]
 }
 
-注意：
-- scores 中的各项评分必须是 0-9 之间的数字（可以是小数如 6.5）
-- paragraphFeedback 数组必须包含用户作文中的每个段落
-- suggestions 数组至少包含 3 条建议
-- improvedVersion 是可选字段，如果有就提供改进后的完整范文
-- 不要输出任何其他内容，只输出 JSON
+评分标准：TR/TA=任务回应, CC=连贯衔接, LR=词汇, GRA=语法，各项 0-9 分。
 
-## 评分标准
-- TR/TA (Task Response/Achievement): 任务回应/完成度
-- CC (Coherence and Cohesion): 连贯与衔接
-- LR (Lexical Resource): 词汇资源
-- GRA (Grammatical Range and Accuracy): 语法多样性与准确性`
+注意：
+- 每项评分可以是小数（如 6.5）
+- feedback 用中文写，简洁明了，每段 1-2 句话
+- suggestions 3 条即可，每条不超过 30 字
+- 直接输出 JSON，不要用代码块包裹`
   }, [essayType])
 
   const handleSubmit = async () => {
@@ -173,13 +140,17 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             }
           }
           
-          if (parsed && parsed.scores && parsed.paragraphFeedback) {
+          if (parsed && parsed.scores) {
             // 验证数据结构
             const scores = parsed.scores
             if (typeof scores.tr_ta === 'number' && typeof scores.cc === 'number' &&
                 typeof scores.lr === 'number' && typeof scores.gra === 'number' &&
                 typeof scores.total === 'number') {
-              setResult(parsed)
+              setResult({
+                scores: parsed.scores,
+                feedback: parsed.feedback || '',
+                suggestions: parsed.suggestions || [],
+              })
             } else {
               setError('评分数据格式不正确，请重试')
             }
@@ -225,21 +196,12 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
     content += `| 语法准确性 (GRA) | ${r.scores.gra} |\n`
     content += `| **总分** | **${r.scores.total}** |\n\n`
     
-    content += `## 逐段点评\n\n`
-    r.paragraphFeedback.forEach((p, i) => {
-      content += `### 段落 ${i + 1}\n`
-      content += `> ${p.paragraph}\n\n`
-      content += `${p.feedback}\n\n`
-    })
+    content += `## 详细点评\n\n${r.feedback}\n\n`
     
     content += `## 总体建议\n\n`
     r.suggestions.forEach((s, i) => {
       content += `${i + 1}. ${s}\n`
     })
-    
-    if (r.improvedVersion) {
-      content += `\n## 改进范文\n\n${r.improvedVersion}`
-    }
     
     return content
   }
@@ -377,27 +339,19 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             </CardContent>
           </Card>
 
-          {/* 逐段点评 */}
+          {/* 详细点评 */}
           <Card>
             <CardContent className="pt-4">
               <button
                 onClick={() => toggleSection('feedback')}
                 className="w-full flex items-center justify-between"
               >
-                <h4 className="font-semibold">逐段点评</h4>
+                <h4 className="font-semibold">详细点评</h4>
                 {expandedSections.feedback ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
               {expandedSections.feedback && (
-                <div className="mt-3 space-y-3">
-                  {result.paragraphFeedback.map((p, i) => (
-                    <div key={i} className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-sm font-medium text-muted-foreground mb-1">段落 {i + 1}</p>
-                      <blockquote className="text-sm border-l-2 border-amber-300 dark:border-amber-700 pl-2 italic mb-2">
-                        {p.paragraph}
-                      </blockquote>
-                      <p className="text-sm">{p.feedback}</p>
-                    </div>
-                  ))}
+                <div className="mt-3">
+                  <p className="text-sm whitespace-pre-wrap">{result.feedback}</p>
                 </div>
               )}
             </CardContent>
@@ -425,26 +379,6 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
               )}
             </CardContent>
           </Card>
-
-          {/* 改进范文 */}
-          {result.improvedVersion && (
-            <Card>
-              <CardContent className="pt-4">
-                <button
-                  onClick={() => toggleSection('improved')}
-                  className="w-full flex items-center justify-between"
-                >
-                  <h4 className="font-semibold">改进范文</h4>
-                  {expandedSections.improved ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
-                {expandedSections.improved && (
-                  <div className="mt-3 text-sm whitespace-pre-wrap bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
-                    {result.improvedVersion}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {/* 保存按钮 */}
           <Button
