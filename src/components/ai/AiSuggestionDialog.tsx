@@ -15,25 +15,47 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const [error, setError] = useState('')
   const { suggestion, setSuggestion } = useAiSuggestionStore()
 
-  // 完全复制学习报告的提示词风格
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    return `你是 IELTS Tracker 的 AI 智能学习助手。你是一位经验丰富的雅思备考教练，擅长分析学习数据并给出专业建议。
+    return `你是 IELTS Tracker 的 AI 智能学习助手。
 
 ## 用户学习数据
 ${JSON.stringify(data, null, 2)}
 
-## 你的任务
-根据用户今天的学习数据，生成今日学习建议。
+## 输出要求
+你的回复必须以"今日学习建议："开头，后面跟着 2-3 条建议。
 
-## 要求
-1. 给出 2-3 条具体的学习建议
-2. 用中文回复
-3. 每条建议一句话，简洁明了
-4. 建议要具体可执行，避免空泛的"多练习"
-5. 语气友好、鼓励但不失专业
-6. 使用 Markdown 列表格式`
+格式如下：
+今日学习建议：
+- 第1条建议
+- 第2条建议
+- 第3条建议（可选）
+
+注意：必须以"今日学习建议："开头，这是强制要求。`
   }, [])
+
+  // 从内容中提取"今日学习建议："后面的内容
+  const extractAfterMarker = (text: string): string => {
+    // 查找标记词
+    const marker = '今日学习建议'
+    const index = text.indexOf(marker)
+    
+    if (index !== -1) {
+      // 从标记后开始提取
+      let content = text.substring(index)
+      // 移除标记词本身和后面的冒号/空格
+      content = content.replace(/^今日学习建议[：:]\s*/, '')
+      return content.trim()
+    }
+    
+    // 如果没找到标记，尝试找列表符号
+    const listIndex = text.indexOf('- ')
+    if (listIndex !== -1) {
+      return text.substring(listIndex).trim()
+    }
+    
+    return text
+  }
 
   const generateSuggestion = async () => {
     setIsLoading(true)
@@ -41,12 +63,11 @@ ${JSON.stringify(data, null, 2)}
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '请根据我的学习数据，给出今日的学习建议。' },
+      { role: 'user', content: '请生成今日学习建议。' },
     ]
 
     let fullContent = ''
 
-    // 与学习报告完全相同的方式
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
@@ -57,8 +78,10 @@ ${JSON.stringify(data, null, 2)}
       },
       onDone: () => {
         setIsLoading(false)
-        if (fullContent) {
-          setSuggestion(fullContent)
+        const extracted = extractAfterMarker(fullContent)
+        
+        if (extracted) {
+          setSuggestion(extracted)
         } else {
           setError('生成失败，请重试')
         }
