@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -453,11 +454,12 @@ time:21:00
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>计划名称</Label>
-              <Input
+              <Label>计划内容</Label>
+              <Textarea
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="例如：每天背诵50个单词"
+                rows={3}
               />
             </div>
 
