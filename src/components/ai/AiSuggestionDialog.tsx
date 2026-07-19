@@ -39,9 +39,12 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
       const response = await chatAI(messages, { temperature: 0.7, max_tokens: 512 })
       console.log('[AI Suggestion] Response:', response)
       
-      if (response?.content) {
-        console.log('[AI Suggestion] Content:', response.content)
-        setSuggestion(response.content.trim())
+      // 检查 content 或 reasoning_content（推理模型可能使用不同字段）
+      const content = response?.content || response?.reasoning_content || ''
+      
+      if (content) {
+        console.log('[AI Suggestion] Content:', content)
+        setSuggestion(content.trim())
       } else {
         console.log('[AI Suggestion] Empty response, full data:', JSON.stringify(response))
         setError('AI 返回了空内容，请重试')
