@@ -23,35 +23,47 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 ${JSON.stringify(data, null, 2)}
 
 ## 输出要求
-你的回复必须以"今日学习建议："开头，后面跟着 2-3 条建议。
+直接输出 2-3 条学习建议，每条以 "- " 开头。
 
-格式如下：
-今日学习建议：
-- 第1条建议
-- 第2条建议
-- 第3条建议（可选）
+格式：
+- 第1条建议内容
+- 第2条建议内容
 
-注意：必须以"今日学习建议："开头，这是强制要求。`
+注意：直接输出列表，不要有其他内容。`
   }, [])
 
-  // 从内容中提取"今日学习建议："后面的内容
-  const extractAfterMarker = (text: string): string => {
-    // 查找标记词
-    const marker = '今日学习建议'
-    const index = text.indexOf(marker)
-    
-    if (index !== -1) {
-      // 从标记后开始提取
-      let content = text.substring(index)
-      // 移除标记词本身和后面的冒号/空格
-      content = content.replace(/^今日学习建议[：:]\s*/, '')
-      return content.trim()
+  // 从内容中提取列表部分
+  const extractList = (text: string): string => {
+    // 找到第一个 "- " 的位置
+    const listStart = text.indexOf('\n- ')
+    if (listStart !== -1) {
+      // 从 "- " 开始提取
+      return text.substring(listStart + 1).trim()
     }
     
-    // 如果没找到标记，尝试找列表符号
-    const listIndex = text.indexOf('- ')
-    if (listIndex !== -1) {
-      return text.substring(listIndex).trim()
+    // 如果没有 "\n- "，尝试找行首的 "- "
+    const lines = text.split('\n')
+    const listLines: string[] = []
+    let foundList = false
+    
+    for (const line of lines) {
+      if (line.trim().startsWith('- ')) {
+        foundList = true
+        listLines.push(line.trim())
+      } else if (foundList) {
+        // 如果已经找到列表，遇到非列表行就停止
+        break
+      }
+    }
+    
+    if (listLines.length > 0) {
+      return listLines.join('\n')
+    }
+    
+    // 最后尝试找中文内容
+    const chineseMatch = text.match(/[\u4e00-\u9fff].*$/s)
+    if (chineseMatch) {
+      return chineseMatch[0].trim()
     }
     
     return text
@@ -63,7 +75,7 @@ ${JSON.stringify(data, null, 2)}
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '请生成今日学习建议。' },
+      { role: 'user', content: '生成建议' },
     ]
 
     let fullContent = ''
@@ -78,7 +90,7 @@ ${JSON.stringify(data, null, 2)}
       },
       onDone: () => {
         setIsLoading(false)
-        const extracted = extractAfterMarker(fullContent)
+        const extracted = extractList(fullContent)
         
         if (extracted) {
           setSuggestion(extracted)
