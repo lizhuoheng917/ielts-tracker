@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Sparkles, RefreshCw, AlertCircle, Loader2, Calendar } from 'lucide-react'
+import { Sparkles, RefreshCw, AlertCircle, Loader2, Calendar, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { streamAIChat, getAllLearningData, type AIMessage } from '@/lib/aiService'
@@ -32,16 +32,12 @@ ${JSON.stringify(data, null, 2)}
 注意：直接输出列表，不要有其他内容。`
   }, [])
 
-  // 从内容中提取列表部分
   const extractList = (text: string): string => {
-    // 找到第一个 "- " 的位置
     const listStart = text.indexOf('\n- ')
     if (listStart !== -1) {
-      // 从 "- " 开始提取
       return text.substring(listStart + 1).trim()
     }
     
-    // 如果没有 "\n- "，尝试找行首的 "- "
     const lines = text.split('\n')
     const listLines: string[] = []
     let foundList = false
@@ -51,7 +47,6 @@ ${JSON.stringify(data, null, 2)}
         foundList = true
         listLines.push(line.trim())
       } else if (foundList) {
-        // 如果已经找到列表，遇到非列表行就停止
         break
       }
     }
@@ -60,7 +55,6 @@ ${JSON.stringify(data, null, 2)}
       return listLines.join('\n')
     }
     
-    // 最后尝试找中文内容
     const chineseMatch = text.match(/[\u4e00-\u9fff].*$/s)
     if (chineseMatch) {
       return chineseMatch[0].trim()
@@ -101,19 +95,40 @@ ${JSON.stringify(data, null, 2)}
     })
   }
 
+  // 解析建议列表
+  const parseSuggestions = (content: string) => {
+    return content
+      .split('\n')
+      .filter(line => line.trim().startsWith('- '))
+      .map(line => line.replace(/^-\s*/, '').trim())
+      .filter(line => line.length > 0)
+  }
+
   return (
     <div className="space-y-4">
+      {/* 加载状态 */}
       {isLoading && (
-        <Card size="sm">
-          <CardContent className="py-8">
+        <Card size="sm" className="border-indigo-200 dark:border-indigo-800">
+          <CardContent className="py-6">
             <div className="flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-              <p className="text-sm text-muted-foreground">正在生成今日学习建议...</p>
+              <div className="relative">
+                <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+                <Sparkles className="h-5 w-5 text-amber-400 absolute -top-1 -right-1 animate-pulse" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">正在生成学习建议...</p>
+            </div>
+            {/* 警告提示 */}
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/30 px-3 py-2 mt-4">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="text-[12px] text-amber-700 dark:text-amber-400">
+                请勿关闭弹窗或切换页面，以免生成中断
+              </span>
             </div>
           </CardContent>
         </Card>
       )}
 
+      {/* 错误提示 */}
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -121,23 +136,43 @@ ${JSON.stringify(data, null, 2)}
         </div>
       )}
 
+      {/* 建议报告 */}
       {!isLoading && suggestion && (
-        <Card size="sm" className="overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white py-3">
+        <Card size="sm" className="overflow-hidden border-indigo-200 dark:border-indigo-800 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 text-white py-4">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                <Lightbulb className="h-3.5 w-3.5" />
+              </div>
               今日学习建议
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4 max-h-[400px] overflow-y-auto">
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
-              {suggestion.content}
+          <CardContent className="pt-4 pb-3">
+            <div className="space-y-3">
+              {parseSuggestions(suggestion.content).map((item, i) => (
+                <div 
+                  key={i} 
+                  className="flex items-start gap-3 p-2.5 rounded-lg bg-gradient-to-r from-indigo-50/50 to-violet-50/50 dark:from-indigo-950/20 dark:to-violet-950/20 hover:from-indigo-100/70 hover:to-violet-100/70 dark:hover:from-indigo-900/30 dark:hover:to-violet-900/30 transition-colors"
+                >
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 mt-0.5">
+                    <span className="text-[11px] font-bold text-white">{i + 1}</span>
+                  </div>
+                  <p className="text-[13px] leading-relaxed text-foreground">{item}</p>
+                </div>
+              ))}
             </div>
-            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-              <p className="text-[11px] text-muted-foreground">
+            <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Calendar className="h-3 w-3" />
                 {new Date(suggestion.createdAt).toLocaleDateString('zh-CN')} 生成
-              </p>
-              <Button variant="ghost" size="sm" onClick={generateSuggestion} disabled={isLoading} className="h-7 text-xs">
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={generateSuggestion}
+                disabled={isLoading}
+                className="h-7 text-xs text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
                 <RefreshCw className="h-3 w-3 mr-1" />
                 换一批
               </Button>
@@ -146,22 +181,44 @@ ${JSON.stringify(data, null, 2)}
         </Card>
       )}
 
+      {/* 空状态 */}
       {!isLoading && !suggestion && !error && (
-        <Card size="sm">
-          <CardContent className="py-8">
+        <Card size="sm" className="border-dashed border-indigo-200 dark:border-indigo-800">
+          <CardContent className="py-10">
             <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-                <Sparkles className="h-6 w-6 text-indigo-500" />
+              <div className="relative">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/50">
+                  <Sparkles className="h-7 w-7 text-indigo-500 dark:text-indigo-400" />
+                </div>
+                <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 animate-pulse" />
               </div>
-              <p className="text-sm text-muted-foreground text-center">点击下方按钮获取今日学习建议</p>
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">获取个性化学习建议</p>
+                <p className="text-xs text-muted-foreground mt-1">AI 将根据你的学习数据生成建议</p>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
+      {/* 生成按钮 */}
       {!suggestion && (
-        <Button onClick={generateSuggestion} disabled={isLoading} className="w-full bg-indigo-500 hover:bg-indigo-600">
-          {isLoading ? '生成中...' : <><Sparkles className="h-4 w-4 mr-1.5" />生成今日建议</>}
+        <Button 
+          onClick={generateSuggestion} 
+          disabled={isLoading} 
+          className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-md hover:shadow-lg transition-all"
+        >
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              生成中...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              生成今日建议
+            </span>
+          )}
         </Button>
       )}
     </div>

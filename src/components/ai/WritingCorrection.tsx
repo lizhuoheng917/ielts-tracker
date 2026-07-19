@@ -259,6 +259,16 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
         </Button>
       </div>
 
+      {/* 生成中警告 */}
+      {isLoading && (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/30 px-3 py-2">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="text-[12px] text-amber-700 dark:text-amber-400">
+            请勿关闭弹窗或切换页面，以免生成中断
+          </span>
+        </div>
+      )}
+
       {/* 错误提示 */}
       {error && (
         <Card className="border-destructive">
