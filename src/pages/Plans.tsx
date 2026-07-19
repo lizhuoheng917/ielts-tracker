@@ -77,11 +77,14 @@ export default function Plans() {
     if (reports.length > 0) {
       // 按时间倒序（reportStore 新报告在数组开头），取最近 3 份报告
       const recentReports = reports.slice(0, 3)
+      // 清理字符串中的非法字符，防止 JSON 序列化问题
+      const sanitize = (str: string) => str.replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF\u3000-\u303F\uFF00-\uFFEF]/g, '')
       reportSection = `
 ## 历史学习分析报告（共 ${reports.length} 份，以下展示最近 ${recentReports.length} 份）
 ${recentReports.map((r, i) => {
-  const content = r.content.length > 1500 ? r.content.slice(0, 1500) + '...(已截断)' : r.content
-  return `### 报告 ${i + 1}（${r.createdAt}）\n${content}`
+  const content = sanitize(r.content)
+  const truncated = content.length > 1500 ? content.slice(0, 1500) + '...(已截断)' : content
+  return `### 报告 ${i + 1}（${r.createdAt}）\n${truncated}`
 }).join('\n\n---\n\n')}
 
 请综合分析以上所有历史报告中的关键发现、薄弱环节与改进建议，有针对性地生成学习计划。重点关注：

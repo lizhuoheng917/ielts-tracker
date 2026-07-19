@@ -63,6 +63,9 @@ export function getAllLearningData() {
     }
   }
 
+  // 清理字符串中的非法字符，防止 JSON 序列化问题
+  const sanitize = (str: string) => str.replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF\u3000-\u303F\uFF00-\uFFEF]/g, '')
+
   return {
     today,
     streakDays,
@@ -77,7 +80,7 @@ export function getAllLearningData() {
     timerBySubject,
     last30Days,
     plans: plans.plans.map((p) => ({ title: p.title, category: p.category, isActive: p.isActive })),
-    recentDiaries: diary.entries.slice(0, 5).map((d) => ({ date: d.date, mood: d.mood, content: d.content.substring(0, 80) + (d.content.length > 80 ? '...' : '') })),
+    recentDiaries: diary.entries.slice(0, 5).map((d) => ({ date: d.date, mood: d.mood, content: sanitize(d.content).substring(0, 80) + (d.content.length > 80 ? '...' : '') })),
     recentPractice: practice.records.slice(0, 5).map((r) => ({ date: r.date, type: r.type, score: r.score, duration: r.duration })),
     recentTimer: timer.records.slice(0, 5).map((r) => ({ date: r.date, subject: r.subject, duration: r.duration })),
   }
