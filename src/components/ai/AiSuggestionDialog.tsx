@@ -18,37 +18,36 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
     const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次`
-    return `你是雅思学习助手。给用户2条今日学习建议。
+    return `你是雅思学习助手。根据用户情况生成今日学习建议。
 
 用户情况: ${brief}
 
-规则: 
-1. 只输出2条中文建议
-2. 每条一句话
-3. 不要英文、不要解释、不要思考过程
-4. 直接开始写建议内容`
+## 输出格式（必须严格遵守）
+
+用 [SUGGESTION] 标签包裹你的建议内容：
+
+[SUGGESTION]
+第1条建议内容
+第2条建议内容
+[/SUGGESTION]
+
+要求：
+- 2条建议，每条一句话
+- 全部用中文
+- 不要输出任何其他内容，只输出带标签的建议`
   }, [])
 
-  // 清理内容，只保留中文建议
-  const cleanContent = (text: string): string => {
-    // 移除 system-reminder
-    let cleaned = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
-    
-    // 找到中文内容部分（在最后的中文句子）
-    const chineseMatches = cleaned.match(/[\u4e00-\u9fff][^\n]*/g)
-    if (chineseMatches && chineseMatches.length > 0) {
-      // 过滤掉太短的和包含明显英文标记的
-      const validChinese = chineseMatches.filter(s => 
-        s.length > 5 && 
-        !s.includes('thinking') && 
-        !s.includes('Analysis') &&
-        !s.includes('Constraint')
-      )
-      if (validChinese.length > 0) {
-        return validChinese.join('\n')
-      }
+  // 从内容中提取 [SUGGESTION] 标签内的内容
+  const extractSuggestion = (text: string): string => {
+    const match = text.match(/\[SUGGESTION\]([\s\S]*?)\[\/SUGGESTION\]/i)
+    if (match) {
+      return match[1].trim()
     }
-    
+    // 如果没有标签，尝试直接提取中文内容
+    const chineseLines = text.match(/[\u4e00-\u9fff][^\n]*/g)
+    if (chineseLines && chineseLines.length > 0) {
+      return chineseLines.filter(s => s.length > 5).join('\n')
+    }
     return ''
   }
 
@@ -58,7 +57,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '今日学习建议' },
+      { role: 'user', content: '生成今日学习建议' },
     ]
 
     let fullContent = ''
@@ -73,10 +72,10 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
       },
       onDone: () => {
         setIsLoading(false)
-        const cleaned = cleanContent(fullContent)
+        const extracted = extractSuggestion(fullContent)
         
-        if (cleaned) {
-          setSuggestion(cleaned)
+        if (extracted) {
+          setSuggestion(extracted)
         } else {
           setError('未收到有效内容，请重试')
         }
