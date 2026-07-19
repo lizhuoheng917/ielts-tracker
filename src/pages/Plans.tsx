@@ -278,8 +278,8 @@ time:21:00
       </div>
 
       {/* 今日待办 */}
-      <Card>
-        <CardContent className="pt-4 pb-3 px-3 md:px-4">
+      <Card size="sm">
+        <CardContent>
           <h3 className="text-[15px] md:text-base font-semibold mb-3 flex items-center gap-2">
             <ListTodo className="h-4 w-4 text-indigo-500" />
             今日待办 ({todayPlans.length})
