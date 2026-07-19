@@ -284,7 +284,7 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
 
       {/* 结果展示 */}
       {result && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {/* 评分卡片 */}
           <Card className={cn(
             'border-2 transition-colors',
@@ -292,24 +292,24 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             result.scores.total >= 5 ? 'border-amber-200 dark:border-amber-800' :
             'border-red-200 dark:border-red-800'
           )}>
-            <CardContent className="pt-4">
+            <CardContent className="py-2 px-3">
               <button
                 onClick={() => toggleSection('scores')}
                 className="w-full flex items-center justify-between"
               >
-                <h4 className="font-semibold">评分结果</h4>
+                <h4 className="font-semibold text-sm">评分结果</h4>
                 {expandedSections.scores ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
               {expandedSections.scores && (
-                <div className="mt-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="mt-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
                     <ScoreCard label="TR/TA" score={result.scores.tr_ta} />
                     <ScoreCard label="CC" score={result.scores.cc} />
                     <ScoreCard label="LR" score={result.scores.lr} />
                     <ScoreCard label="GRA" score={result.scores.gra} />
                   </div>
-                  <div className="mt-3 text-center">
-                    <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                  <div className="mt-2 text-center">
+                    <span className="text-xl font-bold text-amber-600 dark:text-amber-400">
                       总分: {result.scores.total}
                     </span>
                   </div>
@@ -320,16 +320,16 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
 
           {/* 详细点评 */}
           <Card>
-            <CardContent className="pt-4">
+            <CardContent className="py-2 px-3">
               <button
                 onClick={() => toggleSection('feedback')}
                 className="w-full flex items-center justify-between"
               >
-                <h4 className="font-semibold">详细点评</h4>
+                <h4 className="font-semibold text-sm">详细点评</h4>
                 {expandedSections.feedback ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
               {expandedSections.feedback && (
-                <div className="mt-3">
+                <div className="mt-2">
                   <p className="text-sm whitespace-pre-wrap">{result.feedback}</p>
                 </div>
               )}
@@ -338,19 +338,19 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
 
           {/* 总体建议 */}
           <Card>
-            <CardContent className="pt-4">
+            <CardContent className="py-2 px-3">
               <button
                 onClick={() => toggleSection('suggestions')}
                 className="w-full flex items-center justify-between"
               >
-                <h4 className="font-semibold">总体建议</h4>
+                <h4 className="font-semibold text-sm">总体建议</h4>
                 {expandedSections.suggestions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
               {expandedSections.suggestions && (
-                <ul className="mt-3 space-y-2">
+                <ul className="mt-2 space-y-1">
                   {result.suggestions.map((s, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="text-amber-500 mt-0.5">•</span>
+                    <li key={i} className="flex items-start gap-1.5 text-sm">
+                      <span className="text-amber-500">•</span>
                       <span>{s}</span>
                     </li>
                   ))}
@@ -393,9 +393,9 @@ function ScoreCard({ label, score }: { label: string; score: number }) {
                 'text-red-600 dark:text-red-400'
   
   return (
-    <div className="text-center p-2 rounded-lg bg-muted/50">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={cn('text-xl font-bold', color)}>{score}</p>
+    <div className="text-center p-1.5 rounded-lg bg-muted/50">
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className={cn('text-lg font-bold', color)}>{score}</p>
     </div>
   )
 }

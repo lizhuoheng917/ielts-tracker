@@ -567,8 +567,8 @@ function TabPanel({ type }: { type: PracticeType }) {
 
       {/* AI 写作批改报告列表 */}
       {type === 'writing' && writingReports.length > 0 && (
-        <Card className="mt-4">
-          <CardContent className="pt-4">
+        <Card className="mt-3">
+          <CardContent className="py-2 px-3">
             <button
               onClick={() => setReportsExpanded(!reportsExpanded)}
               className="w-full flex items-center justify-between"
@@ -580,7 +580,7 @@ function TabPanel({ type }: { type: PracticeType }) {
               {reportsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {reportsExpanded && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-2 space-y-2">
                 {writingReports.map((report) => (
                   <WritingReportItem
                     key={report.id}
@@ -700,23 +700,23 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
     <div className="rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-3 text-left"
+        className="w-full flex items-center justify-between p-2 text-left"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
-            <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
+            <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">
               {report.essayType === 'task1' ? '小作文' : '大作文'}批改
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className={cn('text-lg font-bold', scoreColor(report.scores.total))}>
+          <span className={cn('text-base font-bold', scoreColor(report.scores.total))}>
             {report.scores.total}
           </span>
           {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -724,37 +724,37 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
       </button>
       
       {expanded && (
-        <div className="px-3 pb-3 border-t border-border">
+        <div className="px-2 pb-2 border-t border-border">
           {/* 评分详情 */}
-          <div className="grid grid-cols-4 gap-2 mt-3 mb-3">
+          <div className="grid grid-cols-4 gap-1.5 mt-2 mb-2">
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">TR/TA</p>
-              <p className={cn('font-semibold', scoreColor(report.scores.tr_ta))}>{report.scores.tr_ta}</p>
+              <p className="text-[10px] text-muted-foreground">TR/TA</p>
+              <p className={cn('text-sm font-semibold', scoreColor(report.scores.tr_ta))}>{report.scores.tr_ta}</p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">CC</p>
-              <p className={cn('font-semibold', scoreColor(report.scores.cc))}>{report.scores.cc}</p>
+              <p className="text-[10px] text-muted-foreground">CC</p>
+              <p className={cn('text-sm font-semibold', scoreColor(report.scores.cc))}>{report.scores.cc}</p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">LR</p>
-              <p className={cn('font-semibold', scoreColor(report.scores.lr))}>{report.scores.lr}</p>
+              <p className="text-[10px] text-muted-foreground">LR</p>
+              <p className={cn('text-sm font-semibold', scoreColor(report.scores.lr))}>{report.scores.lr}</p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">GRA</p>
-              <p className={cn('font-semibold', scoreColor(report.scores.gra))}>{report.scores.gra}</p>
+              <p className="text-[10px] text-muted-foreground">GRA</p>
+              <p className={cn('text-sm font-semibold', scoreColor(report.scores.gra))}>{report.scores.gra}</p>
             </div>
           </div>
           
           {/* 点评 */}
-          <div className="mb-3">
-            <p className="text-xs font-medium text-muted-foreground mb-1">详细点评</p>
+          <div className="mb-2">
+            <p className="text-[11px] font-medium text-muted-foreground mb-0.5">详细点评</p>
             <p className="text-sm whitespace-pre-wrap">{report.feedback}</p>
           </div>
           
           {/* 建议 */}
-          <div className="mb-3">
-            <p className="text-xs font-medium text-muted-foreground mb-1">总体建议</p>
-            <ul className="text-sm space-y-1">
+          <div className="mb-2">
+            <p className="text-[11px] font-medium text-muted-foreground mb-0.5">总体建议</p>
+            <ul className="text-sm space-y-0.5">
               {report.suggestions.map((s, i) => (
                 <li key={i} className="flex items-start gap-1.5">
                   <span className="text-amber-500">•</span>
@@ -765,16 +765,16 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
           </div>
           
           {/* 原文预览 */}
-          <div className="mb-3">
-            <p className="text-xs font-medium text-muted-foreground mb-1">原文</p>
-            <p className="text-xs text-muted-foreground line-clamp-3">{report.essayContent}</p>
+          <div className="mb-2">
+            <p className="text-[11px] font-medium text-muted-foreground mb-0.5">原文</p>
+            <p className="text-xs text-muted-foreground line-clamp-2">{report.essayContent}</p>
           </div>
           
           {/* 删除按钮 */}
           <button
             onClick={handleDelete}
             className={cn(
-              'text-xs px-2 py-1 rounded transition-colors',
+              'text-xs px-2 py-0.5 rounded transition-colors',
               confirmDelete 
                 ? 'bg-destructive text-destructive-foreground' 
                 : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
