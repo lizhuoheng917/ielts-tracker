@@ -381,7 +381,7 @@ time:21:00
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+                  <div className="flex shrink-0 gap-0.5 opacity-60 hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="icon-xs"
@@ -426,7 +426,7 @@ time:21:00
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-0.5 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
+                  <div className="flex shrink-0 gap-0.5 opacity-60 hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="icon-xs"
