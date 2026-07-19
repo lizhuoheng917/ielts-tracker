@@ -339,7 +339,7 @@ export default function Dashboard() {
 
       {/* ===== 2. 考试倒计时 ===== */}
       {examCountdown && showExamCountdown && (
-        <Card size="sm" className="border-l-4 border-l-indigo-500">
+        <Card size="sm">
           <CardContent>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 md:gap-3">
