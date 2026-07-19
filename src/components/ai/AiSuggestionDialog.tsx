@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Sparkles, RefreshCw, AlertCircle, Loader2 } from 'lucide-react'
+import { Sparkles, RefreshCw, AlertCircle, Loader2, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { chatAI, getAllLearningData, type AIMessage } from '@/lib/aiService'
 import { useAiSuggestionStore } from '@/stores/aiSuggestionStore'
 
@@ -17,24 +17,23 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次, 等级${data.currentLevel}`
-    return `你是雅思学习助手。根据用户情况给出2-3条今日学习建议。
+    const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次`
+    return `你是雅思学习助手。根据用户情况给出2条今日学习建议。
 
 用户: ${brief}
 
-直接输出建议文本，不要思考过程。`
+要求: 直接输出2条建议，每条一句话，不要任何其他内容。`
   }, [])
 
-  // 从内容中提取最终建议（过滤掉推理过程）
-  const extractFinalContent = (text: string): string => {
-    // 尝试找到中文内容部分
-    const chineseMatch = text.match(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef].*$/s)
+  // 从推理内容中提取最终建议
+  const extractAnswer = (text: string): string => {
+    // 方法1: 找到中文内容部分
+    const chineseMatch = text.match(/[\u4e00-\u9fff].*$/s)
     if (chineseMatch) {
-      // 清理掉前面的英文推理部分
       let result = chineseMatch[0]
-      // 移除常见的推理标记
-      result = result.replace(/^(Requirements|Identify|Draft|Check|Step|Analysis).*$/gm, '')
-      result = result.replace(/^-.*$/gm, '')
+      // 清理常见的推理标记
+      result = result.replace(/^(?:Draft|建议|建议如下|今日建议)[：:]\s*/gm, '')
+      result = result.replace(/^\d+[.、]\s*/gm, '')
       result = result.replace(/\n{3,}/g, '\n\n')
       return result.trim()
     }
@@ -51,38 +50,35 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         { role: 'user', content: '今日学习建议' },
       ]
 
-      const response = await chatAI(messages, { temperature: 0.7, max_tokens: 512 })
+      const response = await chatAI(messages, { temperature: 0.7, max_tokens: 256 })
       
-      // 从 content 或 reasoning_content 中提取内容
       let content = response?.content || response?.reasoning_content || ''
-      
-      // 提取最终建议，过滤推理过程
-      content = extractFinalContent(content)
+      content = extractAnswer(content)
       
       if (content) {
         setSuggestion(content.trim())
       } else {
-        setError('AI 返回了空内容，请重试')
+        setError('生成失败，请重试')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败，请重试')
+      setError(err instanceof Error ? err.message : '生成失败')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleRegenerate = () => {
-    generateSuggestion()
-  }
-
   return (
     <div className="space-y-4">
-      {/* 状态提示 */}
+      {/* 加载状态 */}
       {isLoading && (
-        <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">正在生成学习建议...</span>
-        </div>
+        <Card size="sm">
+          <CardContent className="py-8">
+            <div className="flex flex-col items-center justify-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+              <p className="text-sm text-muted-foreground">正在生成今日学习建议...</p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* 错误提示 */}
@@ -93,22 +89,40 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         </div>
       )}
 
-      {/* 建议内容 */}
+      {/* 建议报告 */}
       {!isLoading && suggestion && (
-        <Card size="sm" className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800">
-          <CardContent className="max-h-[300px] overflow-y-auto">
-            <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50">
-                <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
-                  {suggestion.content}
+        <Card size="sm" className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white py-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              今日学习建议
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="space-y-3">
+              {suggestion.content.split('\n').filter((line: string) => line.trim()).map((line: string, i: number) => (
+                <div key={i} className="flex items-start gap-2">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 mt-0.5">
+                    <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">{i + 1}</span>
+                  </div>
+                  <p className="text-sm leading-relaxed">{line.replace(/^\d+[.、]\s*/, '')}</p>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-2">
-                  生成于 {new Date(suggestion.createdAt).toLocaleString('zh-CN')}
-                </p>
-              </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+              <p className="text-[11px] text-muted-foreground">
+                {new Date(suggestion.createdAt).toLocaleDateString('zh-CN')} 生成
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={generateSuggestion}
+                disabled={isLoading}
+                className="h-7 text-xs"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                换一批
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -116,34 +130,35 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
       {/* 空状态 */}
       {!isLoading && !suggestion && !error && (
-        <div className="text-center py-8">
-          <Sparkles className="h-12 w-12 mx-auto text-indigo-300 dark:text-indigo-600 mb-3" />
-          <p className="text-sm text-muted-foreground">点击下方按钮生成今日学习建议</p>
-        </div>
+        <Card size="sm">
+          <CardContent className="py-8">
+            <div className="flex flex-col items-center justify-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
+                <Sparkles className="h-6 w-6 text-indigo-500" />
+              </div>
+              <p className="text-sm text-muted-foreground text-center">点击下方按钮获取今日学习建议</p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* 操作按钮 */}
-      <div className="flex gap-2">
+      {/* 生成按钮 */}
+      {!suggestion && (
         <Button
-          onClick={handleRegenerate}
+          onClick={generateSuggestion}
           disabled={isLoading}
-          className="flex-1 bg-indigo-500 hover:bg-indigo-600"
+          className="w-full bg-indigo-500 hover:bg-indigo-600"
         >
           {isLoading ? (
             '生成中...'
-          ) : suggestion ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-1.5" />
-              重新生成
-            </>
           ) : (
             <>
               <Sparkles className="h-4 w-4 mr-1.5" />
-              生成建议
+              生成今日建议
             </>
           )}
         </Button>
-      </div>
+      )}
     </div>
   )
 }
