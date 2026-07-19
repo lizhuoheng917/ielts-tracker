@@ -117,9 +117,17 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
       onError: (err) => {
         setError(err)
         setIsLoading(false)
+        // 确保在错误时也显示原始内容
+        if (fullContent) {
+          setRawContent(fullContent)
+        }
       },
       onDone: () => {
         setIsLoading(false)
+        // 确保 rawContent 有值
+        if (fullContent) {
+          setRawContent(fullContent)
+        }
         // 尝试解析 JSON 结果
         try {
           // 尝试多种方式解析 JSON
@@ -298,21 +306,25 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
 
       {/* 错误提示 */}
       {error && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-          {/* 显示原始内容帮助调试 */}
-          {rawContent && (
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer hover:text-foreground">查看原始返回内容</summary>
-              <pre className="mt-2 p-2 bg-muted rounded-lg whitespace-pre-wrap overflow-auto max-h-[200px]">
-                {rawContent}
-              </pre>
-            </details>
-          )}
-        </div>
+        <Card className="border-destructive">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-sm text-destructive mb-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="font-medium">{error}</span>
+            </div>
+            {/* 显示原始内容帮助调试 */}
+            {rawContent ? (
+              <details open className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer hover:text-foreground mb-2">AI 返回的原始内容：</summary>
+                <pre className="p-3 bg-muted rounded-lg whitespace-pre-wrap overflow-auto max-h-[300px] text-xs">
+                  {rawContent}
+                </pre>
+              </details>
+            ) : (
+              <p className="text-xs text-muted-foreground">未收到 AI 响应内容</p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* 结果展示 */}
