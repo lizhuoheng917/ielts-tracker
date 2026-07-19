@@ -17,38 +17,32 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
-    const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次`
-    return `你是雅思学习助手。
-
-用户: ${brief}
-
-输出2条今日学习建议，用中文，每条一句话。
-
-[SUGGESTION]
-第1条建议
-第2条建议
-[/SUGGESTION]`
+    return `给一个雅思初学者2条今日学习建议。
+今天是${data.today}，连续打卡${data.streakDays}天，已背词${data.totalWords}个。
+每条建议一句话，共2句话，直接输出，不要编号，不要其他内容。`
   }, [])
 
-  // 从内容中提取 [SUGGESTION] 标签内的内容
+  // 提取中文建议
   const extractSuggestion = (text: string): string => {
-    // 尝试提取 [SUGGESTION] 标签内容
-    const tagMatch = text.match(/\[SUGGESTION\]([\s\S]*?)\[\/SUGGESTION\]/i)
-    if (tagMatch && tagMatch[1].trim().length > 10) {
-      return tagMatch[1].trim()
+    // 提取所有中文句子（至少10个字符）
+    const chineseSentences = text.match(/[\u4e00-\u9fff][\u4e00-\u9fff\w\s，。！？、；：""''（）\d]*/g)
+    
+    if (!chineseSentences) return ''
+    
+    // 过滤出有意义的句子（长度>10）
+    const meaningful = chineseSentences
+      .filter(s => s.trim().length > 10)
+      .map(s => s.trim())
+    
+    // 去重
+    const unique = [...new Set(meaningful)]
+    
+    // 取最后2条（通常是实际建议，不是思考过程）
+    if (unique.length >= 2) {
+      return unique.slice(-2).join('\n')
     }
     
-    // 如果标签内容太少，尝试找最后一个中文句子
-    const allChinese = text.match(/[\u4e00-\u9fff][^\n]*/g)
-    if (allChinese) {
-      // 取最后几条有意义的中文句子
-      const meaningful = allChinese.filter(s => s.length > 10)
-      if (meaningful.length >= 2) {
-        return meaningful.slice(-2).join('\n')
-      }
-    }
-    
-    return ''
+    return unique.join('\n')
   }
 
   const generateSuggestion = async () => {
@@ -57,7 +51,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: '建议' },
+      { role: 'user', content: '给出建议' },
     ]
 
     let fullContent = ''
@@ -80,12 +74,11 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
           setError('生成失败，请重试')
         }
       },
-    }, { temperature: 0.7, max_tokens: 2048 }) // 增加到 2048 以容纳推理过程
+    }, { temperature: 0.7, max_tokens: 2048 })
   }
 
   return (
     <div className="space-y-4">
-      {/* 加载状态 */}
       {isLoading && (
         <Card size="sm">
           <CardContent className="py-8">
@@ -97,7 +90,6 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         </Card>
       )}
 
-      {/* 错误提示 */}
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -105,7 +97,6 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         </div>
       )}
 
-      {/* 建议报告 */}
       {!isLoading && suggestion && (
         <Card size="sm" className="overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white py-3">
@@ -121,7 +112,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
                   <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 mt-0.5">
                     <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">{i + 1}</span>
                   </div>
-                  <p className="text-sm leading-relaxed">{line.replace(/^\d+[.、]\s*/, '')}</p>
+                  <p className="text-sm leading-relaxed">{line}</p>
                 </div>
               ))}
             </div>
@@ -129,13 +120,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
               <p className="text-[11px] text-muted-foreground">
                 {new Date(suggestion.createdAt).toLocaleDateString('zh-CN')} 生成
               </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={generateSuggestion}
-                disabled={isLoading}
-                className="h-7 text-xs"
-              >
+              <Button variant="ghost" size="sm" onClick={generateSuggestion} disabled={isLoading} className="h-7 text-xs">
                 <RefreshCw className="h-3 w-3 mr-1" />
                 换一批
               </Button>
@@ -144,7 +129,6 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         </Card>
       )}
 
-      {/* 空状态 */}
       {!isLoading && !suggestion && !error && (
         <Card size="sm">
           <CardContent className="py-8">
@@ -158,21 +142,9 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         </Card>
       )}
 
-      {/* 生成按钮 */}
       {!suggestion && (
-        <Button
-          onClick={generateSuggestion}
-          disabled={isLoading}
-          className="w-full bg-indigo-500 hover:bg-indigo-600"
-        >
-          {isLoading ? (
-            '生成中...'
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4 mr-1.5" />
-              生成今日建议
-            </>
-          )}
+        <Button onClick={generateSuggestion} disabled={isLoading} className="w-full bg-indigo-500 hover:bg-indigo-600">
+          {isLoading ? '生成中...' : <><Sparkles className="h-4 w-4 mr-1.5" />生成今日建议</>}
         </Button>
       )}
     </div>
