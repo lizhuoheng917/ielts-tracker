@@ -57,38 +57,41 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
 3. 指出语法、词汇、逻辑等方面的问题
 4. 给出改进后的范文或修改建议
 
-## 输出格式要求（极其重要）
-请严格按照以下 JSON 格式输出，不要包含其他内容：
-\`\`\`json
+## ⚠️ 输出格式要求（极其重要，必须严格遵守）
+
+你必须只输出一个 JSON 对象，不要输出任何其他文字、解释或 markdown 格式。
+
+直接输出以下 JSON 结构（不要用 \`\`\`json 代码块包裹）：
 {
   "scores": {
-    "tr_ta": 评分(0-9),
-    "cc": 评分(0-9),
-    "lr": 评分(0-9),
-    "gra": 评分(0-9),
-    "total": 总分
+    "tr_ta": 数字,
+    "cc": 数字,
+    "lr": 数字,
+    "gra": 数字,
+    "total": 数字
   },
   "paragraphFeedback": [
     {
       "paragraph": "原文段落内容",
-      "feedback": "该段落的详细点评和修改建议"
+      "feedback": "该段落的详细点评"
     }
   ],
-  "suggestions": ["总体建议1", "总体建议2", "总体建议3"],
-  "improvedVersion": "改进后的完整范文（可选）"
+  "suggestions": ["建议1", "建议2", "建议3"],
+  "improvedVersion": "改进后的范文"
 }
-\`\`\`
+
+注意：
+- scores 中的各项评分必须是 0-9 之间的数字（可以是小数如 6.5）
+- paragraphFeedback 数组必须包含用户作文中的每个段落
+- suggestions 数组至少包含 3 条建议
+- improvedVersion 是可选字段，如果有就提供改进后的完整范文
+- 不要输出任何其他内容，只输出 JSON
 
 ## 评分标准
 - TR/TA (Task Response/Achievement): 任务回应/完成度
 - CC (Coherence and Cohesion): 连贯与衔接
 - LR (Lexical Resource): 词汇资源
-- GRA (Grammatical Range and Accuracy): 语法多样性与准确性
-
-## 风格要求
-- 点评用中文，但可以引用原文中的英文表达
-- 语气专业但鼓励
-- 具体指出问题所在，避免泛泛而谈`
+- GRA (Grammatical Range and Accuracy): 语法多样性与准确性`
   }, [essayType])
 
   const handleSubmit = async () => {
@@ -119,14 +122,50 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
         setIsLoading(false)
         // 尝试解析 JSON 结果
         try {
-          const jsonMatch = fullContent.match(/```json\s*([\s\S]*?)\s*```/)
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[1])
-            setResult(parsed)
+          // 尝试多种方式解析 JSON
+          let parsed = null
+          
+          // 方式 1: 尝试直接解析
+          try {
+            parsed = JSON.parse(fullContent)
+          } catch {
+            // 方式 2: 尝试从代码块中提取
+            const jsonMatch = fullContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+            if (jsonMatch) {
+              try {
+                parsed = JSON.parse(jsonMatch[1])
+              } catch {
+                // 继续尝试其他方式
+              }
+            }
+          }
+          
+          // 方式 3: 尝试找到第一个 { 和最后一个 } 之间的内容
+          if (!parsed) {
+            const firstBrace = fullContent.indexOf('{')
+            const lastBrace = fullContent.lastIndexOf('}')
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+              const jsonString = fullContent.substring(firstBrace, lastBrace + 1)
+              try {
+                parsed = JSON.parse(jsonString)
+              } catch {
+                // 继续尝试其他方式
+              }
+            }
+          }
+          
+          if (parsed && parsed.scores && parsed.paragraphFeedback) {
+            // 验证数据结构
+            const scores = parsed.scores
+            if (typeof scores.tr_ta === 'number' && typeof scores.cc === 'number' &&
+                typeof scores.lr === 'number' && typeof scores.gra === 'number' &&
+                typeof scores.total === 'number') {
+              setResult(parsed)
+            } else {
+              setError('评分数据格式不正确，请重试')
+            }
           } else {
-            // 尝试直接解析
-            const parsed = JSON.parse(fullContent)
-            setResult(parsed)
+            setError('结果解析失败，请重试')
           }
         } catch {
           // JSON 解析失败，显示原始内容
@@ -259,9 +298,20 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
 
       {/* 错误提示 */}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          {/* 显示原始内容帮助调试 */}
+          {rawContent && (
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer hover:text-foreground">查看原始返回内容</summary>
+              <pre className="mt-2 p-2 bg-muted rounded-lg whitespace-pre-wrap overflow-auto max-h-[200px]">
+                {rawContent}
+              </pre>
+            </details>
+          )}
         </div>
       )}
 
@@ -392,18 +442,6 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             )}
           </Button>
         </div>
-      )}
-
-      {/* 原始内容（调试用，可删除） */}
-      {!result && rawContent && (
-        <Card>
-          <CardContent className="pt-4">
-            <h4 className="font-semibold mb-2">原始返回内容</h4>
-            <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-auto max-h-[300px]">
-              {rawContent}
-            </pre>
-          </CardContent>
-        </Card>
       )}
     </div>
   )
