@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3 } from 'lucide-react'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3, ListTodo } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
@@ -19,7 +20,7 @@ import { usePlanStore } from '@/stores/planStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useStreakStore } from '@/stores/streakStore'
-import { BADGES, MOOD_OPTIONS, WEEKDAY_LABELS } from '@/lib/constants'
+import { BADGES, MOOD_OPTIONS, WEEKDAY_LABELS, PLAN_CATEGORY_OPTIONS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { Achievement } from '@/lib/types'
 
@@ -55,6 +56,8 @@ export default function Dashboard() {
   const checkIn = useSettingsStore((s) => s.checkIn)
   const [checkedIn, setCheckedIn] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [planDetailOpen, setPlanDetailOpen] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<{ id: string; title: string; description?: string; category?: string; frequency?: string; targetTime?: string } | null>(null)
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -173,6 +176,10 @@ export default function Dashboard() {
       return {
         id: plan.id,
         title: plan.title,
+        description: plan.description,
+        category: plan.category,
+        frequency: plan.frequency,
+        targetTime: plan.targetTime,
         completed: exec?.isCompleted ?? false,
         execId: exec?.id,
       }
@@ -188,6 +195,11 @@ export default function Dashboard() {
     } else {
       addExecution({ planId, date: today, isCompleted: true })
     }
+  }
+
+  const showPlanDetail = (plan: typeof todayPlans[0]) => {
+    setSelectedPlan(plan)
+    setPlanDetailOpen(true)
   }
 
   // ===== 考试倒计时 =====
@@ -409,24 +421,32 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-2">
               {todayPlans.map((plan, index) => (
-                <button
+                <div
                   key={plan.id}
-                  onClick={() => togglePlanComplete(plan.id, plan.execId)}
                   className={`animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-all ${
                     plan.completed
                       ? 'bg-green-50 dark:bg-green-900/30'
                       : 'hover:bg-accent'
                   }`}
                 >
-                  {plan.completed ? (
-                    <CheckCircle className="h-4 w-4 shrink-0 text-green-500" />
-                  ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className={plan.completed ? 'line-through text-muted-foreground' : ''}>
+                  <button
+                    onClick={() => togglePlanComplete(plan.id, plan.execId)}
+                    className="shrink-0 p-0.5 -ml-0.5"
+                    aria-label={plan.completed ? '标记为未完成' : '标记为已完成'}
+                  >
+                    {plan.completed ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => showPlanDetail(plan)}
+                    className={`flex-1 text-left ${plan.completed ? 'line-through text-muted-foreground' : ''}`}
+                  >
                     {plan.title}
-                  </span>
-                </button>
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -643,6 +663,45 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 计划详情弹窗 */}
+      <Dialog open={planDetailOpen} onOpenChange={setPlanDetailOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListTodo className="h-5 w-5 text-indigo-500" />
+              计划详情
+            </DialogTitle>
+          </DialogHeader>
+          {selectedPlan && (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold">{selectedPlan.title}</h3>
+                {selectedPlan.description && (
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedPlan.description}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedPlan.category && (
+                  <Badge variant="outline" className="text-xs">
+                    {PLAN_CATEGORY_OPTIONS.find(o => o.value === selectedPlan.category)?.label || selectedPlan.category}
+                  </Badge>
+                )}
+                {selectedPlan.frequency && (
+                  <Badge variant="outline" className="text-xs">
+                    {selectedPlan.frequency === 'daily' ? '每日' : '每周'}
+                  </Badge>
+                )}
+                {selectedPlan.targetTime && (
+                  <Badge variant="outline" className="text-xs text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
+                    {selectedPlan.targetTime}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

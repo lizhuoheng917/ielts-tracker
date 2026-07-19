@@ -28,6 +28,7 @@ import { Plus, CheckCircle, Circle, Pencil, Trash2, ListTodo, Play, Pause, Spark
 import { EmptyState } from '@/components/ui/empty-state'
 import { AIChatPanel } from '@/components/ai/AIChatPanel'
 import { getAllLearningData } from '@/lib/aiService'
+import { PLAN_CATEGORY_OPTIONS } from '@/lib/constants'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: '每日',
@@ -70,6 +71,8 @@ export default function Plans() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
+  const [planDetailOpen, setPlanDetailOpen] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<StudyPlan | null>(null)
 
   const aiSystemPrompt = useMemo(() => {
     const data = getAllLearningData()
@@ -193,6 +196,11 @@ time:21:00
     }
   }
 
+  const showPlanDetail = (plan: StudyPlan) => {
+    setSelectedPlan(plan)
+    setPlanDetailOpen(true)
+  }
+
   const openAdd = () => {
     setEditingId(null)
     setFormTitle('')
@@ -288,9 +296,8 @@ time:21:00
                 const exec = todayExecMap[plan.id]
                 const isCompleted = exec?.completed ?? false
                 return (
-                  <button
+                  <div
                     key={plan.id}
-                    onClick={() => togglePlanComplete(plan.id)}
                     className={cn(
                       `animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all`,
                       isCompleted
@@ -298,19 +305,26 @@ time:21:00
                         : 'border-border bg-background hover:bg-accent active:bg-accent/80'
                     )}
                   >
-                    {isCompleted ? (
-                      <CheckCircle className="h-4 w-4 md:h-5 md:w-5 shrink-0 text-green-500" />
-                    ) : (
-                      <Circle className="h-4 w-4 md:h-5 md:w-5 shrink-0 text-muted-foreground" />
-                    )}
-                    <span
+                    <button
+                      onClick={() => togglePlanComplete(plan.id)}
+                      className="shrink-0 p-0.5 -ml-0.5"
+                      aria-label={isCompleted ? '标记为未完成' : '标记为已完成'}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-green-500" />
+                      ) : (
+                        <Circle className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => showPlanDetail(plan)}
                       className={cn(
-                        'text-sm flex-1',
+                        'text-sm flex-1 text-left',
                         isCompleted && 'line-through text-muted-foreground'
                       )}
                     >
                       {plan.title}
-                    </span>
+                    </button>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {plan.targetTime && (
                         <span className="text-[12px] text-indigo-500 dark:text-indigo-400 font-medium">
@@ -321,7 +335,7 @@ time:21:00
                         {FREQUENCY_LABELS[plan.frequency]}
                       </Badge>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -675,6 +689,46 @@ time:21:00
               }}
             />
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 计划详情弹窗 */}
+      <Dialog open={planDetailOpen} onOpenChange={setPlanDetailOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListTodo className="h-5 w-5 text-indigo-500" />
+              计划详情
+            </DialogTitle>
+          </DialogHeader>
+          {selectedPlan && (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold">{selectedPlan.title}</h3>
+                {selectedPlan.description && (
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedPlan.description}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {PLAN_CATEGORY_OPTIONS.find(o => o.value === selectedPlan.category)?.label || selectedPlan.category}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  {selectedPlan.frequency === 'daily' ? '每日' : '每周'}
+                </Badge>
+                {selectedPlan.targetTime && (
+                  <Badge variant="outline" className="text-xs text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
+                    {selectedPlan.targetTime}
+                  </Badge>
+                )}
+                {selectedPlan.frequency === 'weekly' && selectedPlan.weekDays && (
+                  <Badge variant="outline" className="text-xs">
+                    周{selectedPlan.weekDays.map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label).join('、')}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
