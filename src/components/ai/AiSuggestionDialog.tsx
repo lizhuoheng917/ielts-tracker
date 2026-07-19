@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Sparkles, RefreshCw, AlertCircle, Loader2, Calendar, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { streamAIChat, getAllLearningData, type AIMessage } from '@/lib/aiService'
 import { useAiSuggestionStore } from '@/stores/aiSuggestionStore'
 
@@ -136,12 +136,14 @@ ${JSON.stringify(data, null, 2)}
       {/* 建议报告 */}
       {!isLoading && suggestion && (
         <Card size="sm" className="overflow-hidden border-indigo-200 dark:border-indigo-800 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 text-white py-4">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Lightbulb className="h-4 w-4" />
-              今日学习建议
-            </CardTitle>
-          </CardHeader>
+          <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 text-white px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                <Lightbulb className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-sm font-semibold">今日学习建议</span>
+            </div>
+          </div>
           <CardContent className="pt-4 pb-3">
             <div className="space-y-3">
               {parseSuggestions(suggestion.content).map((item, i) => (
