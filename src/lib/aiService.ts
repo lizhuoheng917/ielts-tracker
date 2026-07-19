@@ -174,9 +174,13 @@ export async function streamAIChat(
           const delta = data.choices?.[0]?.delta
           if (!delta) continue
 
-          // 文本内容
+          // 文本内容 - 同时检查 content 和 reasoning_content
           if (delta.content) {
             currentContent += delta.content
+            callbacks.onContent?.(currentContent)
+          } else if (delta.reasoning_content) {
+            // 推理模型可能把内容放在 reasoning_content 中
+            currentContent += delta.reasoning_content
             callbacks.onContent?.(currentContent)
           }
 
