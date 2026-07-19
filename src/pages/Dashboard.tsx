@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { AiSuggestionDialog } from '@/components/ai/AiSuggestionDialog'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWordStore } from '@/stores/wordStore'
 import { usePracticeStore } from '@/stores/practiceStore'
@@ -60,6 +61,7 @@ export default function Dashboard() {
   const [reportOpen, setReportOpen] = useState(false)
   const [planDetailOpen, setPlanDetailOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<{ id: string; title: string; description?: string; category?: string; frequency?: string; targetTime?: string } | null>(null)
+  const [aiSuggestionOpen, setAiSuggestionOpen] = useState(false)
 
   // ===== 激励语句（每天固定一句） =====
   const todayQuote = useMemo(() => {
@@ -95,11 +97,6 @@ export default function Dashboard() {
       return examMinutes + timerMinutes
     },
     [practiceRecords, timerRecords, today]
-  )
-
-  const todayCompletedTasks = useMemo(
-    () => executions.filter((e) => e.date === today && e.isCompleted).length,
-    [executions, today]
   )
 
   // ===== 周报/月报数据 =====
@@ -374,15 +371,45 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* ===== 3. AI 学习建议 ===== */}
+      {/* ===== 3. AI 学习建议入口 ===== */}
       {showAiSuggestions && (
-        <AiSuggestionCard
-          todayWordCount={todayWordCount}
-          todayPracticeMinutes={todayPracticeMinutes}
-          todayCompletedTasks={todayCompletedTasks}
-          currentStreak={currentStreak}
-        />
+        <Card
+          size="sm"
+          className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99] bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800"
+          onClick={() => setAiSuggestionOpen(true)}
+        >
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50">
+                  <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">今日学习建议</p>
+                  <p className="text-xs text-muted-foreground">AI 根据你的学习数据生成个性化建议</p>
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">点击展开 →</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
+
+      {/* AI 学习建议弹窗 */}
+      <Dialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen}>
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-indigo-500" />
+              今日学习建议
+            </DialogTitle>
+          </DialogHeader>
+          <AiSuggestionDialog
+            open={aiSuggestionOpen}
+            onOpenChange={setAiSuggestionOpen}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* ===== 4. 今日待办 + 5. 热力图 ===== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -685,73 +712,5 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-// ===== AI 学习建议卡片 =====
-function AiSuggestionCard({
-  todayWordCount,
-  todayPracticeMinutes,
-  todayCompletedTasks,
-  currentStreak,
-}: {
-  todayWordCount: number
-  todayPracticeMinutes: number
-  todayCompletedTasks: number
-  currentStreak: number
-}) {
-  const suggestions = useMemo(() => {
-    const tips: string[] = []
-    
-    if (todayWordCount === 0) {
-      tips.push('今天还没有背单词，建议花 15 分钟复习')
-    } else if (todayWordCount < 30) {
-      tips.push('背词数量较少，可以再加把劲')
-    }
-    
-    if (todayPracticeMinutes === 0) {
-      tips.push('今天还没有练习，打开计时器开始吧')
-    } else if (todayPracticeMinutes < 30) {
-      tips.push('学习时间较短，建议增加练习时长')
-    }
-    
-    if (todayCompletedTasks === 0) {
-      tips.push('今日待办还没完成，去计划页面看看')
-    }
-    
-    if (currentStreak >= 7) {
-      tips.push(`已连续打卡 ${currentStreak} 天，继续保持!`)
-    } else if (currentStreak >= 3) {
-      tips.push(`连续 ${currentStreak} 天，距离 7 天目标还差 ${7 - currentStreak} 天`)
-    }
-    
-    if (tips.length === 0) {
-      tips.push('今天表现很棒，继续保持!')
-    }
-    
-    return tips.slice(0, 2)
-  }, [todayWordCount, todayPracticeMinutes, todayCompletedTasks, currentStreak])
-
-  return (
-    <Card size="sm" className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800">
-      <CardContent>
-        <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50">
-            <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-semibold mb-1">今日学习建议</h4>
-            <ul className="space-y-1">
-              {suggestions.map((tip, i) => (
-                <li key={i} className="text-[13px] text-muted-foreground flex items-start gap-1.5">
-                  <span className="text-indigo-500 mt-0.5">•</span>
-                  <span>{tip}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
