@@ -22,11 +22,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
 用户: ${brief}
 
-要求: 
-- 只输出2条建议，每条一句话
-- 用中文
-- 不要任何英文、解释或思考过程
-- 直接输出建议内容`
+要求: 只输出2条建议，每条一句话，用中文，不要任何英文或解释。`
   }, [])
 
   const generateSuggestion = async () => {
@@ -40,27 +36,26 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
     let fullContent = ''
 
+    console.log('[AI Suggestion] Starting stream...')
+
     await streamAIChat(messages, {
       onContent: (content) => {
         fullContent = content
+        console.log('[AI Suggestion] Content received:', content.substring(0, 100))
       },
       onError: (err) => {
+        console.error('[AI Suggestion] Error:', err)
         setError(err)
         setIsLoading(false)
       },
       onDone: () => {
+        console.log('[AI Suggestion] Done. Full content:', fullContent)
         setIsLoading(false)
-        // 清理内容，移除可能的推理过程
-        let cleaned = fullContent
-          .replace(/```[\s\S]*?```/g, '') // 移除代码块
-          .replace(/^[A-Z][a-z].*$/gm, '') // 移除英文行
-          .replace(/\n{3,}/g, '\n\n') // 清理多余空行
-          .trim()
         
-        if (cleaned) {
-          setSuggestion(cleaned)
+        if (fullContent && fullContent.trim()) {
+          setSuggestion(fullContent.trim())
         } else {
-          setError('生成失败，请重试')
+          setError('未收到内容，请重试')
         }
       },
     }, { temperature: 0.7, max_tokens: 256 })
