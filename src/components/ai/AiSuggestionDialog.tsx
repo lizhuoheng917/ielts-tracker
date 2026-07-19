@@ -111,10 +111,7 @@ ${JSON.stringify(data, null, 2)}
         <Card size="sm" className="border-indigo-200 dark:border-indigo-800">
           <CardContent className="py-6">
             <div className="flex flex-col items-center justify-center gap-3">
-              <div className="relative">
-                <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-                <Sparkles className="h-5 w-5 text-amber-400 absolute -top-1 -right-1 animate-pulse" />
-              </div>
+              <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
               <p className="text-sm font-medium text-muted-foreground">正在生成学习建议...</p>
             </div>
             {/* 警告提示 */}
@@ -141,9 +138,7 @@ ${JSON.stringify(data, null, 2)}
         <Card size="sm" className="overflow-hidden border-indigo-200 dark:border-indigo-800 shadow-md">
           <CardHeader className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 text-white py-4">
             <CardTitle className="text-sm flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-                <Lightbulb className="h-3.5 w-3.5" />
-              </div>
+              <Lightbulb className="h-4 w-4" />
               今日学习建议
             </CardTitle>
           </CardHeader>
