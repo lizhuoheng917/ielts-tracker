@@ -26,9 +26,10 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { PlusIcon, PencilIcon, TrashIcon, Sparkles } from 'lucide-react'
+import { PlusIcon, PencilIcon, TrashIcon, Sparkles, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { WritingCorrection } from '@/components/ai/WritingCorrection'
+import { useWritingReportStore, type WritingReport } from '@/stores/writingReportStore'
 
 // ===== 雅思分数滑轴组件（方案 B：极简 + 端点提示） =====
 function IeltsScoreSlider({
@@ -456,8 +457,11 @@ function TabPanel({ type }: { type: PracticeType }) {
   const [deleteTarget, setDeleteTarget] = useState<PracticeRecord | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [reportsExpanded, setReportsExpanded] = useState(true)
 
   const deleteRecord = usePracticeStore((s) => s.deleteRecord)
+  const writingReports = useWritingReportStore((s) => s.reports)
+  const deleteWritingReport = useWritingReportStore((s) => s.deleteReport)
 
   const records = useMemo(
     () =>
@@ -560,6 +564,35 @@ function TabPanel({ type }: { type: PracticeType }) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* AI 写作批改报告列表 */}
+      {type === 'writing' && writingReports.length > 0 && (
+        <Card className="mt-4">
+          <CardContent className="pt-4">
+            <button
+              onClick={() => setReportsExpanded(!reportsExpanded)}
+              className="w-full flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-amber-500" />
+                <h4 className="font-semibold text-sm">AI 写作批改报告 ({writingReports.length})</h4>
+              </div>
+              {reportsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {reportsExpanded && (
+              <div className="mt-3 space-y-2">
+                {writingReports.map((report) => (
+                  <WritingReportItem
+                    key={report.id}
+                    report={report}
+                    onDelete={() => deleteWritingReport(report.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </>
   )
 }
@@ -640,6 +673,118 @@ export default function Practice() {
           opacity: 1 !important;
         }
       `}</style>
+    </div>
+  )
+}
+
+// ===== AI 写作批改报告项 =====
+function WritingReportItem({ report, onDelete }: { report: WritingReport; onDelete: () => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const scoreColor = (score: number) =>
+    score >= 7 ? 'text-green-600 dark:text-green-400' :
+    score >= 5 ? 'text-amber-600 dark:text-amber-400' :
+    'text-red-600 dark:text-red-400'
+
+  const handleDelete = () => {
+    if (confirmDelete) {
+      onDelete()
+    } else {
+      setConfirmDelete(true)
+      setTimeout(() => setConfirmDelete(false), 3000)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-3 text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
+            <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">
+              {report.essayType === 'task1' ? '小作文' : '大作文'}批改
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={cn('text-lg font-bold', scoreColor(report.scores.total))}>
+            {report.scores.total}
+          </span>
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+      
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-border">
+          {/* 评分详情 */}
+          <div className="grid grid-cols-4 gap-2 mt-3 mb-3">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">TR/TA</p>
+              <p className={cn('font-semibold', scoreColor(report.scores.tr_ta))}>{report.scores.tr_ta}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">CC</p>
+              <p className={cn('font-semibold', scoreColor(report.scores.cc))}>{report.scores.cc}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">LR</p>
+              <p className={cn('font-semibold', scoreColor(report.scores.lr))}>{report.scores.lr}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">GRA</p>
+              <p className={cn('font-semibold', scoreColor(report.scores.gra))}>{report.scores.gra}</p>
+            </div>
+          </div>
+          
+          {/* 点评 */}
+          <div className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">详细点评</p>
+            <p className="text-sm whitespace-pre-wrap">{report.feedback}</p>
+          </div>
+          
+          {/* 建议 */}
+          <div className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">总体建议</p>
+            <ul className="text-sm space-y-1">
+              {report.suggestions.map((s, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="text-amber-500">•</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          
+          {/* 原文预览 */}
+          <div className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">原文</p>
+            <p className="text-xs text-muted-foreground line-clamp-3">{report.essayContent}</p>
+          </div>
+          
+          {/* 删除按钮 */}
+          <button
+            onClick={handleDelete}
+            className={cn(
+              'text-xs px-2 py-1 rounded transition-colors',
+              confirmDelete 
+                ? 'bg-destructive text-destructive-foreground' 
+                : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+            )}
+          >
+            <TrashIcon className="h-3 w-3 inline mr-1" />
+            {confirmDelete ? '确认删除' : '删除'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

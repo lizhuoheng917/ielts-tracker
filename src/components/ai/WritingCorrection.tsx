@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { streamAIChat, type AIMessage } from '@/lib/aiService'
 import { AILoadingState } from './AILoadingState'
-import { useReportStore } from '@/stores/reportStore'
+import { useWritingReportStore } from '@/stores/writingReportStore'
 
 export interface WritingScore {
   tr_ta: number
@@ -41,7 +41,7 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [error, setError] = useState('')
 
-  const addReport = useReportStore((s) => s.addReport)
+  const addReport = useWritingReportStore((s) => s.addReport)
 
   const systemPrompt = useMemo(() => {
     return `你是雅思写作批改助手。请按以下 JSON 格式输出批改结果，不要输出其他内容：
@@ -169,41 +169,18 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
     if (!result) return
 
     setSaveStatus('saving')
-    const reportContent = formatReportContent(result)
     
     addReport({
-      type: 'writing_correction',
-      title: `${essayType === 'task1' ? '小作文' : '大作文'}批改报告`,
-      content: reportContent,
-      createdAt: new Date().toISOString(),
-      metadata: {
-        essayType,
-        scores: result.scores,
-      },
+      essayType,
+      essayContent,
+      scores: result.scores,
+      feedback: result.feedback,
+      suggestions: result.suggestions,
     })
 
     setSaveStatus('saved')
     onSuccess?.()
     setTimeout(() => setSaveStatus('idle'), 2000)
-  }
-
-  const formatReportContent = (r: WritingCorrectionResult): string => {
-    let content = `## 评分结果\n\n`
-    content += `| 评分项 | 分数 |\n|--------|------|\n`
-    content += `| 任务回应 (TR/TA) | ${r.scores.tr_ta} |\n`
-    content += `| 连贯衔接 (CC) | ${r.scores.cc} |\n`
-    content += `| 词汇资源 (LR) | ${r.scores.lr} |\n`
-    content += `| 语法准确性 (GRA) | ${r.scores.gra} |\n`
-    content += `| **总分** | **${r.scores.total}** |\n\n`
-    
-    content += `## 详细点评\n\n${r.feedback}\n\n`
-    
-    content += `## 总体建议\n\n`
-    r.suggestions.forEach((s, i) => {
-      content += `${i + 1}. ${s}\n`
-    })
-    
-    return content
   }
 
   const toggleSection = (section: string) => {
@@ -220,6 +197,7 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             <Button
               variant={essayType === 'task1' ? 'default' : 'outline'}
               onClick={() => setEssayType('task1')}
+              disabled={isLoading}
               className={cn(
                 'flex-1',
                 essayType === 'task1' && 'bg-amber-500 hover:bg-amber-600'
@@ -231,6 +209,7 @@ export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
             <Button
               variant={essayType === 'task2' ? 'default' : 'outline'}
               onClick={() => setEssayType('task2')}
+              disabled={isLoading}
               className={cn(
                 'flex-1',
                 essayType === 'task2' && 'bg-amber-500 hover:bg-amber-600'
