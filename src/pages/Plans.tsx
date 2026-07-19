@@ -61,6 +61,7 @@ export default function Plans() {
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formTitle, setFormTitle] = useState('')
+  const [formDescription, setFormDescription] = useState('')
   const [formCategory, setFormCategory] = useState<string>('general')
   const [formFreq, setFormFreq] = useState<'daily' | 'weekly'>('daily')
   const [formWeekDays, setFormWeekDays] = useState<number[]>([])
@@ -193,6 +194,7 @@ time:21:00
   const openAdd = () => {
     setEditingId(null)
     setFormTitle('')
+    setFormDescription('')
     setFormCategory('general')
     setFormFreq('daily')
     setFormWeekDays([])
@@ -204,6 +206,7 @@ time:21:00
   const openEdit = (plan: StudyPlan) => {
     setEditingId(plan.id)
     setFormTitle(plan.title)
+    setFormDescription(plan.description || '')
     setFormCategory(plan.category)
     setFormFreq(plan.frequency as 'daily' | 'weekly')
     setFormWeekDays(plan.weekDays || [])
@@ -216,6 +219,7 @@ time:21:00
     if (!formTitle.trim()) return
     const data = {
       title: formTitle.trim(),
+      description: formDescription.trim() || undefined,
       category: formCategory as 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general',
       frequency: formFreq as 'daily' | 'weekly',
       weekDays: formFreq === 'weekly' ? formWeekDays : undefined,
@@ -454,11 +458,20 @@ time:21:00
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>计划内容</Label>
-              <Textarea
+              <Label>计划名称</Label>
+              <Input
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="例如：每天背诵50个单词"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>计划内容</Label>
+              <Textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                placeholder="详细描述你的学习计划（可选）"
                 rows={3}
               />
             </div>
@@ -603,8 +616,8 @@ time:21:00
               }
               onActionConfirm={(action) => {
                 if (action.type === 'create_plan') {
+                  const title = action.title || 'AI 建议计划'
                   const lines = action.description.split('\n').map((l) => l.trim()).filter(Boolean)
-                  const title = lines[0] || 'AI 建议计划'
 
                   // 提取元数据字段
                   let category: string = 'general'
@@ -613,7 +626,7 @@ time:21:00
                   let weekDays: number[] | undefined
                   const descLines: string[] = []
 
-                  for (const line of lines.slice(1)) {
+                  for (const line of lines) {
                     const catMatch = line.match(/^category:(.+)/i)
                     const freqMatch = line.match(/^frequency:(.+)/i)
                     const timeMatch = line.match(/^time:(.+)/i)
