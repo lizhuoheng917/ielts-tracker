@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Sparkles, RefreshCw, AlertCircle, Loader2, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { chatAI, getAllLearningData, type AIMessage } from '@/lib/aiService'
+import { streamAIChat, getAllLearningData, type AIMessage } from '@/lib/aiService'
 import { useAiSuggestionStore } from '@/stores/aiSuggestionStore'
 
 interface AiSuggestionDialogProps {
@@ -18,53 +18,52 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const systemPrompt = useMemo(() => {
     const data = getAllLearningData()
     const brief = `今天${data.today}, 连续打卡${data.streakDays}天, 总学习${data.totalActiveDays}天, 背词${data.totalWords}个, 练习${data.totalPractice}次`
-    return `你是雅思学习助手。根据用户情况给出2条今日学习建议。
+    return `你是雅思学习助手。根据用户情况给出2条简短的今日学习建议。
 
 用户: ${brief}
 
-要求: 直接输出2条建议，每条一句话，不要任何其他内容。`
+要求: 
+- 只输出2条建议，每条一句话
+- 用中文
+- 不要任何英文、解释或思考过程
+- 直接输出建议内容`
   }, [])
-
-  // 从推理内容中提取最终建议
-  const extractAnswer = (text: string): string => {
-    // 方法1: 找到中文内容部分
-    const chineseMatch = text.match(/[\u4e00-\u9fff].*$/s)
-    if (chineseMatch) {
-      let result = chineseMatch[0]
-      // 清理常见的推理标记
-      result = result.replace(/^(?:Draft|建议|建议如下|今日建议)[：:]\s*/gm, '')
-      result = result.replace(/^\d+[.、]\s*/gm, '')
-      result = result.replace(/\n{3,}/g, '\n\n')
-      return result.trim()
-    }
-    return text
-  }
 
   const generateSuggestion = async () => {
     setIsLoading(true)
     setError('')
 
-    try {
-      const messages: AIMessage[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: '今日学习建议' },
-      ]
+    const messages: AIMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: '今日学习建议' },
+    ]
 
-      const response = await chatAI(messages, { temperature: 0.7, max_tokens: 256 })
-      
-      let content = response?.content || response?.reasoning_content || ''
-      content = extractAnswer(content)
-      
-      if (content) {
-        setSuggestion(content.trim())
-      } else {
-        setError('生成失败，请重试')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败')
-    } finally {
-      setIsLoading(false)
-    }
+    let fullContent = ''
+
+    await streamAIChat(messages, {
+      onContent: (content) => {
+        fullContent = content
+      },
+      onError: (err) => {
+        setError(err)
+        setIsLoading(false)
+      },
+      onDone: () => {
+        setIsLoading(false)
+        // 清理内容，移除可能的推理过程
+        let cleaned = fullContent
+          .replace(/```[\s\S]*?```/g, '') // 移除代码块
+          .replace(/^[A-Z][a-z].*$/gm, '') // 移除英文行
+          .replace(/\n{3,}/g, '\n\n') // 清理多余空行
+          .trim()
+        
+        if (cleaned) {
+          setSuggestion(cleaned)
+        } else {
+          setError('生成失败，请重试')
+        }
+      },
+    }, { temperature: 0.7, max_tokens: 256 })
   }
 
   return (
@@ -98,7 +97,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
               今日学习建议
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4">
+          <CardContent className="pt-4 max-h-[300px] overflow-y-auto">
             <div className="space-y-3">
               {suggestion.content.split('\n').filter((line: string) => line.trim()).map((line: string, i: number) => (
                 <div key={i} className="flex items-start gap-2">
