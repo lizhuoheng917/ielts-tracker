@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3, ListTodo } from 'lucide-react'
+import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3, ListTodo, Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -41,6 +41,7 @@ export default function Dashboard() {
   // ===== Store selectors (stable references) =====
   const examDate = useSettingsStore((s) => s.examDate)
   const showExamCountdown = useSettingsStore((s) => s.showExamCountdown)
+  const showAiSuggestions = useSettingsStore((s) => s.showAiSuggestions)
   const wordRecords = useWordStore((s) => s.records)
   const practiceRecords = usePracticeStore((s) => s.records)
   const timerRecords = useTimerStore((s) => s.records)
@@ -373,37 +374,15 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* ===== 3. 今日概览 ===== */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <StatCard
-          icon={<BookA className="h-5 w-5 text-indigo-500" />}
-          value={todayWordCount}
-          label="今日背词"
-          accentBg="bg-indigo-50 dark:bg-indigo-950/40"
-          accentBorder="border-l-indigo-400"
+      {/* ===== 3. AI 学习建议 ===== */}
+      {showAiSuggestions && (
+        <AiSuggestionCard
+          todayWordCount={todayWordCount}
+          todayPracticeMinutes={todayPracticeMinutes}
+          todayCompletedTasks={todayCompletedTasks}
+          currentStreak={currentStreak}
         />
-        <StatCard
-          icon={<Clock className="h-5 w-5 text-amber-500" />}
-          value={`${todayPracticeMinutes}min`}
-          label="学习时长"
-          accentBg="bg-amber-50 dark:bg-amber-950/40"
-          accentBorder="border-l-amber-400"
-        />
-        <StatCard
-          icon={<CheckCircle className="h-5 w-5 text-emerald-500" />}
-          value={todayCompletedTasks}
-          label="完成任务"
-          accentBg="bg-emerald-50 dark:bg-emerald-950/40"
-          accentBorder="border-l-emerald-400"
-        />
-        <StatCard
-          icon={<Flame className="h-5 w-5 text-orange-500" />}
-          value={currentStreak}
-          label="连续天数"
-          accentBg="bg-orange-50 dark:bg-orange-950/40"
-          accentBorder="border-l-orange-400"
-        />
-      </div>
+      )}
 
       {/* ===== 4. 今日待办 + 5. 热力图 ===== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -709,29 +688,68 @@ export default function Dashboard() {
   )
 }
 
-// ===== 小统计卡片 =====
-function StatCard({
-  icon,
-  value,
-  label,
-  accentBg = 'bg-indigo-50 dark:bg-indigo-950/40',
-  accentBorder = 'border-l-indigo-400',
+// ===== AI 学习建议卡片 =====
+function AiSuggestionCard({
+  todayWordCount,
+  todayPracticeMinutes,
+  todayCompletedTasks,
+  currentStreak,
 }: {
-  icon: React.ReactNode
-  value: number | string
-  label: string
-  accentBg?: string
-  accentBorder?: string
+  todayWordCount: number
+  todayPracticeMinutes: number
+  todayCompletedTasks: number
+  currentStreak: number
 }) {
+  const suggestions = useMemo(() => {
+    const tips: string[] = []
+    
+    if (todayWordCount === 0) {
+      tips.push('今天还没有背单词，建议花 15 分钟复习')
+    } else if (todayWordCount < 30) {
+      tips.push('背词数量较少，可以再加把劲')
+    }
+    
+    if (todayPracticeMinutes === 0) {
+      tips.push('今天还没有练习，打开计时器开始吧')
+    } else if (todayPracticeMinutes < 30) {
+      tips.push('学习时间较短，建议增加练习时长')
+    }
+    
+    if (todayCompletedTasks === 0) {
+      tips.push('今日待办还没完成，去计划页面看看')
+    }
+    
+    if (currentStreak >= 7) {
+      tips.push(`已连续打卡 ${currentStreak} 天，继续保持!`)
+    } else if (currentStreak >= 3) {
+      tips.push(`连续 ${currentStreak} 天，距离 7 天目标还差 ${7 - currentStreak} 天`)
+    }
+    
+    if (tips.length === 0) {
+      tips.push('今天表现很棒，继续保持!')
+    }
+    
+    return tips.slice(0, 2)
+  }, [todayWordCount, todayPracticeMinutes, todayCompletedTasks, currentStreak])
+
   return (
-    <Card size="sm" className={`border-l-2 ${accentBorder}`}>
-      <CardContent className="flex items-center gap-2.5 md:gap-3 py-3.5 px-3.5 md:px-4">
-        <div className={`flex h-9 w-9 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg ${accentBg}`}>
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <div className="text-lg md:text-lg font-bold leading-tight">{value}</div>
-          <div className="text-[13px] md:text-xs text-muted-foreground">{label}</div>
+    <Card size="sm" className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800">
+      <CardContent>
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50">
+            <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold mb-1">今日学习建议</h4>
+            <ul className="space-y-1">
+              {suggestions.map((tip, i) => (
+                <li key={i} className="text-[13px] text-muted-foreground flex items-start gap-1.5">
+                  <span className="text-indigo-500 mt-0.5">•</span>
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </CardContent>
     </Card>

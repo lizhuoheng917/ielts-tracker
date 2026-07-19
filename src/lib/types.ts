@@ -99,6 +99,7 @@ export interface AchievementState {
 export interface Settings {
   examDate?: string // YYYY-MM-DD
   showExamCountdown: boolean // 是否在主页显示考试倒计时
+  showAiSuggestions: boolean // 是否在主页显示 AI 学习建议
   theme: 'light' | 'dark' | 'system'
   lastCheckinDate?: string // YYYY-MM-DD
 }

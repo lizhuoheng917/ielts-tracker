@@ -54,6 +54,8 @@ export default function Settings() {
   const clearExamDate = useSettingsStore((s) => s.clearExamDate)
   const showExamCountdown = useSettingsStore((s) => s.showExamCountdown)
   const setShowExamCountdown = useSettingsStore((s) => s.setShowExamCountdown)
+  const showAiSuggestions = useSettingsStore((s) => s.showAiSuggestions)
+  const setShowAiSuggestions = useSettingsStore((s) => s.setShowAiSuggestions)
 
   const theme = useSettingsStore((s) => s.theme)
   const setTheme = useSettingsStore((s) => s.setTheme)
@@ -406,6 +408,29 @@ export default function Settings() {
                   className={cn(
                     'absolute top-[2px] w-[20px] h-[20px] rounded-full bg-white shadow-sm transition-all duration-200',
                     theme === 'system' ? 'left-[22px]' : 'left-[2px]'
+                  )}
+                />
+              </button>
+            </div>
+
+            {/* 主页 AI 建议卡片 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">主页 AI 建议</span>
+              </div>
+              <button
+                onClick={() => setShowAiSuggestions(!showAiSuggestions)}
+                className={cn(
+                  'relative w-[44px] h-[24px] rounded-full transition-all duration-200 shrink-0',
+                  showAiSuggestions ? 'bg-indigo-500' : 'bg-muted'
+                )}
+                aria-label="主页显示 AI 建议"
+              >
+                <span
+                  className={cn(
+                    'absolute top-[2px] w-[20px] h-[20px] rounded-full bg-white shadow-sm transition-all duration-200',
+                    showAiSuggestions ? 'left-[22px]' : 'left-[2px]'
                   )}
                 />
               </button>

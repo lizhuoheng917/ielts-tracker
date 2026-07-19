@@ -7,6 +7,7 @@ interface SettingsStore extends Settings {
   setExamDate: (date: string) => void
   clearExamDate: () => void
   setShowExamCountdown: (show: boolean) => void
+  setShowAiSuggestions: (show: boolean) => void
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   toggleTheme: () => void
   checkIn: () => boolean // 返回是否打卡成功（false = 今天已打过卡）
@@ -23,6 +24,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setExamDate: (date) => set({ examDate: date }),
       clearExamDate: () => set((state) => ({ ...state, examDate: undefined })),
       setShowExamCountdown: (show) => set({ showExamCountdown: show }),
+      setShowAiSuggestions: (show) => set({ showAiSuggestions: show }),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       checkIn: () => {

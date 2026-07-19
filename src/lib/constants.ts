@@ -88,6 +88,7 @@ export const DEFAULT_ACHIEVEMENT_STATE: AchievementState = {
 export const DEFAULT_SETTINGS = {
   theme: 'light' as const,
   showExamCountdown: true,
+  showAiSuggestions: true,
 }
 
 // ===== 默认连续打卡数据 =====
