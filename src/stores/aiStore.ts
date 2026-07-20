@@ -12,8 +12,8 @@ interface AIStore {
   clearConfig: () => void
 }
 
-const DEFAULT_BASE_URL = 'https://api.hub.agnes-ai.com/v1'
-const DEFAULT_MODEL = 'agnes-2.5-flash'
+const DEFAULT_BASE_URL = 'https://apihub.agnes-ai.com/v1'
+const DEFAULT_MODEL = 'agnes-2.0-flash'
 
 export const useAIStore = create<AIStore>()(
   persist(
