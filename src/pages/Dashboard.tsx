@@ -289,10 +289,10 @@ export default function Dashboard() {
     <div className="space-y-5 md:space-y-6">
       {/* ===== 1. 欢迎横幅 ===== */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 p-6 md:p-8 text-white shadow-lg">
-        {/* 装饰性背景圆形 */}
-        <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-        <div className="absolute -right-4 bottom-0 h-24 w-24 rounded-full bg-white/5 blur-xl" />
-        <div className="absolute left-1/2 -top-4 h-20 w-20 rounded-full bg-violet-400/20 blur-lg" />
+        {/* 装饰性背景圆形（不拦截点击事件） */}
+        <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        <div className="absolute -right-4 bottom-0 h-24 w-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
+        <div className="absolute left-1/2 -top-4 h-20 w-20 rounded-full bg-violet-400/20 blur-lg pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-start justify-between gap-4">
             <div>
