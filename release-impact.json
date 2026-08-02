@@ -7,18 +7,18 @@
   },
   "Backend": {
     "status": "reviewed-not-needed",
-    "reason": "已实时复核 production Supabase olkvqmnuyxuddgpcordp 为 ACTIVE_HEALTHY、lexi-ai-gateway v3 为 ACTIVE，正式 Tracker origin 的 CORS 预检返回 204，未登录 POST 返回 401 且不产生 receipt。四项 Tracker policy 均为 version 2 且保持关闭，当前 usage rows、request count 与 receipt count 均为 0。Tracker 没有业务表或云同步实现，因此不新增空表、migration、RPC 或 RLS；普通记录继续只存浏览器。"
+    "reason": "已实时复核 production Supabase olkvqmnuyxuddgpcordp 与 ACTIVE lexi-ai-gateway v3：正式 Tracker origin 的 CORS 预检返回 204，未登录 POST 返回 401 且不产生 receipt；真实账号 daily_suggestion 返回 HTTP 200，并恰好新增 1 条 succeeded receipt 与 1 次 usage（输入 2750、输出 693 tokens，0 次受限）。AI Gateway 三张私有表不存在 prompt、content、body、response、artifact、essay 或 snapshot 字段，生产库仍没有 Tracker 业务表。验收后四项 policy 均恢复关闭；普通记录和 AI 正文继续只存浏览器，因此本轮无需新增 migration、RPC 或 RLS。"
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "已复核 Lexi Control：现有 /admin 已能管理 production Agnes 服务端配置、四项独立 policy、配额与聚合健康；本轮没有新增可管理的服务端状态，所以不改 Admin 代码。生产查询确认四项 policy 当前全部关闭；真实账号 smoke 将只通过现有控制面临时开启 daily_suggestion，完成后再关闭。"
+    "reason": "Lexi Control 已完成正式验收：通过现有二次确认流程仅将 daily_suggestion 从 v2 临时开启为 v3，真实调用后关闭为 v4；两次 ai_gateway.policy.updated 管理员审计均存在。刷新后的控制面显示过去 24 小时 1 次请求、1 次成功、0 次失败、0 次不确定、0 次受限及 3443 tokens；其他三项策略始终关闭。本轮没有新增可管理状态，所以无需修改 Admin 代码。"
   },
   "Deployment": {
     "status": "deployed",
-    "reason": "正式候选 SHA a260b613ab6648dbe5a3ab164c7b409b0198472a 已推送到 origin/main，并部署到 Cloudflare Pages 项目 ielts-tracker；正式部署 ID 为 2301e50e-f558-42df-b734-6be0a5433206。https://ielts-tracker-6km.pages.dev/ 返回 200，线上 bundle 使用 production ref olkvqmnuyxuddgpcordp，未发现 staging URL 或 secret-shaped token。"
+    "reason": "正式功能候选 SHA a260b613ab6648dbe5a3ab164c7b409b0198472a 及后续发布证据提交均通过 origin/main 协调发布到 Cloudflare Pages 项目 ielts-tracker。https://ielts-tracker-6km.pages.dev/ 返回 200，线上 bundle 使用 production ref olkvqmnuyxuddgpcordp，未发现 staging URL 或 secret-shaped token；最终验收证据提交继续按同一 SHA 门禁重新部署。"
   },
   "Verification": {
-    "status": "required",
-    "reason": "本地 npm run verify:release 已通过 release impact、TypeScript、oxlint、42 个测试文件共 279 项测试、production 构建与 bundle guard。正式站桌面主要路由、设置页和账号弹窗均正常，390px 首页无横向溢出且移动导航正常，浏览器 console 无 error/warning；生产 CORS 与未登录 401 边界也已通过。仍待用户在 Tracker 正式域名单独登录、确认本机数据归属，核对登录前后数据数量不变，并完成一次 daily_suggestion 的真实结构化结果、local artifact 与单条 receipt/usage 验收。"
+    "status": "passed",
+    "reason": "npm run verify:release 已通过 release impact、TypeScript、oxlint、42 个测试文件共 279 项测试、production 构建与 bundle guard；正式站桌面主要路由、390px 移动端、console、CORS 与未登录 401 边界均通过。真实账号登录后，单词、练习、计时、计划、连续学习与 AI 内容数量未被上传或覆盖；账号归属确认成功。Agnes 生成严格 DailySuggestionV2，页面完整展示并使本机 AI 内容库从 0 增至 1；Edge Function v3 返回 200，数据库仅增 1 条成功 receipt/usage，未保存正文，最终四项 policy 全部关闭。"
   }
 }

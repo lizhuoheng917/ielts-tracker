@@ -91,3 +91,25 @@ Keep all four Managed AI policies closed during the initial upload.
 Do not call this release “Tracker cloud sync.” The acceptance claim is
 “production Auth and Managed AI connected while existing local data remained
 available.”
+
+## Production acceptance result
+
+Completed on 2026-08-02 against the formal Tracker and Lexi Control domains:
+
+- An existing Lexi account signed in successfully. Words, practice, timers,
+  plans, streak state and saved AI artifact counts stayed unchanged at zero.
+- The explicit device-data ownership gate completed without uploading or
+  replacing ordinary Tracker records.
+- Lexi Control temporarily enabled only `daily_suggestion` on the Agnes
+  `default` route (policy v3), then restored it to disabled (policy v4). Both
+  changes have `ai_gateway.policy.updated` audit entries. The other three
+  purposes remained disabled throughout.
+- One strict `DailySuggestionV2` result rendered successfully and the local AI
+  artifact library increased from zero to one.
+- `lexi-ai-gateway` v3 returned HTTP 200 in 13,045 ms. Supabase gained exactly
+  one `succeeded` receipt and one usage increment: 2,750 input tokens, 693
+  output tokens, no error and no rate-limit event.
+- The three AI Gateway metadata tables expose no prompt, content, response,
+  artifact, essay or snapshot columns. No Tracker business table appeared, so
+  the generated suggestion body remains in the browser.
+- Final state: all four Tracker Managed AI policies are disabled.
