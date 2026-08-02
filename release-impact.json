@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-02-tracker-production-auth-ai-connection",
+  "release": "2026-08-02-tracker-phase4a-shadow-sync",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker 的完整 UI、本地数据基础、共享 Lexi Auth、账号归属门禁、四类 Managed AI 合同与 AI artifact 流程作为一个正式候选版本收口。生产构建固定到 production project olkvqmnuyxuddgpcordp，只接受浏览器安全 publishable key，并在构建前后阻止漏配、staging ref 或 secret marker。Agnes Custom 预设修正为用户确认的 agnes-2.0-flash，v2 错误状态会迁移修复；关闭的后端 AI policy 会明确显示“此 AI 功能当前未开放”。普通学习记录仍保持 local-first。"
+    "reason": "新增 examDate 隐藏影子同步运行时、账号隔离持久化、稳定批次与请求哈希、5 秒合并、网络恢复触发、12 秒请求超时和独立跨标签同步锁。只有本机归属已确认且 getUser 实时匹配时才工作；远端 pull/snapshot 只验证合同，不会改写用户可见设置。整库导入会新建设备流，退休设备必须先完成影子快照。"
   },
   "Backend": {
-    "status": "reviewed-not-needed",
-    "reason": "已实时复核 production Supabase olkvqmnuyxuddgpcordp 与 ACTIVE lexi-ai-gateway v3：正式 Tracker origin 的 CORS 预检返回 204，未登录 POST 返回 401 且不产生 receipt；真实账号 daily_suggestion 返回 HTTP 200，并恰好新增 1 条 succeeded receipt 与 1 次 usage（输入 2750、输出 693 tokens，0 次受限）。AI Gateway 三张私有表不存在 prompt、content、body、response、artifact、essay 或 snapshot 字段，生产库仍没有 Tracker 业务表。验收后四项 policy 均恢复关闭；普通记录和 AI 正文继续只存浏览器，因此本轮无需新增 migration、RPC 或 RLS。"
+    "status": "changed",
+    "reason": "协调发布的 Lexi 正式仓库新增 Tracker 独立 Supabase 表、RLS、capability/apply/pull/snapshot RPC、短期回执、设备生命周期和安全清理任务。后端默认关闭且允许列表为空，只接受 tracker_preferences/preferences 的 {examDate}，拒绝空版本、空序列和未知字段，不删除用户可见实体。"
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "Lexi Control 已完成正式验收：通过现有二次确认流程仅将 daily_suggestion 从 v2 临时开启为 v3，真实调用后关闭为 v4；两次 ai_gateway.policy.updated 管理员审计均存在。刷新后的控制面显示过去 24 小时 1 次请求、1 次成功、0 次失败、0 次不确定、0 次受限及 3443 tokens；其他三项策略始终关闭。本轮没有新增可管理状态，所以无需修改 Admin 代码。"
+    "status": "changed",
+    "reason": "协调发布的 Lexi Control 新增 AAL2 Tracker 云同步面板与二次确认开关，展示真实聚合容量、请求、重复回放、冲突、设备和清理状态；为节省空间不保存逐次 pull 明细，也不返回日记、备注、AI 报告、邮箱或设备名称。"
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "正式功能候选 SHA a260b613ab6648dbe5a3ab164c7b409b0198472a 及后续发布证据提交均通过 origin/main 协调发布到 Cloudflare Pages 项目 ielts-tracker。https://ielts-tracker-6km.pages.dev/ 返回 200，线上 bundle 使用 production ref olkvqmnuyxuddgpcordp，未发现 staging URL 或 secret-shaped token；最终验收证据提交继续按同一 SHA 门禁重新部署。"
+    "status": "not-deployed",
+    "reason": "共享 Supabase migration 已在 staging 以默认关闭状态通过真实事务、RLS、重复请求与双账号隔离验收；Admin 和 Tracker 客户端尚未发布，生产线上仍是账号与 Agnes 验收版本。"
   },
   "Verification": {
     "status": "passed",
-    "reason": "npm run verify:release 已通过 release impact、TypeScript、oxlint、42 个测试文件共 279 项测试、production 构建与 bundle guard；正式站桌面主要路由、390px 移动端、console、CORS 与未登录 401 边界均通过。真实账号登录后，单词、练习、计时、计划、连续学习与 AI 内容数量未被上传或覆盖；账号归属确认成功。Agnes 生成严格 DailySuggestionV2，页面完整展示并使本机 AI 内容库从 0 增至 1；Edge Function v3 返回 200，数据库仅增 1 条成功 receipt/usage，未保存正文，最终四项 policy 全部关闭。"
+    "reason": "npm run verify:release 已通过：47 个测试文件、304 项测试、typecheck、lint、生产构建和 bundle guard 全部通过；配套 Lexi 完整发布门禁及 staging SQL/RLS/重复重试/跨账号事务验收也通过。生产部署后仍需做浏览器冒烟。"
   }
 }

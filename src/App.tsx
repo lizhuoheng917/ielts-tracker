@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { appRoutes } from '@/app/navigation'
 import { NotFoundRoute } from '@/components/navigation/NotFoundRoute'
 import { AiArtifactAccessBridge } from '@/components/ai/AiArtifactAccessBridge'
+import { TrackerShadowSyncBridge } from '@/components/sync/TrackerShadowSyncBridge'
 
 function ThemeHandler() {
   const theme = useSettingsStore((s) => s.theme)
@@ -35,6 +36,7 @@ function App() {
     <BrowserRouter>
       <ThemeHandler />
       <AiArtifactAccessBridge />
+      <TrackerShadowSyncBridge />
       <Routes>
         <Route element={<Layout />}>
           {appRoutes.map(({ path, Page }) => (
