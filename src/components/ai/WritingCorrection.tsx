@@ -1,411 +1,614 @@
-import { useState, useMemo } from 'react'
-import { Sparkles, FileText, ChevronDown, ChevronUp, Save, AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
-import { streamAIChat, type AIMessage } from '@/lib/aiService'
-import { AILoadingState } from './AILoadingState'
-import { useWritingReportStore } from '@/stores/writingReportStore'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  FileText,
+  RefreshCcw,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  Square,
+} from 'lucide-react'
 
-export interface WritingScore {
-  tr_ta: number
-  cc: number
-  lr: number
-  gra: number
-  total: number
+import { AiGatewayError } from '@/ai/gateway'
+import { executeReadOnlyAi } from '@/ai/readOnlyExecution'
+import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
+import { aiArtifactToMarkdown, createWritingFeedbackArtifactV2 } from '@/ai/artifactRepository'
+import {
+  buildWritingContextSnapshot,
+  calculateWritingOverallBand,
+  countWritingWords,
+  createWritingSubmissionV2,
+  type WritingBand,
+  type WritingFeedbackV2,
+  type WritingModule,
+  type WritingSubmissionV2,
+  type WritingTask,
+} from '@/ai/writingFeedback'
+import { useAccountDialog } from '@/components/account/accountDialogContext'
+import { AILoadingState } from '@/components/ai/AILoadingState'
+import { WritingFeedbackContent } from '@/components/ai/StructuredAIContent'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
+import { useAIStore } from '@/stores/aiStore'
+import { useAiArtifactStore } from '@/stores/aiArtifactStore'
+
+const WRITING_DRAFT_VERSION = 2 as const
+const WRITING_DRAFT_PREFIX = 'ielts-tracker:writingDraftV2'
+const GENERATION_TIMEOUT_MS = 45_000
+
+interface WritingDraftV2 {
+  version: typeof WRITING_DRAFT_VERSION
+  module: WritingModule
+  task: WritingTask
+  promptText: string
+  sourceMaterialDescription: string
+  essayText: string
+  updatedAt: string
 }
 
-export interface WritingCorrectionResult {
-  scores: WritingScore
-  feedback: string
-  suggestions: string[]
+interface FeedbackPreview {
+  submission: WritingSubmissionV2
+  feedback: WritingFeedbackV2
+  overallBand: WritingBand | null
+  snapshot: ReturnType<typeof buildWritingContextSnapshot>
+  source: 'managed' | 'custom'
+  runId?: string
+  providerArtifactId?: string
+  generatedAt: string
+  dataAsOf: string
+  contextHash: string
+  warnings: string[]
+}
+
+type WorkspaceStatus = 'editing' | 'generating' | 'preview' | 'saving' | 'saved' | 'error'
+
+export interface WritingWorkspaceState {
+  generating: boolean
+  hasUnsavedResult: boolean
 }
 
 interface WritingCorrectionProps {
-  onSuccess?: () => void
+  onWorkspaceStateChange?: (state: WritingWorkspaceState) => void
 }
 
-export function WritingCorrection({ onSuccess }: WritingCorrectionProps) {
-  const [essayType, setEssayType] = useState<'task1' | 'task2'>('task2')
-  const [essayContent, setEssayContent] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [result, setResult] = useState<WritingCorrectionResult | null>(null)
-  const [rawContent, setRawContent] = useState('')
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    scores: true,
-    feedback: true,
-    suggestions: true,
-  })
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
-  const [error, setError] = useState('')
-
-  const addReport = useWritingReportStore((s) => s.addReport)
-
-  const systemPrompt = useMemo(() => {
-    return `你是雅思写作批改助手。请按以下 JSON 格式输出批改结果，不要输出其他内容：
-
-{
-  "scores": {"tr_ta": 评分, "cc": 评分, "lr": 评分, "gra": 评分, "total": 总分},
-  "feedback": "逐段点评（将所有段落的点评合并为一段文字，用【段落1】【段落2】等标记分隔）",
-  "suggestions": ["建议1", "建议2", "建议3"]
+function isWritingModule(value: unknown): value is WritingModule {
+  return value === 'academic' || value === 'general_training'
 }
 
-评分标准：TR/TA=任务回应, CC=连贯衔接, LR=词汇, GRA=语法，各项 0-9 分。
+function isWritingTask(value: unknown): value is WritingTask {
+  return value === 'task1' || value === 'task2'
+}
 
-注意：
-- 每项评分可以是小数（如 6.5）
-- feedback 用中文写，简洁明了，每段 1-2 句话
-- suggestions 3 条即可，每条不超过 30 字
-- 直接输出 JSON，不要用代码块包裹`
-  }, [essayType])
+function loadDraft(storageKey: string): WritingDraftV2 | null {
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return null
+    const value: unknown = JSON.parse(raw)
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+    const draft = value as Record<string, unknown>
+    if (
+      draft.version !== WRITING_DRAFT_VERSION
+      || !isWritingModule(draft.module)
+      || !isWritingTask(draft.task)
+      || typeof draft.promptText !== 'string'
+      || typeof draft.sourceMaterialDescription !== 'string'
+      || typeof draft.essayText !== 'string'
+      || typeof draft.updatedAt !== 'string'
+    ) return null
+    return draft as unknown as WritingDraftV2
+  } catch {
+    return null
+  }
+}
 
-  const handleSubmit = async () => {
-    if (!essayContent.trim()) return
+function downloadMarkdown(filename: string, content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
 
-    // 检查输入长度
-    const estimatedTokens = Math.ceil((systemPrompt.length + essayContent.length) / 3)
-    if (estimatedTokens > 8000) {
-      setError(`输入内容过长（约 ${estimatedTokens} tokens），请缩减作文长度后重试。建议控制在 500 词以内。`)
+function safeFilePart(value: string): string {
+  return value.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'report'
+}
+
+export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionProps = {}) {
+  const access = useAiArtifactAccess()
+  const routeMode = useAIStore((state) => state.routeMode)
+  const saveWritingFeedback = useAiArtifactStore((state) => state.saveWritingFeedback)
+  const { openAccountDialog } = useAccountDialog()
+
+  const [module, setModule] = useState<WritingModule>('academic')
+  const [task, setTask] = useState<WritingTask>('task2')
+  const [promptText, setPromptText] = useState('')
+  const [sourceMaterialDescription, setSourceMaterialDescription] = useState('')
+  const [essayText, setEssayText] = useState('')
+  const [status, setStatus] = useState<WorkspaceStatus>('editing')
+  const [preview, setPreview] = useState<FeedbackPreview | null>(null)
+  const [error, setError] = useState<{ message: string; code?: string } | null>(null)
+  const [savedRecordId, setSavedRecordId] = useState<string | null>(null)
+  const [loadedDraftStorageKey, setLoadedDraftStorageKey] = useState<string | null>(null)
+  const controllerRef = useRef<AbortController | null>(null)
+  const abortReasonRef = useRef<'user' | 'timeout' | null>(null)
+  const requestSequenceRef = useRef(0)
+
+  const draftStorageKey = useMemo(() => {
+    if (access.status !== 'ready') return null
+    return access.mode === 'account'
+      ? `${WRITING_DRAFT_PREFIX}:account:${access.accountUserId}`
+      : `${WRITING_DRAFT_PREFIX}:local`
+  }, [access])
+
+  const wordCount = useMemo(() => countWritingWords(essayText), [essayText])
+  const minimumWords = task === 'task1' ? 150 : 250
+  const belowMinimum = wordCount > 0 && wordCount < minimumWords
+  const needsTaskOneMaterial = module === 'academic' && task === 'task1'
+  const inputLocked = status === 'generating' || status === 'saving'
+
+  useEffect(() => {
+    setLoadedDraftStorageKey(null)
+    requestSequenceRef.current += 1
+    abortReasonRef.current = 'user'
+    controllerRef.current?.abort()
+    controllerRef.current = null
+    setModule('academic')
+    setTask('task2')
+    setPromptText('')
+    setSourceMaterialDescription('')
+    setEssayText('')
+    setPreview(null)
+    setSavedRecordId(null)
+    setError(null)
+    setStatus('editing')
+    if (!draftStorageKey) return
+    const draft = loadDraft(draftStorageKey)
+    if (draft) {
+      setModule(draft.module)
+      setTask(draft.task)
+      setPromptText(draft.promptText)
+      setSourceMaterialDescription(draft.sourceMaterialDescription)
+      setEssayText(draft.essayText)
+    }
+    setLoadedDraftStorageKey(draftStorageKey)
+  }, [draftStorageKey])
+
+  useEffect(() => {
+    if (!draftStorageKey || loadedDraftStorageKey !== draftStorageKey || savedRecordId) return
+    const draft: WritingDraftV2 = {
+      version: WRITING_DRAFT_VERSION,
+      module,
+      task,
+      promptText,
+      sourceMaterialDescription,
+      essayText,
+      updatedAt: new Date().toISOString(),
+    }
+    try {
+      localStorage.setItem(draftStorageKey, JSON.stringify(draft))
+    } catch {
+      // The editor remains usable. A save error is shown only when the user
+      // explicitly saves a generated report.
+    }
+  }, [draftStorageKey, essayText, loadedDraftStorageKey, module, promptText, savedRecordId, sourceMaterialDescription, task])
+
+  useEffect(() => () => {
+    requestSequenceRef.current += 1
+    abortReasonRef.current = 'user'
+    controllerRef.current?.abort()
+  }, [])
+
+  useEffect(() => {
+    onWorkspaceStateChange?.({
+      generating: status === 'generating',
+      hasUnsavedResult: preview !== null && status !== 'saved',
+    })
+  }, [onWorkspaceStateChange, preview, status])
+
+  const clearDraft = () => {
+    if (!draftStorageKey) return
+    try {
+      localStorage.removeItem(draftStorageKey)
+    } catch {
+      // The saved artifact is already durable; a stale editor draft is harmless.
+    }
+  }
+
+  const validateBeforeGenerate = (): string | null => {
+    if (!promptText.trim()) return '请先填写原始写作题目。'
+    if (!essayText.trim()) return '请先粘贴或输入作文正文。'
+    if (promptText.length > 2_000) return '题目内容过长，请控制在 2,000 个字符以内。'
+    if (sourceMaterialDescription.length > 4_000) return '图表材料描述过长，请控制在 4,000 个字符以内。'
+    if (essayText.length > 12_000) return '作文内容过长，请控制在 12,000 个字符以内。'
+    return null
+  }
+
+  const handleGenerate = async () => {
+    const inputError = validateBeforeGenerate()
+    if (inputError) {
+      setError({ message: inputError, code: 'INPUT_INVALID' })
+      setStatus('error')
       return
     }
 
-    setIsLoading(true)
-    setResult(null)
-    setRawContent('')
-    setError('')
+    let submission: WritingSubmissionV2
+    try {
+      submission = createWritingSubmissionV2({
+        module,
+        task,
+        promptText,
+        sourceMaterial: needsTaskOneMaterial && sourceMaterialDescription.trim()
+          ? { kind: 'text_description', description: sourceMaterialDescription }
+          : { kind: 'none' },
+        essayText,
+      })
+    } catch {
+      setError({ message: '请检查题目、材料和作文内容后再试。', code: 'SUBMISSION_INVALID' })
+      setStatus('error')
+      return
+    }
 
-    const messages: AIMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: essayContent },
-    ]
+    const snapshot = buildWritingContextSnapshot(submission)
+    const controller = new AbortController()
+    const requestSequence = requestSequenceRef.current + 1
+    requestSequenceRef.current = requestSequence
+    controllerRef.current = controller
+    abortReasonRef.current = null
+    const timeout = window.setTimeout(() => {
+      if (requestSequenceRef.current !== requestSequence) return
+      abortReasonRef.current = 'timeout'
+      controller.abort()
+    }, GENERATION_TIMEOUT_MS)
 
-    let fullContent = ''
-    let hasReceivedContent = false
+    setStatus('generating')
+    setPreview(null)
+    setSavedRecordId(null)
+    setError(null)
 
-    await streamAIChat(messages, {
-      onContent: (content) => {
-        fullContent = content
-        hasReceivedContent = true
-        setRawContent(content)
-      },
-      onError: (err) => {
-        setError(err)
-        setIsLoading(false)
-        // 确保在错误时也显示原始内容
-        if (fullContent) {
-          setRawContent(fullContent)
-        } else if (!hasReceivedContent) {
-          setRawContent(`[错误] ${err}\n\n提示：可能是输入内容过长或 API 配置问题。`)
-        }
-      },
-      onDone: () => {
-        setIsLoading(false)
-        // 确保 rawContent 有值
-        if (fullContent) {
-          setRawContent(fullContent)
-        }
-        // 尝试解析 JSON 结果
-        try {
-          // 尝试多种方式解析 JSON
-          let parsed = null
-          
-          // 方式 1: 尝试直接解析
-          try {
-            parsed = JSON.parse(fullContent)
-          } catch {
-            // 方式 2: 尝试从代码块中提取
-            const jsonMatch = fullContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-            if (jsonMatch) {
-              try {
-                parsed = JSON.parse(jsonMatch[1])
-              } catch {
-                // 继续尝试其他方式
-              }
-            }
-          }
-          
-          // 方式 3: 尝试找到第一个 { 和最后一个 } 之间的内容
-          if (!parsed) {
-            const firstBrace = fullContent.indexOf('{')
-            const lastBrace = fullContent.lastIndexOf('}')
-            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-              const jsonString = fullContent.substring(firstBrace, lastBrace + 1)
-              try {
-                parsed = JSON.parse(jsonString)
-              } catch {
-                // 继续尝试其他方式
-              }
-            }
-          }
-          
-          if (parsed && parsed.scores) {
-            // 验证数据结构
-            const scores = parsed.scores
-            if (typeof scores.tr_ta === 'number' && typeof scores.cc === 'number' &&
-                typeof scores.lr === 'number' && typeof scores.gra === 'number' &&
-                typeof scores.total === 'number') {
-              setResult({
-                scores: parsed.scores,
-                feedback: parsed.feedback || '',
-                suggestions: parsed.suggestions || [],
-              })
-            } else {
-              setError('评分数据格式不正确，请重试')
-            }
-          } else {
-            setError('结果解析失败，请重试')
-          }
-        } catch {
-          // JSON 解析失败，显示原始内容
-          setError('结果解析失败，请重试')
-        }
-      },
-    }, { temperature: 0.3, max_tokens: 4096 })
+    try {
+      const result = await executeReadOnlyAi({
+        purpose: 'writing_feedback',
+        snapshot,
+        // The complete writing request lives in the purpose-scoped snapshot.
+        // Managed wire keeps userInput empty so no second instruction channel
+        // can contradict the submission contract.
+        userInput: '',
+        signal: controller.signal,
+      })
+      if (requestSequenceRef.current !== requestSequence) return
+      const feedback = result.content
+      const generatedAt = result.artifact?.createdAt ?? new Date().toISOString()
+      setPreview({
+        submission,
+        feedback,
+        overallBand: calculateWritingOverallBand(feedback),
+        snapshot,
+        source: result.source,
+        runId: result.run?.runId,
+        providerArtifactId: result.artifact?.artifactId,
+        generatedAt,
+        dataAsOf: result.artifact?.dataAsOf ?? snapshot.dataAsOf,
+        contextHash: result.artifact?.contextHash ?? snapshot.contextHash,
+        warnings: result.warnings,
+      })
+      setStatus('preview')
+    } catch (caught) {
+      if (requestSequenceRef.current !== requestSequence) return
+      if (controller.signal.aborted && abortReasonRef.current === 'user') {
+        setStatus('editing')
+        setError(null)
+        return
+      }
+      const gatewayError = caught instanceof AiGatewayError ? caught : null
+      setError({
+        message: abortReasonRef.current === 'timeout'
+          ? '写作批改等待超时，作文草稿已经保留，请稍后重试。'
+          : gatewayError?.message ?? '暂时无法生成写作反馈，作文草稿已经保留。',
+        code: abortReasonRef.current === 'timeout' ? 'TIMEOUT' : gatewayError?.code ?? 'UNKNOWN',
+      })
+      setStatus('error')
+    } finally {
+      window.clearTimeout(timeout)
+      if (controllerRef.current === controller) {
+        controllerRef.current = null
+        abortReasonRef.current = null
+      }
+    }
   }
 
-  const handleSave = async () => {
-    if (!result) return
-
-    setSaveStatus('saving')
-    
-    addReport({
-      essayType,
-      essayContent,
-      scores: result.scores,
-      feedback: result.feedback,
-      suggestions: result.suggestions,
-    })
-
-    setSaveStatus('saved')
-    onSuccess?.()
-    setTimeout(() => setSaveStatus('idle'), 2000)
+  const handleCancel = () => {
+    requestSequenceRef.current += 1
+    abortReasonRef.current = 'user'
+    controllerRef.current?.abort()
+    setStatus('editing')
+    setError(null)
   }
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
+  const handleSave = () => {
+    if (!preview || access.status !== 'ready') {
+      setError({ message: '当前账号状态无法安全保存这份报告，请先处理账号归属。', code: 'ARTIFACT_ACCESS_LOCKED' })
+      return
+    }
+    setStatus('saving')
+    setError(null)
+    try {
+      const artifact = saveWritingFeedback({
+        recordId: preview.providerArtifactId ?? `writing-${preview.snapshot.snapshotId}`,
+        providerArtifactId: preview.providerArtifactId,
+        runId: preview.runId,
+        snapshotId: preview.snapshot.snapshotId,
+        contextHash: preview.contextHash,
+        promptVersion: 'writing-feedback-v2',
+        rubricVersion: preview.feedback.rubricVersion,
+        createdAt: preview.generatedAt,
+        dataAsOf: preview.dataAsOf,
+        source: preview.source,
+        warnings: preview.warnings,
+        submission: preview.submission,
+        feedback: preview.feedback,
+      }, access)
+      setSavedRecordId(artifact.recordId)
+      clearDraft()
+      setStatus('saved')
+    } catch {
+      setError({
+        message: '报告已经生成，但没有成功写入当前设备。你可以重试保存或先导出 Markdown。',
+        code: 'LOCAL_SAVE_FAILED',
+      })
+      setStatus('preview')
+    }
+  }
+
+  const handleExport = () => {
+    if (!preview) return
+    const taskLabel = `${preview.submission.module}-${preview.submission.task}`
+    const portableReport = createWritingFeedbackArtifactV2({
+      recordId: preview.providerArtifactId ?? `writing-${preview.snapshot.snapshotId}`,
+      providerArtifactId: preview.providerArtifactId,
+      runId: preview.runId,
+      snapshotId: preview.snapshot.snapshotId,
+      contextHash: preview.contextHash,
+      promptVersion: 'writing-feedback-v2',
+      createdAt: preview.generatedAt,
+      savedAt: preview.generatedAt,
+      dataAsOf: preview.dataAsOf,
+      source: preview.source,
+      warnings: preview.warnings,
+      submission: preview.submission,
+      feedback: preview.feedback,
+    }, { status: 'ready', mode: 'device' })
+    downloadMarkdown(
+      `lexi-writing-${safeFilePart(taskLabel)}-${new Date().toISOString().slice(0, 10)}.md`,
+      aiArtifactToMarkdown(portableReport),
+    )
+  }
+
+  const returnToEditor = () => {
+    setPreview(null)
+    setSavedRecordId(null)
+    setError(null)
+    setStatus('editing')
+  }
+
+  if (preview && (status === 'preview' || status === 'saving' || status === 'saved')) {
+    return (
+      <div className="space-y-4" aria-live="polite">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
+          <Button type="button" variant="ghost" size="sm" onClick={returnToEditor} disabled={status === 'saving'}>
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            返回修改
+          </Button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline">{preview.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'}</Badge>
+            <Badge variant="secondary">{preview.submission.wordCount} 词</Badge>
+            {status === 'saved' && <Badge className="gap-1"><CheckCircle2 className="size-3" />已保存</Badge>}
+          </div>
+        </div>
+
+        <WritingFeedbackContent
+          submission={preview.submission}
+          feedback={preview.feedback}
+          overallBand={preview.overallBand}
+        />
+
+        {preview.warnings.length > 0 && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {preview.warnings.map((warning) => <p key={warning}>· {warning}</p>)}
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2" role="alert">
+            <p className="text-sm text-destructive">{error.message}</p>
+            <details className="mt-1 text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer">技术详情</summary>
+              <p className="mt-1">错误代码：{error.code ?? 'UNKNOWN'}</p>
+            </details>
+          </div>
+        )}
+
+        <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-popover/95 px-4 py-3 backdrop-blur sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={handleExport}>
+            <Download className="size-4" aria-hidden="true" />
+            导出 Markdown
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={status === 'saving' || status === 'saved'}>
+            {status === 'saving' ? <AILoadingState text="保存中" /> : <Save className="size-4" aria-hidden="true" />}
+            {status === 'saving' ? '保存中…' : status === 'saved' ? '已保存到 AI 内容库' : '保存报告'}
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      {/* 输入区域 */}
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <Label>作文类型</Label>
-          <div className="flex gap-2">
-            <Button
-              variant={essayType === 'task1' ? 'default' : 'outline'}
-              onClick={() => setEssayType('task1')}
-              disabled={isLoading}
-              className={cn(
-                'flex-1',
-                essayType === 'task1' && 'bg-amber-500 hover:bg-amber-600'
-              )}
-            >
-              <FileText className="h-4 w-4 mr-1.5" />
-              小作文 (Task 1)
-            </Button>
-            <Button
-              variant={essayType === 'task2' ? 'default' : 'outline'}
-              onClick={() => setEssayType('task2')}
-              disabled={isLoading}
-              className={cn(
-                'flex-1',
-                essayType === 'task2' && 'bg-amber-500 hover:bg-amber-600'
-              )}
-            >
-              <FileText className="h-4 w-4 mr-1.5" />
-              大作文 (Task 2)
-            </Button>
+    <div className="space-y-5" aria-busy={status === 'generating'}>
+      {access.status === 'locked' && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">请先确认这台设备的账号归属</p>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">作文草稿不会发送；处理后才能使用内置 AI 并安全保存报告。</p>
           </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>粘贴你的作文</Label>
-          <Textarea
-            value={essayContent}
-            onChange={(e) => setEssayContent(e.target.value)}
-            placeholder={essayType === 'task1' 
-              ? '请粘贴你的小作文（图表描述/书信等），建议 150 词以内...' 
-              : '请粘贴你的大作文（议论文/讨论类等），建议 250 词以内...'}
-            rows={8}
-            className="min-h-[200px] resize-none"
-          />
-          <div className="flex justify-between text-[11px] text-muted-foreground">
-            <span>约 {Math.ceil(essayContent.length / 5)} 词</span>
-            <span className={essayContent.length > 2500 ? 'text-destructive' : ''}>
-              {essayContent.length > 2500 ? '内容较长，建议精简' : '建议 250 词以内'}
-            </span>
-          </div>
-        </div>
-
-        <Button
-          onClick={handleSubmit}
-          disabled={!essayContent.trim() || isLoading}
-          className="w-full bg-amber-500 hover:bg-amber-600"
-        >
-          {isLoading ? (
-            <>
-              <AILoadingState text="批改中" className="mr-2" />
-              AI 正在批改...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4 mr-1.5" />
-              AI 批改
-            </>
-          )}
-        </Button>
-      </div>
-
-      {/* 生成中警告 */}
-      {isLoading && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/30 px-3 py-2">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span className="text-[12px] text-amber-700 dark:text-amber-400">
-            请勿关闭弹窗或切换页面，以免生成中断
-          </span>
-        </div>
-      )}
-
-      {/* 错误提示 */}
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-sm text-destructive mb-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span className="font-medium">{error}</span>
-            </div>
-            {/* 显示原始内容帮助调试 */}
-            {rawContent ? (
-              <details open className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer hover:text-foreground mb-2">AI 返回的原始内容：</summary>
-                <pre className="p-3 bg-muted rounded-lg whitespace-pre-wrap overflow-auto max-h-[300px] text-xs">
-                  {rawContent}
-                </pre>
-              </details>
-            ) : (
-              <p className="text-xs text-muted-foreground">未收到 AI 响应内容</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 结果展示 */}
-      {result && (
-        <div className="space-y-2">
-          {/* 评分卡片 */}
-          <Card size="sm" className={cn(
-            'border-2 transition-colors',
-            result.scores.total >= 7 ? 'border-green-200 dark:border-green-800' :
-            result.scores.total >= 5 ? 'border-amber-200 dark:border-amber-800' :
-            'border-red-200 dark:border-red-800'
-          )}>
-            <CardContent>
-              <button
-                onClick={() => toggleSection('scores')}
-                className="w-full flex items-center justify-between"
-              >
-                <h4 className="font-semibold text-sm">评分结果</h4>
-                {expandedSections.scores ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              {expandedSections.scores && (
-                <div className="mt-2">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
-                    <ScoreCard label="TR/TA" score={result.scores.tr_ta} />
-                    <ScoreCard label="CC" score={result.scores.cc} />
-                    <ScoreCard label="LR" score={result.scores.lr} />
-                    <ScoreCard label="GRA" score={result.scores.gra} />
-                  </div>
-                  <div className="mt-2 text-center">
-                    <span className="text-xl font-bold text-amber-600 dark:text-amber-400">
-                      总分: {result.scores.total}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 详细点评 */}
-          <Card size="sm">
-            <CardContent>
-              <button
-                onClick={() => toggleSection('feedback')}
-                className="w-full flex items-center justify-between"
-              >
-                <h4 className="font-semibold text-sm">详细点评</h4>
-                {expandedSections.feedback ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              {expandedSections.feedback && (
-                <div className="mt-2">
-                  <p className="text-sm whitespace-pre-wrap">{result.feedback}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 总体建议 */}
-          <Card size="sm">
-            <CardContent>
-              <button
-                onClick={() => toggleSection('suggestions')}
-                className="w-full flex items-center justify-between"
-              >
-                <h4 className="font-semibold text-sm">总体建议</h4>
-                {expandedSections.suggestions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              {expandedSections.suggestions && (
-                <ul className="mt-2 space-y-1">
-                  {result.suggestions.map((s, i) => (
-                    <li key={i} className="flex items-start gap-1.5 text-sm">
-                      <span className="text-amber-500">•</span>
-                      <span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 保存按钮 */}
-          <Button
-            onClick={handleSave}
-            disabled={saveStatus === 'saving'}
-            variant="outline"
-            className="w-full"
-          >
-            {saveStatus === 'saving' ? (
-              '保存中...'
-            ) : saveStatus === 'saved' ? (
-              <>
-                <Save className="h-4 w-4 mr-1.5 text-green-500" />
-                已保存
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-1.5" />
-                保存到报告列表
-              </>
-            )}
+          <Button type="button" size="sm" onClick={(event) => openAccountDialog(event.currentTarget)}>
+            <ShieldCheck className="size-4" aria-hidden="true" />
+            查看账号状态
           </Button>
         </div>
       )}
-    </div>
-  )
-}
 
-// 评分卡片组件
-function ScoreCard({ label, score }: { label: string; score: number }) {
-  const color = score >= 7 ? 'text-green-600 dark:text-green-400' :
-                score >= 5 ? 'text-amber-600 dark:text-amber-400' :
-                'text-red-600 dark:text-red-400'
-  
-  return (
-    <div className="text-center p-1.5 rounded-lg bg-muted/50">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className={cn('text-lg font-bold', color)}>{score}</p>
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">1. 选择考试类型</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">用于选择对应的 Task Achievement / Task Response 评分标准。</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={module === 'academic' ? 'default' : 'outline'}
+            onClick={() => setModule('academic')}
+            disabled={inputLocked}
+          >
+            Academic
+          </Button>
+          <Button
+            type="button"
+            variant={module === 'general_training' ? 'default' : 'outline'}
+            onClick={() => setModule('general_training')}
+            disabled={inputLocked}
+          >
+            General Training
+          </Button>
+          <Button
+            type="button"
+            variant={task === 'task1' ? 'secondary' : 'outline'}
+            onClick={() => setTask('task1')}
+            disabled={inputLocked}
+          >
+            <FileText className="size-4" aria-hidden="true" />Task 1
+          </Button>
+          <Button
+            type="button"
+            variant={task === 'task2' ? 'secondary' : 'outline'}
+            onClick={() => setTask('task2')}
+            disabled={inputLocked}
+          >
+            <FileText className="size-4" aria-hidden="true" />Task 2
+          </Button>
+        </div>
+      </section>
+
+      <section className="space-y-2 border-t border-border/70 pt-4">
+        <div className="flex items-end justify-between gap-3">
+          <Label htmlFor="writing-task-prompt" className="text-sm font-semibold">2. 原始题目</Label>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{promptText.length} / 2000</span>
+        </div>
+        <Textarea
+          id="writing-task-prompt"
+          value={promptText}
+          onChange={(event) => setPromptText(event.target.value)}
+          disabled={inputLocked}
+          maxLength={2_000}
+          rows={4}
+          className="min-h-24 resize-y"
+          placeholder={task === 'task1' ? '粘贴完整 Task 1 题目、说明和要点…' : '粘贴完整 Task 2 题目…'}
+        />
+      </section>
+
+      {needsTaskOneMaterial && (
+        <section className="space-y-2 border-t border-border/70 pt-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <Label htmlFor="writing-source-material" className="text-sm font-semibold">3. 图表材料</Label>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">首版请用文字写明图表类型、时间范围、单位和关键数据。</p>
+            </div>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{sourceMaterialDescription.length} / 4000</span>
+          </div>
+          <Textarea
+            id="writing-source-material"
+            value={sourceMaterialDescription}
+            onChange={(event) => setSourceMaterialDescription(event.target.value)}
+            disabled={inputLocked}
+            maxLength={4_000}
+            rows={5}
+            className="min-h-28 resize-y"
+            placeholder="例如：折线图显示 2000–2020 年三座城市公共交通使用率，纵轴单位为百分比…"
+          />
+          {!sourceMaterialDescription.trim() && (
+            <p className="flex items-start gap-1.5 text-xs leading-5 text-amber-700 dark:text-amber-300">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              缺少图表材料时，AI 只能给语言反馈，不会显示精确 Task Achievement 分数。
+            </p>
+          )}
+        </section>
+      )}
+
+      <section className="space-y-2 border-t border-border/70 pt-4">
+        <div className="flex items-end justify-between gap-3">
+          <Label htmlFor="writing-essay" className="text-sm font-semibold">{needsTaskOneMaterial ? '4' : '3'}. 作文正文</Label>
+          <span className={cn('text-xs tabular-nums', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
+            {wordCount} 词
+          </span>
+        </div>
+        <Textarea
+          id="writing-essay"
+          value={essayText}
+          onChange={(event) => setEssayText(event.target.value)}
+          disabled={inputLocked}
+          maxLength={12_000}
+          rows={14}
+          className="min-h-72 resize-y font-mono text-[13px] leading-6"
+          placeholder="粘贴或输入你的英文作文…"
+        />
+        <p className={cn('text-xs leading-5', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
+          {belowMinimum
+            ? `当前少于 IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 的 ${minimumWords} 词最低要求；仍可批改，但报告会说明这一局限。`
+            : `IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 建议不少于 ${minimumWords} 词。`}
+        </p>
+      </section>
+
+      {error && (
+        <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2" role="alert">
+          <p className="text-sm text-destructive">{error.message}</p>
+          <details className="mt-1 text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer">技术详情</summary>
+            <p className="mt-1">错误代码：{error.code ?? 'UNKNOWN'}</p>
+          </details>
+        </div>
+      )}
+
+      {status === 'generating' && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-subject-writing-border bg-subject-writing-soft px-3 py-2.5" role="status" aria-live="polite">
+          <div className="flex min-w-0 items-center gap-2">
+            <AILoadingState text="正在对照题目和评分标准" />
+            <span className="truncate text-xs text-muted-foreground">作文草稿已保留</span>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={handleCancel}>
+            <Square className="size-3" fill="currentColor" aria-hidden="true" />停止
+          </Button>
+        </div>
+      )}
+
+      <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-popover/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] leading-4 text-muted-foreground">
+          {routeMode === 'managed' ? '作文仅用于本次 Lexi 内置 AI 请求，服务端默认不保存正文。' : '作文会发送到你在高级设置中配置的自定义 AI 服务商。'}
+        </p>
+        <Button
+          type="button"
+          onClick={handleGenerate}
+          disabled={status === 'generating' || access.status === 'locked' || !promptText.trim() || !essayText.trim()}
+          className="shrink-0 bg-subject-writing text-white hover:bg-subject-writing/90"
+        >
+          {status === 'error' ? <RefreshCcw className="size-4" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
+          {status === 'error' ? '重新生成' : '生成写作反馈'}
+        </Button>
+      </div>
     </div>
   )
 }

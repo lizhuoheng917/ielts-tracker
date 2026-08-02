@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import {
+  createPlanCommandDrafts,
+  parsePlanCreateCommandDraft,
+} from './planCommands'
+import type { PlanDraftV2 } from './structuredOutputs'
+
+const CONTENT: PlanDraftV2 = {
+  schemaVersion: 2,
+  kind: 'plan_draft',
+  title: '一周听力计划',
+  summary: '先完成三次短练习，再根据记录调整。',
+  plans: [{
+    title: '早晨听力训练',
+    description: '完成精听并记录错因。',
+    category: 'listening',
+    frequency: 'weekly',
+    weekDays: [1, 3, 5],
+    targetTime: '08:00',
+    targetDuration: 25,
+    targetCount: null,
+  }],
+  evidence: [],
+  limitations: ['样本较少。'],
+}
+
+const COMMAND_CONTEXT = {
+  snapshotId: 'snapshot-plan',
+  contextHash: 'context-plan',
+  sourceRevision: 'source-plan',
+  routeMode: 'managed' as const,
+  accountScopeId: 'managed:user-1',
+}
+
+describe('plan command lifecycle', () => {
+  it('creates local command identifiers instead of trusting provider identifiers', () => {
+    const commands = createPlanCommandDrafts(CONTENT, 'run-1', {
+      context: COMMAND_CONTEXT,
+      now: new Date('2026-08-02T00:00:00.000Z'),
+      createId: () => '123e4567-e89b-42d3-a456-426614174111',
+    })
+
+    expect(commands).toEqual([expect.objectContaining({
+      draftId: '123e4567-e89b-42d3-a456-426614174111',
+      idempotencyKey: 'tracker-plan-create:123e4567-e89b-42d3-a456-426614174111',
+      confirmation: { required: true, status: 'pending' },
+      payload: expect.objectContaining({ title: '早晨听力训练', weekDays: [1, 3, 5] }),
+    })])
+  })
+
+  it('rejects altered command ids and provider-added fields on restore', () => {
+    const [draft] = createPlanCommandDrafts(CONTENT, 'run-1', {
+      context: COMMAND_CONTEXT,
+      createId: () => '123e4567-e89b-42d3-a456-426614174112',
+    })
+    expect(() => parsePlanCreateCommandDraft({
+      ...draft,
+      idempotencyKey: 'provider-chosen-key',
+    })).toThrow('Invalid plan command draft')
+    expect(() => parsePlanCreateCommandDraft({
+      ...draft,
+      providerAction: 'delete_everything',
+    })).toThrow('Invalid plan command draft')
+  })
+})

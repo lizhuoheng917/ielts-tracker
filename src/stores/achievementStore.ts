@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { AchievementState } from '@/lib/types'
 import { STORAGE_PREFIX, DEFAULT_ACHIEVEMENT_STATE, LEVELS, BADGES } from '@/lib/constants'
+import { levelForXP } from '@/lib/learningXP'
 
 interface AchievementStore extends AchievementState {
   addXP: (amount: number) => void
@@ -18,16 +19,10 @@ export const useAchievementStore = create<AchievementStore>()(
       ...DEFAULT_ACHIEVEMENT_STATE,
       addXP: (amount) => {
         set((state) => {
-          const newTotal = state.totalXP + amount
-          // 计算新等级
-          let newLevel = state.level
-          for (let i = LEVELS.length - 1; i >= 0; i--) {
-            if (newTotal >= LEVELS[i].requiredXP) {
-              newLevel = LEVELS[i].level
-              break
-            }
-          }
-          return { totalXP: newTotal, level: newLevel }
+          if (!Number.isFinite(amount) || amount === 0) return state
+          const currentTotal = Number.isFinite(state.totalXP) ? Math.max(0, state.totalXP) : 0
+          const newTotal = Math.max(0, currentTotal + amount)
+          return { totalXP: newTotal, level: levelForXP(newTotal) }
         })
       },
       unlockBadge: (badgeId) => {
@@ -50,8 +45,9 @@ export const useAchievementStore = create<AchievementStore>()(
       },
       getCurrentLevel: () => {
         const state = get()
-        const currentLevel = LEVELS.find((l) => l.level === state.level) || LEVELS[0]
-        const nextLevel = LEVELS.find((l) => l.level === state.level + 1)
+        const derivedLevel = levelForXP(state.totalXP)
+        const currentLevel = LEVELS.find((l) => l.level === derivedLevel) || LEVELS[0]
+        const nextLevel = LEVELS.find((l) => l.level === derivedLevel + 1)
         return {
           level: currentLevel.level,
           name: currentLevel.name,
@@ -61,17 +57,31 @@ export const useAchievementStore = create<AchievementStore>()(
       },
       getXPProgress: () => {
         const state = get()
-        const currentLevel = LEVELS.find((l) => l.level === state.level) || LEVELS[0]
-        const nextLevel = LEVELS.find((l) => l.level === state.level + 1)
-        if (!nextLevel) return { current: state.totalXP, required: currentLevel.requiredXP, percentage: 100 }
-        const progress = state.totalXP - currentLevel.requiredXP
+        const safeTotalXP = Number.isFinite(state.totalXP) ? Math.max(0, state.totalXP) : 0
+        const derivedLevel = levelForXP(safeTotalXP)
+        const currentLevel = LEVELS.find((l) => l.level === derivedLevel) || LEVELS[0]
+        const nextLevel = LEVELS.find((l) => l.level === derivedLevel + 1)
+        if (!nextLevel) return { current: safeTotalXP, required: currentLevel.requiredXP, percentage: 100 }
+        const progress = safeTotalXP - currentLevel.requiredXP
         const required = nextLevel.requiredXP - currentLevel.requiredXP
-        return { current: state.totalXP, required: nextLevel.requiredXP, percentage: (progress / required) * 100 }
+        return { current: safeTotalXP, required: nextLevel.requiredXP, percentage: (progress / required) * 100 }
       },
     }),
     {
       name: `${STORAGE_PREFIX}:achievements`,
       storage: createJSONStorage(() => localStorage),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AchievementState>
+        const totalXP = Number.isFinite(persisted.totalXP)
+          ? Math.max(0, persisted.totalXP ?? 0)
+          : 0
+        return {
+          ...currentState,
+          ...persisted,
+          totalXP,
+          level: levelForXP(totalXP),
+        }
+      },
     }
   )
 )

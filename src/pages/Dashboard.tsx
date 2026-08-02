@@ -1,281 +1,140 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { format, subDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
-import { BookA, Clock, CheckCircle, Circle, Flame, CalendarDays, Star, BookOpen, Check, BarChart3, ListTodo, Sparkles } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EmptyState } from '@/components/ui/empty-state'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
+  differenceInCalendarDays,
+  endOfWeek,
+  format,
+  startOfMonth,
+  startOfWeek,
+  subDays,
+} from 'date-fns'
+import { zhCN } from 'date-fns/locale'
+import {
+  AlertCircle,
+  ArrowRight,
+  BarChart3,
+  BookA,
+  BookOpen,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Circle,
+  Clock3,
+  Flame,
+  ListChecks,
+  ListTodo,
+  Sparkles,
+  Star,
+} from 'lucide-react'
+
 import { AiSuggestionDialog } from '@/components/ai/AiSuggestionDialog'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useWordStore } from '@/stores/wordStore'
-import { usePracticeStore } from '@/stores/practiceStore'
-import { useTimerStore } from '@/stores/timerStore'
-import { usePlanStore } from '@/stores/planStore'
-import { useDiaryStore } from '@/stores/diaryStore'
-import { useAchievementStore } from '@/stores/achievementStore'
-import { useStreakStore } from '@/stores/streakStore'
-import { BADGES, MOOD_OPTIONS, WEEKDAY_LABELS, PLAN_CATEGORY_OPTIONS } from '@/lib/constants'
+import { AchievementMark } from '@/components/achievements/achievement-mark'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/ui/empty-state'
+import { MetricGroup } from '@/components/ui/metric-group'
+import { SectionHeader } from '@/components/ui/section-header'
+import { BADGES, LEVELS, MOOD_OPTIONS, PLAN_CATEGORY_OPTIONS, WEEKDAY_LABELS } from '@/lib/constants'
+import { parseLocalDate, toLocalDate } from '@/lib/localDate'
+import { indexLatestPlanExecutionsForDate, isPlanScheduledForDay } from '@/lib/planView'
+import { getActivityLevel, getDateRangeSummary } from '@/lib/statsAnalytics'
 import { cn } from '@/lib/utils'
+import { useAchievementStore } from '@/stores/achievementStore'
+import { useDiaryStore } from '@/stores/diaryStore'
+import { usePlanStore } from '@/stores/planStore'
+import { usePracticeStore } from '@/stores/practiceStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useStreakStore } from '@/stores/streakStore'
+import { useTimerStore } from '@/stores/timerStore'
+import { useWordStore } from '@/stores/wordStore'
 import type { Achievement } from '@/lib/types'
 
-// ===== 激励语句 =====
 const MOTIVATIONAL_QUOTES = [
   '每一天的努力，都在缩短你和目标之间的距离。',
-  '坚持就是胜利，今天又是元气满满的一天!',
-  '千里之行，始于足下。继续加油!',
+  '坚持就是胜利，今天又是元气满满的一天！',
+  '千里之行，始于足下。继续加油！',
   '哪怕每天只进步一点点，也是了不起的成长。',
-  '你的坚持终将美好，今天也要全力以赴!',
+  '你的坚持终将美好，今天也要全力以赴！',
   '成功不是将来才有的，而是从决定去做的那一刻起。',
   '今天的你，比昨天更接近梦想了。',
 ]
 
-const todayStr = () => format(new Date(), 'yyyy-MM-dd')
+const HEATMAP_COLORS = [
+  'var(--heatmap-level-0)',
+  'var(--heatmap-level-1)',
+  'var(--heatmap-level-2)',
+  'var(--heatmap-level-3)',
+  'var(--heatmap-level-4)',
+] as const
+
+const BADGE_BY_ID = new Map(BADGES.map((badge) => [badge.id, badge]))
+
+function ReportMetric({ value, label, tone }: { value: string | number; label: string; tone: string }) {
+  return (
+    <div className={cn('rounded-xl border p-3 text-center', tone)}>
+      <p className="text-xl font-bold tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+    </div>
+  )
+}
 
 export default function Dashboard() {
-  // ===== Store selectors (stable references) =====
-  const examDate = useSettingsStore((s) => s.examDate)
-  const showExamCountdown = useSettingsStore((s) => s.showExamCountdown)
-  const showAiSuggestions = useSettingsStore((s) => s.showAiSuggestions)
-  const wordRecords = useWordStore((s) => s.records)
-  const practiceRecords = usePracticeStore((s) => s.records)
-  const timerRecords = useTimerStore((s) => s.records)
-  const plans = usePlanStore((s) => s.plans)
-  const executions = usePlanStore((s) => s.executions)
-  const addExecution = usePlanStore((s) => s.addExecution)
-  const updateExecution = usePlanStore((s) => s.updateExecution)
-  const diaryEntries = useDiaryStore((s) => s.entries)
-  const unlockedBadges = useAchievementStore((s) => s.unlockedBadges)
-  const achievementStore = useAchievementStore()
-  const currentStreak = useStreakStore((s) => s.currentStreak)
-  const heatmapData = useStreakStore((s) => s.heatmapData)
-  const lastCheckinDate = useSettingsStore((s) => s.lastCheckinDate)
-  const checkIn = useSettingsStore((s) => s.checkIn)
-  const [checkedIn, setCheckedIn] = useState(false)
+  const examDate = useSettingsStore((state) => state.examDate)
+  const showExamCountdown = useSettingsStore((state) => state.showExamCountdown)
+  const showAiSuggestions = useSettingsStore((state) => state.showAiSuggestions)
+  const lastCheckinDate = useSettingsStore((state) => state.lastCheckinDate)
+  const checkIn = useSettingsStore((state) => state.checkIn)
+  const wordRecords = useWordStore((state) => state.records)
+  const practiceRecords = usePracticeStore((state) => state.records)
+  const timerRecords = useTimerStore((state) => state.records)
+  const plans = usePlanStore((state) => state.plans)
+  const executions = usePlanStore((state) => state.executions)
+  const setExecutionForDate = usePlanStore((state) => state.setExecutionForDate)
+  const diaryEntries = useDiaryStore((state) => state.entries)
+  const unlockedBadges = useAchievementStore((state) => state.unlockedBadges)
+  const achievementLevel = useAchievementStore((state) => state.level)
+  const totalXP = useAchievementStore((state) => state.totalXP)
+  const displayXP = Math.max(totalXP, 0)
+  const currentStreak = useStreakStore((state) => state.currentStreak)
+  const heatmapData = useStreakStore((state) => state.heatmapData)
+
   const [reportOpen, setReportOpen] = useState(false)
   const [planDetailOpen, setPlanDetailOpen] = useState(false)
-  const [selectedPlan, setSelectedPlan] = useState<{ id: string; title: string; description?: string; category?: string; frequency?: string; targetTime?: string } | null>(null)
   const [aiSuggestionOpen, setAiSuggestionOpen] = useState(false)
+  const [planMutationError, setPlanMutationError] = useState('')
+  const [mutatingPlanIds, setMutatingPlanIds] = useState<Set<string>>(new Set())
+  const [selectedPlan, setSelectedPlan] = useState<{
+    id: string
+    title: string
+    description?: string
+    category?: string
+    frequency?: string
+    targetTime?: string
+  } | null>(null)
 
-  // ===== 激励语句（每天固定一句） =====
+  const today = toLocalDate()
+  const checkedIn = lastCheckinDate === today
+
   const todayQuote = useMemo(() => {
-    const dayOfYear = Math.floor(
-      (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
-    )
+    const now = new Date()
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000)
     return MOTIVATIONAL_QUOTES[dayOfYear % MOTIVATIONAL_QUOTES.length]
   }, [])
 
-  // ===== 今日日期（中文格式） =====
   const todayFormatted = useMemo(
     () => format(new Date(), 'yyyy年M月d日 EEEE', { locale: zhCN }),
-    []
+    [],
   )
 
-  // ===== 今日数据 =====
-  const today = todayStr()
-
-  // 检测今日是否已打卡
-  useMemo(() => {
-    setCheckedIn(lastCheckinDate === today)
-  }, [lastCheckinDate, today])
-
-  const todayWordCount = useMemo(
-    () => wordRecords.filter((r) => r.date === today).reduce((sum, r) => sum + r.count, 0),
-    [wordRecords, today]
-  )
-
-  const todayPracticeMinutes = useMemo(
-    () => {
-      const examMinutes = practiceRecords.filter((r) => r.date === today).reduce((sum, r) => sum + r.duration, 0)
-      const timerMinutes = timerRecords.filter((r) => r.date === today).reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
-      return examMinutes + timerMinutes
-    },
-    [practiceRecords, timerRecords, today]
-  )
-
-  // ===== 周报/月报数据 =====
-  const weekReport = useMemo(() => {
-    const now = new Date()
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 })
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd')
-    const weekEndStr = format(weekEnd, 'yyyy-MM-dd')
-
-    const weekWords = wordRecords
-      .filter((r) => r.date >= weekStartStr && r.date <= weekEndStr)
-      .reduce((sum, r) => sum + r.count, 0)
-
-    const weekExamMinutes = practiceRecords
-      .filter((r) => r.date >= weekStartStr && r.date <= weekEndStr)
-      .reduce((sum, r) => sum + r.duration, 0)
-
-    const weekTimerMinutes = timerRecords
-      .filter((r) => r.date >= weekStartStr && r.date <= weekEndStr)
-      .reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
-
-    const weekCompletedTasks = executions
-      .filter((e) => e.date >= weekStartStr && e.date <= weekEndStr && e.isCompleted)
-      .length
-
-    return {
-      words: weekWords,
-      minutes: weekExamMinutes + weekTimerMinutes,
-      completedTasks: weekCompletedTasks,
-    }
-  }, [wordRecords, practiceRecords, timerRecords, executions])
-
-  const monthReport = useMemo(() => {
-    const now = new Date()
-    const monthStart = startOfMonth(now)
-    const monthEnd = endOfMonth(now)
-    const monthStartStr = format(monthStart, 'yyyy-MM-dd')
-    const monthEndStr = format(monthEnd, 'yyyy-MM-dd')
-
-    const monthWords = wordRecords
-      .filter((r) => r.date >= monthStartStr && r.date <= monthEndStr)
-      .reduce((sum, r) => sum + r.count, 0)
-
-    const monthExamMinutes = practiceRecords
-      .filter((r) => r.date >= monthStartStr && r.date <= monthEndStr)
-      .reduce((sum, r) => sum + r.duration, 0)
-
-    const monthTimerMinutes = timerRecords
-      .filter((r) => r.date >= monthStartStr && r.date <= monthEndStr)
-      .reduce((sum, r) => sum + Math.floor(r.duration / 60), 0)
-
-    const monthCompletedTasks = executions
-      .filter((e) => e.date >= monthStartStr && e.date <= monthEndStr && e.isCompleted)
-      .length
-
-    return {
-      words: monthWords,
-      minutes: monthExamMinutes + monthTimerMinutes,
-      completedTasks: monthCompletedTasks,
-    }
-  }, [wordRecords, practiceRecords, timerRecords, executions])
-
-  // ===== 今日待办 =====
-  const todayPlans = useMemo(() => {
-    const dayOfWeek = new Date().getDay()
-    const activePlans = plans.filter((p) => {
-      if (!p.isActive) return false
-      if (p.frequency === 'daily') return true
-      if (p.frequency === 'weekly') return p.weekDays?.includes(dayOfWeek)
-      return false
-    })
-    const todayExecs = executions.filter((e) => e.date === today)
-    return activePlans.slice(0, 5).map((plan) => {
-      const exec = todayExecs.find((e) => e.planId === plan.id)
-      return {
-        id: plan.id,
-        title: plan.title,
-        description: plan.description,
-        category: plan.category,
-        frequency: plan.frequency,
-        targetTime: plan.targetTime,
-        completed: exec?.isCompleted ?? false,
-        execId: exec?.id,
-      }
-    })
-  }, [plans, executions, today])
-
-  const togglePlanComplete = (planId: string, execId?: string) => {
-    if (execId) {
-      const exec = executions.find((e) => e.id === execId)
-      if (exec) {
-        updateExecution(execId, { isCompleted: !exec.isCompleted })
-      }
-    } else {
-      addExecution({ planId, date: today, isCompleted: true })
-    }
-  }
-
-  const showPlanDetail = (plan: typeof todayPlans[0]) => {
-    setSelectedPlan(plan)
-    setPlanDetailOpen(true)
-  }
-
-  // ===== 考试倒计时 =====
-  const examCountdown = useMemo(() => {
-    if (!examDate) return null
-    const exam = new Date(examDate)
-    const now = new Date()
-    const daysLeft = differenceInDays(exam, now)
-    if (daysLeft < 0) return { daysLeft: 0, progress: 100, color: 'bg-red-500' }
-    const startDate = subDays(exam, 90)
-    const totalDays = 90
-    const elapsed = differenceInDays(now, startDate)
-    const progress = Math.min(100, Math.max(0, (elapsed / totalDays) * 100))
-    let color = 'bg-green-500'
-    if (daysLeft <= 7) color = 'bg-red-500'
-    else if (daysLeft <= 30) color = 'bg-orange-500'
-    return { daysLeft, progress, color }
-  }, [examDate])
-
-  // ===== 最近35天热力图 =====
-  const heatmapCells = useMemo(() => {
-    const cells: { date: string; level: number; isToday: boolean }[] = []
-    for (let i = 34; i >= 0; i--) {
-      const d = subDays(new Date(), i)
-      const dateStr = format(d, 'yyyy-MM-dd')
-      const isToday = i === 0
-      const activity = heatmapData[dateStr] ?? 0
-      let level = 0
-      if (activity >= 4) level = 4
-      else if (activity >= 3) level = 3
-      else if (activity >= 2) level = 2
-      else if (activity >= 1) level = 1
-      cells.push({ date: dateStr, level, isToday })
-    }
-    return cells
-  }, [heatmapData])
-
-  // ===== 最近成就（最多3个） =====
-  const recentAchievements = useMemo(() => {
-    return unlockedBadges
-      .map((id) => BADGES.find((b) => b.id === id))
-      .filter((b): b is Achievement => !!b)
-      .slice(0, 3)
-  }, [unlockedBadges])
-
-  // ===== 最近日记（最新1条） =====
-  const latestDiary = useMemo(() => {
-    if (diaryEntries.length === 0) return null
-    const sorted = [...diaryEntries].sort((a, b) => b.date.localeCompare(a.date))
-    const entry = sorted[0]
-    const mood = MOOD_OPTIONS.find((m) => m.value === entry.mood)
-    return {
-      date: entry.date,
-      moodEmoji: mood?.emoji ?? '',
-      moodLabel: mood?.label ?? '',
-      contentPreview: entry.content.length > 60 ? entry.content.slice(0, 60) + '...' : entry.content,
-    }
-  }, [diaryEntries])
-
-  // ===== 等级和经验值 =====
-  const levelInfo = useMemo(() => {
-    const current = achievementStore.getCurrentLevel()
-    const progress = achievementStore.getXPProgress()
-    return { ...current, xpProgress: progress }
-  }, [achievementStore])
-
-  // ===== 热力图颜色 =====
-  // Indigo 体系（与主色统一）
-  const heatmapColors = [
-    'bg-indigo-50 dark:bg-indigo-950/50',
-    'bg-indigo-100 dark:bg-indigo-900/60',
-    'bg-indigo-300 dark:bg-indigo-700/70',
-    'bg-indigo-500 dark:bg-indigo-500',
-    'bg-indigo-700 dark:bg-indigo-300',
-  ]
-
-  // ===== 时间感知问候语 =====
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
     if (hour < 6) return '夜深了'
@@ -285,400 +144,583 @@ export default function Dashboard() {
     return '晚上好'
   }, [])
 
+  const analyticsInput = useMemo(
+    () => ({ wordRecords, practiceRecords, timerRecords, planExecutions: executions }),
+    [wordRecords, practiceRecords, timerRecords, executions],
+  )
+
+  const todaySummary = useMemo(
+    () => getDateRangeSummary(analyticsInput, { startDate: today, endDate: today }),
+    [analyticsInput, today],
+  )
+
+  const weekReport = useMemo(() => {
+    const now = parseLocalDate(today)
+    const summary = getDateRangeSummary(analyticsInput, {
+      startDate: toLocalDate(startOfWeek(now, { weekStartsOn: 1 })),
+      endDate: today,
+    })
+    return {
+      words: summary.totalWords,
+      minutes: summary.displayMinutes,
+      completedTasks: summary.completedPlanCount,
+    }
+  }, [analyticsInput, today])
+
+  const monthReport = useMemo(() => {
+    const summary = getDateRangeSummary(analyticsInput, {
+      startDate: toLocalDate(startOfMonth(parseLocalDate(today))),
+      endDate: today,
+    })
+    return {
+      words: summary.totalWords,
+      minutes: summary.displayMinutes,
+      completedTasks: summary.completedPlanCount,
+    }
+  }, [analyticsInput, today])
+
+  const todayPlans = useMemo(() => {
+    const dayOfWeek = new Date().getDay()
+    const todayExecutionMap = indexLatestPlanExecutionsForDate(executions, today)
+
+    return plans
+      .filter((plan) => isPlanScheduledForDay(plan, dayOfWeek))
+      .map((plan) => {
+        const execution = todayExecutionMap.get(plan.id)
+        return {
+          id: plan.id,
+          title: plan.title,
+          description: plan.description,
+          category: plan.category,
+          frequency: plan.frequency,
+          targetTime: plan.targetTime,
+          completed: execution?.isCompleted ?? false,
+          execId: execution?.id,
+        }
+      })
+  }, [executions, plans, today])
+
+  const visibleTodayPlans = todayPlans.slice(0, 5)
+  const completedTodayCount = todayPlans.filter((plan) => plan.completed).length
+  const remainingTodayCount = todayPlans.length - completedTodayCount
+
+  const togglePlanComplete = async (planId: string) => {
+    if (mutatingPlanIds.has(planId)) return
+    const execution = indexLatestPlanExecutionsForDate(executions, today).get(planId)
+    setMutatingPlanIds((current) => new Set(current).add(planId))
+    setPlanMutationError('')
+    try {
+      const result = await setExecutionForDate({
+        planId,
+        date: today,
+        isCompleted: !(execution?.isCompleted ?? false),
+      })
+      if (result.status === 'busy' || result.status === 'failed') {
+        setPlanMutationError(result.error?.message || '计划状态暂时无法保存，请重试。')
+      }
+    } finally {
+      setMutatingPlanIds((current) => {
+        const next = new Set(current)
+        next.delete(planId)
+        return next
+      })
+    }
+  }
+
+  const showPlanDetail = (plan: (typeof todayPlans)[number]) => {
+    setSelectedPlan(plan)
+    setPlanDetailOpen(true)
+  }
+
+  const examCountdown = useMemo(() => {
+    if (!examDate) return null
+    const exam = parseLocalDate(examDate)
+    const now = new Date()
+    const daysLeft = differenceInCalendarDays(exam, now)
+    if (daysLeft < 0) return { daysLeft: 0, progress: 100, tone: 'danger' as const }
+
+    const elapsed = differenceInCalendarDays(now, subDays(exam, 90))
+    const progress = Math.min(100, Math.max(0, (elapsed / 90) * 100))
+    if (daysLeft <= 7) return { daysLeft, progress, tone: 'danger' as const }
+    if (daysLeft <= 30) return { daysLeft, progress, tone: 'warning' as const }
+    return { daysLeft, progress, tone: 'success' as const }
+  }, [examDate])
+
+  const heatmapCells = useMemo(() => {
+    const gridEnd = endOfWeek(new Date(), { weekStartsOn: 0 })
+    return Array.from({ length: 35 }, (_, index) => {
+      const date = toLocalDate(subDays(gridEnd, 34 - index))
+      const isFuture = date > today
+      const value = isFuture ? 0 : (heatmapData[date] ?? 0)
+      return {
+        date,
+        value,
+        level: getActivityLevel(value),
+        isToday: date === today,
+        isFuture,
+      }
+    })
+  }, [heatmapData, today])
+
+  const recentAchievements = useMemo(
+    () => unlockedBadges
+      .slice(-3)
+      .reverse()
+      .map((id) => BADGE_BY_ID.get(id))
+      .filter((badge): badge is Achievement => Boolean(badge)),
+    [unlockedBadges],
+  )
+
+  const latestDiary = useMemo(() => {
+    if (diaryEntries.length === 0) return null
+    const entry = diaryEntries.reduce((latest, candidate) => (
+      candidate.date > latest.date ? candidate : latest
+    ))
+    const mood = MOOD_OPTIONS.find((item) => item.value === entry.mood)
+    return {
+      date: entry.date,
+      moodEmoji: mood?.emoji ?? '',
+      moodLabel: mood?.label ?? '',
+      contentPreview: entry.content.length > 88 ? `${entry.content.slice(0, 88)}…` : entry.content,
+    }
+  }, [diaryEntries])
+
+  const levelInfo = useMemo(() => {
+    const currentLevel = LEVELS.find((item) => item.level === achievementLevel) ?? LEVELS[0]
+    const nextLevel = LEVELS.find((item) => item.level === currentLevel.level + 1)
+    const levelRange = nextLevel ? nextLevel.requiredXP - currentLevel.requiredXP : 0
+    const percentage = nextLevel && levelRange > 0
+      ? ((displayXP - currentLevel.requiredXP) / levelRange) * 100
+      : 100
+
+    return {
+      level: currentLevel.level,
+      name: currentLevel.name,
+      xpProgress: {
+        current: displayXP,
+        required: nextLevel?.requiredXP ?? currentLevel.requiredXP,
+        percentage: Math.max(0, percentage),
+      },
+    }
+  }, [achievementLevel, displayXP])
+
+  const countdownTone = examCountdown?.tone === 'danger'
+    ? 'text-danger'
+    : examCountdown?.tone === 'warning'
+      ? 'text-warning'
+      : 'text-success'
+  const countdownBar = examCountdown?.tone === 'danger'
+    ? 'bg-danger'
+    : examCountdown?.tone === 'warning'
+      ? 'bg-warning'
+      : 'bg-success'
+
   return (
     <div className="space-y-5 md:space-y-6">
-      {/* ===== 1. 欢迎横幅 ===== */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 p-6 md:p-8 text-white shadow-lg">
-        {/* 装饰性背景圆形（不拦截点击事件） */}
-        <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        <div className="absolute -right-4 bottom-0 h-24 w-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
-        <div className="absolute left-1/2 -top-4 h-20 w-20 rounded-full bg-violet-400/20 blur-lg pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{greeting}</h1>
-              <p className="mt-1 text-[15px] md:text-base text-indigo-100">{todayFormatted}</p>
-            </div>
-            {/* 打卡按钮 */}
-            <button
-              onClick={() => {
-                if (checkIn()) setCheckedIn(true)
-              }}
-              disabled={checkedIn}
-              className={cn(
-                'shrink-0 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all',
-                checkedIn
-                  ? 'bg-white/20 text-white/80 cursor-default'
-                  : 'bg-white text-indigo-600 hover:bg-white/90 hover:scale-105 active:scale-95 shadow-md'
-              )}
-            >
-              <Check className={cn('h-4 w-4', checkedIn && 'text-green-300')} />
-              {checkedIn ? '已打卡' : '打卡'}
-            </button>
-          </div>
-          <p className="mt-3 text-[13px] md:text-sm text-indigo-200 italic leading-relaxed max-w-lg">
-            {todayQuote}
-          </p>
-          {/* 今日快速概览 */}
-          <div className="mt-4 flex gap-4 md:gap-6">
-            <div className="flex items-center gap-1.5 text-[13px] md:text-sm">
-              <BookA className="h-4 w-4 text-amber-300" />
-              <span className="text-indigo-100">背词 <strong className="text-white">{todayWordCount}</strong></span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[13px] md:text-sm">
-              <Clock className="h-4 w-4 text-amber-300" />
-              <span className="text-indigo-100">学习 <strong className="text-white">{todayPracticeMinutes}min</strong></span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[13px] md:text-sm">
-              <Flame className="h-4 w-4 text-amber-300" />
-              <span className="text-indigo-100">连续 <strong className="text-white">{currentStreak}天</strong></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== 2. 考试倒计时 ===== */}
-      {examCountdown && showExamCountdown && (
-        <Card size="sm">
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 md:gap-3">
-                <CalendarDays className="h-5 w-5 text-indigo-500" />
-                <CardTitle className="text-[15px] md:text-base">考试倒计时</CardTitle>
-              </div>
-              <span
-                className={`text-3xl md:text-4xl font-bold ${
-                  examCountdown.daysLeft <= 7
-                    ? 'text-red-500'
-                    : examCountdown.daysLeft <= 30
-                      ? 'text-orange-500'
-                      : 'text-green-500'
-                }`}
-              >
-                {examCountdown.daysLeft}
+      <Card className="relative isolate overflow-hidden border-0 bg-gradient-to-br from-primary via-primary to-violet-600 py-0 text-primary-foreground shadow-md shadow-primary/15">
+        <div
+          className="pointer-events-none absolute -right-10 -top-16 size-44 rounded-full border-[26px] border-white/8"
+          aria-hidden="true"
+        />
+        <CardContent className="relative flex items-start justify-between gap-3 px-4 py-4 sm:items-center sm:px-5 md:py-5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/14 ring-1 ring-white/15">
+                <CalendarDays className="size-4.5" aria-hidden="true" />
               </span>
-            </div>
-            <p className="text-[13px] md:text-sm text-muted-foreground mt-2">
-              距离考试还有 {examCountdown.daysLeft} 天
-            </p>
-            <div className="mt-3 h-2 w-full rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-              <div
-                className={`h-full rounded-full transition-all ${examCountdown.color}`}
-                style={{ width: `${examCountdown.progress}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ===== 3. AI 学习建议入口 ===== */}
-      {showAiSuggestions && (
-        <Card
-          size="sm"
-          className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99] bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800"
-          onClick={() => setAiSuggestionOpen(true)}
-        >
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50">
-                  <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">今日学习建议</p>
-                  <p className="text-xs text-muted-foreground">AI 根据你的学习数据生成个性化建议</p>
-                </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-foreground/65">今日学习</p>
+                <h1 className="text-xl font-bold tracking-tight md:text-2xl">{greeting}</h1>
               </div>
-              <span className="text-xs text-muted-foreground">点击展开 →</span>
             </div>
-          </CardContent>
-        </Card>
+            <p className="mt-2 max-w-2xl text-sm leading-5 text-primary-foreground/82">{todayQuote}</p>
+            <time className="mt-1.5 block text-xs text-primary-foreground/65" dateTime={today}>{todayFormatted}</time>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={checkIn}
+            disabled={checkedIn}
+            className="shrink-0 bg-white text-primary hover:bg-white/90 disabled:bg-white/15 disabled:text-primary-foreground/75"
+            aria-label={checkedIn ? '今天已完成打卡' : '完成今天的学习打卡'}
+          >
+            <Check aria-hidden="true" />
+            <span className="sm:hidden">{checkedIn ? '已打卡' : '打卡'}</span>
+            <span className="hidden sm:inline">{checkedIn ? '今日已打卡' : '今日打卡'}</span>
+          </Button>
+        </CardContent>
+      </Card>
+
+      {planMutationError && (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{planMutationError}</span>
+        </div>
       )}
 
-      {/* AI 学习建议弹窗 */}
-      <Dialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen}>
-        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-500" />
-              今日学习建议
-            </DialogTitle>
-          </DialogHeader>
-          <AiSuggestionDialog
-            open={aiSuggestionOpen}
-            onOpenChange={setAiSuggestionOpen}
-          />
-        </DialogContent>
-      </Dialog>
+      <MetricGroup
+        ariaLabel="今日学习概览"
+        columns={4}
+        items={[
+          {
+            label: '今日背词',
+            value: todaySummary.totalWords.toLocaleString('zh-CN'),
+            description: '词',
+            icon: <BookA />,
+            tone: 'primary',
+          },
+          {
+            label: '今日学习',
+            value: `${todaySummary.displayMinutes} 分钟`,
+            description: `${todaySummary.studySessionCount} 次练习记录`,
+            icon: <Clock3 />,
+            tone: 'warning',
+          },
+          {
+            label: '连续学习',
+            value: `${currentStreak} 天`,
+            description: '保持稳定节奏',
+            icon: <Flame />,
+            tone: 'success',
+          },
+          {
+            label: '今日计划',
+            value: todayPlans.length === 0 ? '暂无' : `${completedTodayCount}/${todayPlans.length}`,
+            description: todayPlans.length === 0 ? '尚未安排任务' : `${remainingTodayCount} 项待完成`,
+            icon: <ListChecks />,
+            tone: 'reading',
+          },
+        ]}
+      />
 
-      {/* ===== 4. 今日待办 + 5. 热力图 ===== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 今日待办 */}
+      {((examCountdown && showExamCountdown) || showAiSuggestions) && (
+        <section
+          className={cn(
+            'grid gap-3',
+            examCountdown && showExamCountdown && showAiSuggestions && 'md:grid-cols-2',
+          )}
+          aria-label="备考工具"
+        >
+          {examCountdown && showExamCountdown && (
+            <Card size="sm">
+              <CardContent>
+                <div className="flex items-center gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <CalendarDays className="size-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-sm font-semibold">考试倒计时</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {examDate ? format(parseLocalDate(examDate), 'yyyy年M月d日') : ''}
+                    </p>
+                  </div>
+                  <span className={cn('shrink-0 text-2xl font-bold tabular-nums', countdownTone)}>
+                    {examCountdown.daysLeft}<span className="ml-1 text-xs font-medium">天</span>
+                  </span>
+                </div>
+                <div
+                  className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-label="90 天备考周期进度"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(examCountdown.progress)}
+                >
+                  <div className={cn('h-full rounded-full', countdownBar)} style={{ width: `${examCountdown.progress}%` }} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {showAiSuggestions && (
+            <Card size="sm" className="border-primary/15 bg-primary/5">
+              <CardContent className="flex items-center gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Sparkles className="size-4.5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold">AI 学习建议</h2>
+                  <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">根据现有学习记录生成可执行建议。</p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setAiSuggestionOpen(true)}>
+                  查看<span className="hidden sm:inline">建议</span>
+                  <ArrowRight aria-hidden="true" />
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      )}
+
+      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)]" aria-label="今日安排与活跃度">
         <Card>
           <CardHeader>
-            <CardTitle className="text-[15px] md:text-base">今日待办</CardTitle>
+            <SectionHeader
+              title="今日待办"
+              description={todayPlans.length > 0 ? `${completedTodayCount} 项已完成，${remainingTodayCount} 项待完成` : '把计划拆成今天可以完成的小步骤'}
+              action={(
+                <Link to="/plans" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+                  全部计划<ArrowRight aria-hidden="true" />
+                </Link>
+              )}
+            />
           </CardHeader>
           <CardContent>
-            {todayPlans.length === 0 ? (
+            {visibleTodayPlans.length === 0 ? (
               <EmptyState
                 scene="tasks"
+                density="compact"
                 title="今天没有待办任务"
-                description="去「学习计划」页面创建你的第一个学习计划吧"
+                description="创建或调整学习计划，让首页为你聚焦下一步。"
+                action={(
+                  <Link to="/plans" className={buttonVariants({ size: 'sm' })}>安排今天</Link>
+                )}
               />
-          ) : (
-            <div className="space-y-2">
-              {todayPlans.map((plan, index) => (
-                <div
-                  key={plan.id}
-                  className={`animate-stagger-up stagger-${index + 1} flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-all ${
-                    plan.completed
-                      ? 'bg-green-50 dark:bg-green-900/30'
-                      : 'hover:bg-accent'
-                  }`}
-                >
-                  <button
-                    onClick={() => togglePlanComplete(plan.id, plan.execId)}
-                    className="shrink-0 p-0.5 -ml-0.5"
-                    aria-label={plan.completed ? '标记为未完成' : '标记为已完成'}
-                  >
-                    {plan.completed ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ul className="space-y-2" aria-label="今日学习待办">
+                {visibleTodayPlans.map((plan) => (
+                  <li
+                    key={plan.id}
+                    className={cn(
+                      'flex min-h-12 items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-colors',
+                      plan.completed ? 'border-success-border bg-success-surface' : 'border-border bg-background hover:bg-accent/70',
                     )}
-                  </button>
-                  <button
-                    onClick={() => showPlanDetail(plan)}
-                    className={`flex-1 text-left ${plan.completed ? 'line-through text-muted-foreground' : ''}`}
                   >
-                    {plan.title}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-            <Link
-              to="/plans"
-              className="text-[15px] text-primary hover:underline mt-3 inline-block"
-            >
-              查看全部计划 &rarr;
-            </Link>
+                    <button
+                      type="button"
+                      onClick={() => void togglePlanComplete(plan.id)}
+                      disabled={mutatingPlanIds.has(plan.id)}
+                      className="grid size-9 shrink-0 place-items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={plan.completed ? `将「${plan.title}」标记为未完成` : `将「${plan.title}」标记为已完成`}
+                      aria-pressed={plan.completed}
+                    >
+                      {plan.completed
+                        ? <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
+                        : <Circle className="size-5 text-muted-foreground" aria-hidden="true" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => showPlanDetail(plan)}
+                      className={cn(
+                        'min-w-0 flex-1 rounded-md py-1 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        plan.completed && 'text-muted-foreground line-through',
+                      )}
+                    >
+                      <span className="block truncate">{plan.title}</span>
+                    </button>
+                    {plan.targetTime && (
+                      <time className="shrink-0 text-xs font-medium tabular-nums text-primary" dateTime={plan.targetTime}>
+                        {plan.targetTime}
+                      </time>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {todayPlans.length > visibleTodayPlans.length && (
+              <p className="mt-3 text-xs text-muted-foreground">另有 {todayPlans.length - visibleTodayPlans.length} 项任务，请在计划页查看。</p>
+            )}
           </CardContent>
         </Card>
 
-        {/* 热力图 */}
-        <Card>
+        <Card size="sm" className="self-start">
           <CardHeader>
-            <CardTitle className="text-[15px] md:text-base">最近活跃度</CardTitle>
+            <SectionHeader title="最近活跃度" description="过去 5 周累计学习事件" />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-1 md:gap-1.5">
+            <div
+              className="grid grid-cols-[repeat(7,1.35rem)] justify-center gap-1.5 min-[380px]:grid-cols-[repeat(7,1.5rem)]"
+              aria-label="过去 5 周学习活跃度"
+            >
               {WEEKDAY_LABELS.map((label) => (
-                <div
-                  key={label}
-                  className="text-xs md:text-xs text-muted-foreground text-center mb-1"
-                >
-                  {label}
-                </div>
+                <span key={label} className="mb-0.5 text-center text-[11px] font-medium text-muted-foreground">{label}</span>
               ))}
               {heatmapCells.map((cell) => (
-                <div
+                <span
                   key={cell.date}
-                  title={`${cell.date}: ${cell.level > 0 ? '有学习记录' : '无记录'}`}
-                  className={`aspect-square rounded-sm ${heatmapColors[cell.level]} ${
-                    cell.isToday ? 'ring-2 ring-indigo-500 ring-offset-1' : ''
-                  } transition-colors`}
+                  role="img"
+                  title={cell.isFuture ? `${cell.date}: 尚未到来` : `${cell.date}: ${cell.value} 次活动`}
+                  aria-label={cell.isFuture ? `${cell.date}，尚未到来` : `${cell.date}，${cell.value} 次活动`}
+                  className={cn(
+                    'aspect-square rounded-[4px]',
+                    cell.isToday && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+                  )}
+                  style={{ backgroundColor: cell.isFuture ? 'transparent' : HEATMAP_COLORS[cell.level] }}
                 />
               ))}
             </div>
+            <div className="mt-4 flex items-center justify-center gap-1 text-[11px] text-muted-foreground" aria-hidden="true">
+              <span className="mr-1">少</span>
+              {HEATMAP_COLORS.map((color) => (
+                <span key={color} className="size-3 rounded-[3px]" style={{ backgroundColor: color }} />
+              ))}
+              <span className="ml-1">多</span>
+            </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
 
-      {/* ===== 6. 最近成就 + 8. 等级经验值 ===== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 最近成就 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-[15px] md:text-base">最近成就</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentAchievements.length === 0 ? (
-              <EmptyState
-                scene="achievements"
-                title="还没有解锁任何成就"
-                description="坚持学习，完成每日任务来解锁你的第一个成就!"
-              />
-            ) : (
-              <div className="flex gap-3 md:gap-4 flex-wrap">
-                {recentAchievements.map((badge, index) => (
-                  <div
-                    key={badge.id}
-                    className={`animate-stagger-up stagger-${index + 1} flex flex-col items-center gap-1.5 p-2 md:p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 min-w-[72px] md:min-w-[80px]`}
-                  >
-                    <span className="text-xl md:text-2xl">{badge.icon}</span>
-                    <span className="text-xs font-medium text-center">{badge.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Link
-              to="/achievements"
-              className="text-[15px] text-primary hover:underline mt-3 inline-block"
-            >
-              查看全部成就 &rarr;
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* 等级和经验值 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-[15px] md:text-base">等级与经验</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-                <Star className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div>
-                <div className="font-semibold text-[15px] md:text-base">
-                  Lv.{levelInfo.level} {levelInfo.name}
-                </div>
-                <div className="text-[13px] text-muted-foreground">
-                  {levelInfo.xpProgress.current} XP
-                  {levelInfo.xpProgress.required !== levelInfo.xpProgress.current &&
-                    ` / ${levelInfo.xpProgress.required} XP`}
-                </div>
-              </div>
-            </div>
-            <div className="h-2 md:h-2.5 w-full rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all"
-                style={{
-                  width: `${Math.min(100, levelInfo.xpProgress.percentage)}%`,
-                }}
-              />
-            </div>
-            <p className="text-[13px] text-muted-foreground mt-1.5">
-              {levelInfo.xpProgress.percentage >= 100
-                ? '已达到最高等级!'
-                : `距离下一等级还需 ${Math.max(0, levelInfo.xpProgress.required - levelInfo.xpProgress.current)} XP`}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ===== 7. 最近学习日记 ===== */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[15px] md:text-base">最近学习日记</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {latestDiary ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                <BookOpen className="h-4 w-4" />
-                <span>{format(new Date(latestDiary.date), 'yyyy年M月d日', { locale: zhCN })}</span>
-                <span>
-                  {latestDiary.moodEmoji} {latestDiary.moodLabel}
-                </span>
-              </div>
-              <p className="text-[15px]">{latestDiary.contentPreview}</p>
-            </div>
-          ) : (
-            <EmptyState
-              scene="diary"
-              title="还没有写过学习日记"
-              description="记录每天的学习感悟，回顾时会发现成长的轨迹"
-            />
+      <section className="space-y-3" aria-labelledby="growth-review-title">
+        <SectionHeader
+          title="成长回顾"
+          titleId="growth-review-title"
+          description="把短期行动沉淀成可回看的学习轨迹。"
+          action={(
+            <Button type="button" variant="outline" size="sm" onClick={() => setReportOpen(true)}>
+              <BarChart3 aria-hidden="true" />学习报告
+            </Button>
           )}
-          <Link
-            to="/diary"
-            className="text-[15px] text-primary hover:underline mt-3 inline-block"
-          >
-            查看全部日记 &rarr;
-          </Link>
-        </CardContent>
-      </Card>
+        />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>最近成就</CardTitle>
+              <CardDescription>{unlockedBadges.length} / {BADGES.length} 已解锁</CardDescription>
+            </CardHeader>
+            <CardContent className="flex h-full flex-col justify-between gap-4">
+              {recentAchievements.length === 0 ? (
+                <EmptyState
+                  scene="achievements"
+                  density="compact"
+                  title="还没有解锁成就"
+                  description="完成学习和打卡后，里程碑会出现在这里。"
+                />
+              ) : (
+                <ul className="grid grid-cols-3 gap-2" aria-label="最近解锁的成就">
+                  {recentAchievements.map((badge) => (
+                    <li key={badge.id} className="rounded-xl border border-primary/10 bg-primary/5 p-2.5 text-center">
+                      <AchievementMark achievementId={badge.id} size="md" className="mx-auto" />
+                      <span className="mt-1 block truncate text-xs font-medium">{badge.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/achievements" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}>
+                查看全部成就<ArrowRight aria-hidden="true" />
+              </Link>
+            </CardContent>
+          </Card>
 
-      {/* ===== 学习报告 ===== */}
-      <Card
-        className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99]"
-        onClick={() => setReportOpen(true)}
-      >
-        <CardContent className="flex items-center justify-between py-4 px-4 md:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/50">
-              <BarChart3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">学习报告</p>
-              <p className="text-[13px] text-muted-foreground">查看本周/本月的学习数据</p>
-            </div>
-          </div>
-          <span className="text-[13px] text-muted-foreground">点击展开 &rarr;</span>
-        </CardContent>
-      </Card>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>等级与经验</CardTitle>
+              <CardDescription>持续记录会累积经验值</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Star className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold">Lv.{levelInfo.level} {levelInfo.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                    {levelInfo.xpProgress.current} / {levelInfo.xpProgress.required} XP
+                  </p>
+                </div>
+              </div>
+              <div
+                className="mt-5 h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="当前等级经验进度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(Math.min(100, levelInfo.xpProgress.percentage))}
+              >
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${Math.min(100, levelInfo.xpProgress.percentage)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {levelInfo.xpProgress.percentage >= 100
+                  ? '已达到当前最高等级。'
+                  : `距离下一等级还需 ${Math.max(0, levelInfo.xpProgress.required - levelInfo.xpProgress.current)} XP。`}
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* 学习报告弹窗 */}
-      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <Card size="sm" className="md:col-span-2 xl:col-span-1">
+            <CardHeader>
+              <CardTitle>最近学习日记</CardTitle>
+              <CardDescription>记录状态，也记录方法</CardDescription>
+            </CardHeader>
+            <CardContent className="flex h-full flex-col justify-between gap-4">
+              {latestDiary ? (
+                <article className="rounded-xl border border-border/70 bg-secondary/40 p-3.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <BookOpen className="size-4" aria-hidden="true" />
+                    <time dateTime={latestDiary.date}>{format(parseLocalDate(latestDiary.date), 'yyyy年M月d日')}</time>
+                    <span aria-hidden="true">·</span>
+                    <span>{latestDiary.moodEmoji} {latestDiary.moodLabel}</span>
+                  </div>
+                  <p className="mt-3 line-clamp-3 text-sm leading-6">{latestDiary.contentPreview}</p>
+                </article>
+              ) : (
+                <EmptyState
+                  scene="diary"
+                  density="compact"
+                  title="还没有学习日记"
+                  description="写下今天的方法和感受，方便以后回看。"
+                />
+              )}
+              <Link to="/diary" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}>
+                查看全部日记<ArrowRight aria-hidden="true" />
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <Dialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen}>
+        <DialogContent className="max-h-[85vh] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              <Sparkles className="size-5 text-primary" aria-hidden="true" />
+              今日学习建议
+            </DialogTitle>
+          </DialogHeader>
+          <AiSuggestionDialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="max-h-[85vh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="size-5 text-primary" aria-hidden="true" />
               学习报告
             </DialogTitle>
           </DialogHeader>
-
           <div className="space-y-5">
-            {/* 本周数据 */}
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">本周</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-3 text-center">
-                  <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{weekReport.words}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">背词</p>
-                </div>
-                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 text-center">
-                  <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{weekReport.minutes}<span className="text-xs font-normal">min</span></p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">时长</p>
-                </div>
-                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center">
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{weekReport.completedTasks}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">完成任务</p>
-                </div>
+            <section aria-labelledby="weekly-report-title">
+              <h3 id="weekly-report-title" className="mb-2 text-sm font-semibold">本周</h3>
+              <div className="grid grid-cols-3 gap-2">
+                <ReportMetric value={weekReport.words} label="背词" tone="border-primary/15 bg-primary/5" />
+                <ReportMetric value={`${weekReport.minutes}m`} label="时长" tone="border-warning-border bg-warning-surface" />
+                <ReportMetric value={weekReport.completedTasks} label="完成任务" tone="border-success-border bg-success-surface" />
               </div>
-            </div>
-
-            {/* 本月数据 */}
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">本月</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-3 text-center">
-                  <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{monthReport.words}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">背词</p>
-                </div>
-                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 text-center">
-                  <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{monthReport.minutes}<span className="text-xs font-normal">min</span></p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">时长</p>
-                </div>
-                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-3 text-center">
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{monthReport.completedTasks}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">完成任务</p>
-                </div>
+            </section>
+            <section aria-labelledby="monthly-report-title">
+              <h3 id="monthly-report-title" className="mb-2 text-sm font-semibold">本月</h3>
+              <div className="grid grid-cols-3 gap-2">
+                <ReportMetric value={monthReport.words} label="背词" tone="border-primary/15 bg-primary/5" />
+                <ReportMetric value={`${monthReport.minutes}m`} label="时长" tone="border-warning-border bg-warning-surface" />
+                <ReportMetric value={monthReport.completedTasks} label="完成任务" tone="border-success-border bg-success-surface" />
               </div>
-            </div>
+            </section>
+            <Link to="/stats" onClick={() => setReportOpen(false)} className={buttonVariants({ className: 'w-full' })}>
+              查看完整学习复盘<ArrowRight aria-hidden="true" />
+            </Link>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* 计划详情弹窗 */}
       <Dialog open={planDetailOpen} onOpenChange={setPlanDetailOpen}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ListTodo className="h-5 w-5 text-indigo-500" />
+              <ListTodo className="size-5 text-primary" aria-hidden="true" />
               计划详情
             </DialogTitle>
           </DialogHeader>
@@ -686,26 +728,20 @@ export default function Dashboard() {
             <div className="space-y-3">
               <div>
                 <h3 className="text-base font-semibold">{selectedPlan.title}</h3>
-                {selectedPlan.description && (
-                  <p className="mt-1 text-sm text-muted-foreground">{selectedPlan.description}</p>
-                )}
+                {selectedPlan.description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{selectedPlan.description}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
                 {selectedPlan.category && (
-                  <Badge variant="outline" className="text-xs">
-                    {PLAN_CATEGORY_OPTIONS.find(o => o.value === selectedPlan.category)?.label || selectedPlan.category}
+                  <Badge variant="outline">
+                    {PLAN_CATEGORY_OPTIONS.find((option) => option.value === selectedPlan.category)?.label ?? selectedPlan.category}
                   </Badge>
                 )}
                 {selectedPlan.frequency && (
-                  <Badge variant="outline" className="text-xs">
-                    {selectedPlan.frequency === 'daily' ? '每日' : '每周'}
+                  <Badge variant="outline">
+                    {selectedPlan.frequency === 'daily' ? '每日' : selectedPlan.frequency === 'weekly' ? '每周' : '自定义'}
                   </Badge>
                 )}
-                {selectedPlan.targetTime && (
-                  <Badge variant="outline" className="text-xs text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
-                    {selectedPlan.targetTime}
-                  </Badge>
-                )}
+                {selectedPlan.targetTime && <Badge variant="outline" className="text-primary">{selectedPlan.targetTime}</Badge>}
               </div>
             </div>
           )}

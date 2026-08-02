@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { STORAGE_PREFIX } from '@/lib/constants'
+import type { PlanCreateCommandDraft } from '@/ai/planCommands'
+import type { PlanDraftV2 } from '@/ai/structuredOutputs'
 
 export interface ChatActionRecord {
   id: string
@@ -20,6 +22,10 @@ export interface ChatMessageRecord {
   actions?: ChatActionRecord[]
   /** 已确认执行的 action id 集合 */
   actionConfirmedIds?: string[]
+  /** Strict plan assistant output. Provider output never contains executable ids. */
+  planDraft?: PlanDraftV2
+  /** Host-created commands bound to the snapshot, route and account scope. */
+  commandDrafts?: PlanCreateCommandDraft[]
 }
 
 interface ChatStore {

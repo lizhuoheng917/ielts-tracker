@@ -3,6 +3,11 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { TimerRecord, TimerSubject } from '@/lib/types'
 import { STORAGE_PREFIX } from '@/lib/constants'
 import { useStreakStore } from '@/stores/streakStore'
+import { useAchievementStore } from '@/stores/achievementStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { createActivityTransactionPlan } from '@/data/activityTransaction'
+import { commitActivityTransaction } from '@/data/activityTransactionRuntime'
+import { createEntityCollectionPatch } from '@/data/localMutationJournal'
 
 // ===== 计时器状态 =====
 export type TimerMode = 'countdown' | 'stopwatch'
@@ -38,6 +43,7 @@ interface TimerStore extends TimerState {
 }
 
 const generateId = () => crypto.randomUUID()
+const TIMER_STORAGE_KEY = `${STORAGE_PREFIX}:timerRecords`
 
 export const useTimerStore = create<TimerStore>()(
   persist(
@@ -115,48 +121,112 @@ export const useTimerStore = create<TimerStore>()(
       addRecord: (data) => {
         const now = new Date().toISOString()
         const record: TimerRecord = { ...data, id: generateId(), createdAt: now, updatedAt: now }
-        set((state) => ({ records: [record, ...state.records] }))
-
-        // 记录活动到热力图
-        useStreakStore.getState().recordActivity(data.date)
-
-        // XP: 每30分钟 +15 XP（和模考一致）
-        const minutes = Math.floor(data.duration / 60)
-        if (minutes > 0) {
-          import('@/lib/achievementService').then(({ addXP, checkPracticeBadges }) => {
-            const xp = Math.floor((minutes / 30) * 15)
-            if (xp > 0) addXP(xp)
-            // 检测全科覆盖徽章（计时练习的科目也计入）
-            checkPracticeBadges()
-          })
-        }
+        const plan = createActivityTransactionPlan({
+          action: 'timer.create',
+          domainPatches: [createEntityCollectionPatch({
+            storage: localStorage,
+            storageKey: TIMER_STORAGE_KEY,
+            collection: 'records',
+            changes: [{ id: record.id, before: null, beforeIndex: 0, expectedAfter: record }],
+          })],
+          events: [{
+            entityKind: 'timer_record',
+            entityId: record.id,
+            operation: 'created',
+            effectiveDate: record.date,
+            occurredAt: now,
+            source: 'timer',
+            after: record,
+          }],
+          achievements: useAchievementStore.getState(),
+          streak: useStreakStore.getState(),
+          lastCheckinDate: useSettingsStore.getState().lastCheckinDate,
+          createdAt: now,
+        })
+        const committed = commitActivityTransaction(plan, () => {
+          set((state) => ({ records: [record, ...state.records] }))
+        })
+        if (!committed) return
+        import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+          checkPracticeBadges()
+        })
       },
 
       updateRecord: (id, data) => {
-        set((state) => ({
-          records: state.records.map((r) =>
-            r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r
-          ),
-        }))
+        const oldRecord = get().records.find((r) => r.id === id)
+        if (!oldRecord) return
+        const now = new Date().toISOString()
+        const nextRecord: TimerRecord = { ...oldRecord, ...data, updatedAt: now }
 
-        // 科目变化时检查徽章
-        if (data.subject) {
-          import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
-            checkPracticeBadges()
-          })
-        }
+        const beforeIndex = get().records.findIndex((record) => record.id === id)
+        const plan = createActivityTransactionPlan({
+          action: 'timer.update',
+          domainPatches: [createEntityCollectionPatch({
+            storage: localStorage,
+            storageKey: TIMER_STORAGE_KEY,
+            collection: 'records',
+            changes: [{ id, before: oldRecord, beforeIndex, expectedAfter: nextRecord }],
+          })],
+          events: [{
+            entityKind: 'timer_record',
+            entityId: id,
+            operation: 'updated',
+            effectiveDate: nextRecord.date,
+            occurredAt: now,
+            source: 'timer',
+            before: oldRecord,
+            after: nextRecord,
+          }],
+          achievements: useAchievementStore.getState(),
+          streak: useStreakStore.getState(),
+          lastCheckinDate: useSettingsStore.getState().lastCheckinDate,
+          createdAt: now,
+        })
+        const committed = commitActivityTransaction(plan, () => {
+          set((state) => ({
+            records: state.records.map((record) => (record.id === id ? nextRecord : record)),
+          }))
+        })
+        if (!committed) return
+        import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+          checkPracticeBadges()
+        })
       },
 
       deleteRecord: (id) => {
         const record = get().records.find((r) => r.id === id)
-        set((state) => ({ records: state.records.filter((r) => r.id !== id) }))
-
-        // 删除有科目的记录时重新检查徽章
-        if (record && record.subject !== 'general') {
-          import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
-            checkPracticeBadges()
-          })
-        }
+        if (!record) return
+        const occurredAt = new Date().toISOString()
+        const beforeIndex = get().records.findIndex((candidate) => candidate.id === id)
+        const plan = createActivityTransactionPlan({
+          action: 'timer.delete',
+          domainPatches: [createEntityCollectionPatch({
+            storage: localStorage,
+            storageKey: TIMER_STORAGE_KEY,
+            collection: 'records',
+            changes: [{ id, before: record, beforeIndex, expectedAfter: null }],
+          })],
+          events: [{
+            entityKind: 'timer_record',
+            entityId: id,
+            operation: 'deleted',
+            effectiveDate: record.date,
+            occurredAt,
+            source: 'timer',
+            before: record,
+          }],
+          achievements: useAchievementStore.getState(),
+          streak: useStreakStore.getState(),
+          lastCheckinDate: useSettingsStore.getState().lastCheckinDate,
+          createdAt: occurredAt,
+        })
+        const committed = commitActivityTransaction(plan, () => {
+          set((state) => ({ records: state.records.filter((candidate) => candidate.id !== id) }))
+        })
+        if (!committed) return
+        import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+          checkPracticeBadges()
+        })
       },
 
       getRecordsByDateRange: (start, end) => {

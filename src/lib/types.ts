@@ -104,6 +104,16 @@ export interface Settings {
   lastCheckinDate?: string // YYYY-MM-DD
 }
 
+// ===== 每日奖励（正式幂等记录） =====
+export interface DailyCheckinAward {
+  id: string // 与 date 相同，确保一天只有一条奖励
+  date: string // YYYY-MM-DD
+  awardedXP: number
+  awardedAt: string // ISO datetime
+  source: 'manual' | 'plan' | 'migration'
+  sourceEntityId?: string
+}
+
 // ===== 连续打卡 =====
 export interface StreakData {
   currentStreak: number

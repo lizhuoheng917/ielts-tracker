@@ -1,354 +1,416 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, User, Sparkles, AlertCircle, Trash2, AlertTriangle } from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  Send,
+  Sparkles,
+  Trash2,
+  User,
+} from 'lucide-react'
+
+import type { AiCommandReceipt, AiContextSnapshotV1 } from '@/ai/contracts'
+import { AiGatewayError } from '@/ai/gateway'
+import { shouldAcceptPlanAssistantResult } from '@/ai/planAssistantSession'
+import {
+  createPlanCommandDrafts,
+  parsePlanCreateCommandDraft,
+} from '@/ai/planCommands'
+import { executeReadOnlyAi } from '@/ai/readOnlyExecution'
+import { parsePlanDraftV2, type PlanDraftV2 } from '@/ai/structuredOutputs'
+import { useAuth } from '@/auth/authContext'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { AILoadingState } from './AILoadingState'
+import { useAIStore } from '@/stores/aiStore'
 import { useChatStore, type ChatMessageRecord } from '@/stores/chatStore'
-import { AIConfirmCard, type AIAction } from './AIConfirmCard'
-import { streamAIChat, type AIMessage } from '@/lib/aiService'
-import ReactMarkdown from 'react-markdown'
+import { usePlanStore } from '@/stores/planStore'
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  actions?: AIAction[]
-  actionsConfirmed?: boolean
-  /** 已被确认执行的 action id 集合 */
-  actionConfirmedIds?: string[]
-  /** 消息状态：'streaming'=正在生成中，'error'=生成失败/中断，undefined=正常完成 */
-  status?: 'streaming' | 'error'
-}
+import { AIConfirmCard } from './AIConfirmCard'
+import { AILoadingState } from './AILoadingState'
+import { SafeAIContent } from './SafeAIContent'
 
 interface AIChatPanelProps {
-  systemPrompt: string
+  createSnapshot: () => AiContextSnapshotV1
   placeholder?: string
-  onActionConfirm?: (action: AIAction) => void
-  onReportGenerated?: (content: string) => void
   loadingText?: string
   className?: string
   initialQuery?: string
   suggestions?: string[]
-  /** 用于区分不同页面的对话上下文，如 'plans'、'practice' */
   chatContext?: string
 }
 
+const MAX_USER_MESSAGE_LENGTH = 1_200
+const MAX_GATEWAY_USER_INPUT_LENGTH = 2_000
+
+function accountScopeId(routeMode: 'managed' | 'custom', userId?: string): string {
+  return routeMode === 'managed' ? `managed:${userId || 'signed-out'}` : 'custom:device'
+}
+
+function stripLegacyActionTags(content: string): string {
+  return content
+    .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
+    .replace(/\[ACTION:\w+\][\s\S]*$/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function formatPlanDraftContent(draft: PlanDraftV2): string {
+  const sections = [`## ${draft.title}`, draft.summary]
+  if (draft.evidence.length > 0) {
+    sections.push(`### 依据\n${draft.evidence.map((item) => `- ${item}`).join('\n')}`)
+  }
+  if (draft.limitations.length > 0) {
+    sections.push(`### 需要注意\n${draft.limitations.map((item) => `- ${item}`).join('\n')}`)
+  }
+  return sections.join('\n\n')
+}
+
+function conversationMessage(message: ChatMessageRecord): string {
+  const content = stripLegacyActionTags(message.content)
+  const planTitles = message.planDraft?.plans.map((plan) => plan.title).join('、')
+  return [content, planTitles ? `草稿计划：${planTitles}` : ''].filter(Boolean).join('\n')
+}
+
+function buildBoundedUserInput(messages: readonly ChatMessageRecord[], current: string): string {
+  const currentSection = `当前请求：\n${current}`
+  const historyLines = messages
+    .slice(-6)
+    .map((message) => `${message.role === 'user' ? '用户' : '助手'}：${conversationMessage(message)}`)
+    .filter((line) => line.trim().length > 3)
+  if (historyLines.length === 0) return currentSection
+
+  const historyHeader = '最近对话（只用于理解当前请求）：\n'
+  const available = Math.max(
+    0,
+    MAX_GATEWAY_USER_INPUT_LENGTH - currentSection.length - historyHeader.length - 2,
+  )
+  const history = historyLines.join('\n').slice(-available)
+  return `${historyHeader}${history}\n\n${currentSection}`
+}
+
+function safeRestoredMessages(messages: readonly ChatMessageRecord[]): ChatMessageRecord[] {
+  return messages.map((message) => {
+    let planDraft: PlanDraftV2 | undefined
+    try {
+      planDraft = message.planDraft ? parsePlanDraftV2(message.planDraft) : undefined
+    } catch {
+      planDraft = undefined
+    }
+    const commandDrafts = planDraft && Array.isArray(message.commandDrafts)
+      ? message.commandDrafts.flatMap((command) => {
+          try {
+            return [parsePlanCreateCommandDraft(command)]
+          } catch {
+            return []
+          }
+        }).slice(0, 4)
+      : []
+    return {
+      id: message.id,
+      role: message.role,
+      content: stripLegacyActionTags(message.content),
+      createdAt: message.createdAt,
+      status: message.status === 'streaming' ? 'error' : message.status,
+      ...(planDraft ? { planDraft } : {}),
+      ...(commandDrafts.length > 0 ? { commandDrafts } : {}),
+    }
+  })
+}
+
 export function AIChatPanel({
-  systemPrompt,
-  placeholder = '输入消息...',
-  onActionConfirm,
-  onReportGenerated,
-  loadingText,
+  createSnapshot,
+  placeholder = '描述你想安排的学习计划…',
+  loadingText = '正在整理计划草稿',
   className,
   initialQuery,
   suggestions,
-  chatContext,
+  chatContext = 'plans',
 }: AIChatPanelProps) {
-  const chatKey = chatContext || 'default'
-  const getStoreMessages = useChatStore((s) => s.getMessages)
-  const chatSetMessages = useChatStore((s) => s.setMessages)
-  const chatClearMessages = useChatStore((s) => s.clearMessages)
+  const { user } = useAuth()
+  const routeMode = useAIStore((state) => state.routeMode)
+  const getStoreMessages = useChatStore((state) => state.getMessages)
+  const chatSetMessages = useChatStore((state) => state.setMessages)
+  const chatClearMessages = useChatStore((state) => state.clearMessages)
+  const receipts = usePlanStore((state) => state.aiCommandReceipts)
+  const applyConfirmedAiPlanDraft = usePlanStore((state) => state.applyConfirmedAiPlanDraft)
+  const rejectAiPlanDraft = usePlanStore((state) => state.rejectAiPlanDraft)
 
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessageRecord[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const isHydrated = useRef(false)
+  const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set())
+  const [transientReceipts, setTransientReceipts] = useState<Record<string, AiCommandReceipt>>({})
+  const [hydratedKey, setHydratedKey] = useState('')
+
   const abortRef = useRef<AbortController | null>(null)
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  // 保存最新的 messages 快照，供卸载时同步使用
-  const messagesRef = useRef<ChatMessage[]>([])
-
-  // 组件卸载时中止进行中的流式请求并清理定时器；
-  // 同时将所有 streaming 状态的消息标记为 error 并同步到 store，
-  // 保证下次打开时状态稳定（不会出现"正在思考"的假象）
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort()
-      abortRef.current = null
-      clearTimeout(syncTimeoutRef.current)
-      // 把未完成的 streaming 消息标记为 error 并同步到 store
-      const snapshot = messagesRef.current
-      if (snapshot.some((m) => m.status === 'streaming')) {
-        const fixed: ChatMessageRecord[] = snapshot.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          createdAt: new Date().toISOString(),
-          status: m.status === 'streaming' ? 'error' : (m.status === 'error' ? 'error' : 'done'),
-          actions: m.actions?.map((a) => ({
-            id: a.id,
-            type: a.type,
-            title: a.title,
-            description: a.description,
-          })),
-          actionConfirmedIds: m.actionConfirmedIds,
-        }))
-        chatSetMessages(chatKey, fixed)
-      }
-    }
-  }, [chatKey, chatSetMessages])
-
-  // 首次挂载时从 store 恢复历史消息
-  useEffect(() => {
-    if (!isHydrated.current) {
-      const stored = getStoreMessages(chatKey)
-      if (stored.length > 0) {
-        isHydrated.current = true
-        const restored: ChatMessage[] = stored.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          // 恢复 actions
-          actions: m.actions?.map((a) => ({
-            id: a.id,
-            type: a.type as AIAction['type'],
-            title: a.title,
-            description: a.description,
-          })),
-          // 恢复 actionConfirmedIds
-          actionConfirmedIds: m.actionConfirmedIds,
-          // streaming 状态说明上次生成未完成，标记为 error；error 直接保留
-          status: (m.status === 'error' || m.status === 'streaming' ? 'error' : undefined) as ChatMessage['status'],
-        }))
-        setMessages(restored)
-        messagesRef.current = restored
-      } else {
-        isHydrated.current = true
-      }
-    }
-  }, [chatKey, getStoreMessages])
-
-  // 消息变化时同步到 store（防抖：流式生成期间不频繁写入 localStorage）
-  useEffect(() => {
-    // 始终保持 ref 最新
-    messagesRef.current = messages
-    if (isHydrated.current && messages.length > 0) {
-      clearTimeout(syncTimeoutRef.current)
-      const doSync = () => {
-        const records: ChatMessageRecord[] = messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          createdAt: new Date().toISOString(),
-          // 直接使用消息自身的 status，而非依赖 isLoading 推断
-          status: m.status === 'streaming' ? 'streaming' : (m.status === 'error' ? 'error' : 'done'),
-          actions: m.actions?.map((a) => ({
-            id: a.id,
-            type: a.type,
-            title: a.title,
-            description: a.description,
-          })),
-          actionConfirmedIds: m.actionConfirmedIds,
-        }))
-        chatSetMessages(chatKey, records)
-      }
-      // 非加载状态立即同步；加载中（流式生成）延迟 500ms
-      if (isLoading) {
-        syncTimeoutRef.current = setTimeout(doSync, 500)
-      } else {
-        doSync()
-      }
-    }
-    return () => clearTimeout(syncTimeoutRef.current)
-  }, [messages, chatKey, chatSetMessages, isLoading])
-
+  const requestEpochRef = useRef(0)
+  const messagesRef = useRef<ChatMessageRecord[]>([])
+  const applyingRef = useRef<Set<string>>(new Set())
+  const currentScopeIdRef = useRef('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isUserScrolledUp = useRef(false)
+  const currentScopeId = accountScopeId(routeMode, user?.id)
+  currentScopeIdRef.current = currentScopeId
+  const chatKey = `${chatContext}:${currentScopeId}`
 
-  const scrollToBottom = (force = false) => {
-    const container = messagesContainerRef.current
-    if (container) {
-      if (force) {
-        isUserScrolledUp.current = false
-      }
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight
-      })
+  const receiptByKey = useMemo(() => {
+    const index = new Map<string, AiCommandReceipt>()
+    receipts.forEach((receipt) => {
+      if (!index.has(receipt.idempotencyKey)) index.set(receipt.idempotencyKey, receipt)
+    })
+    return index
+  }, [receipts])
+
+  useEffect(() => {
+    const restored = safeRestoredMessages(getStoreMessages(chatKey))
+    setMessages(restored)
+    messagesRef.current = restored
+    setHydratedKey(chatKey)
+  }, [chatKey, getStoreMessages])
+
+  useEffect(() => {
+    messagesRef.current = messages
+    if (hydratedKey !== chatKey) return
+    try {
+      chatSetMessages(chatKey, messages)
+    } catch {
+      setError('对话暂时无法保存到本机；已生成的计划仍需逐条确认。')
     }
-  }
+  }, [chatKey, chatSetMessages, hydratedKey, messages])
 
-  // 检测用户是否手动向上滚动
-  const handleScroll = () => {
+  useEffect(() => {
+    requestEpochRef.current += 1
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsLoading(false)
+  }, [routeMode, currentScopeId])
+
+  useEffect(() => () => {
+    requestEpochRef.current += 1
+    abortRef.current?.abort()
+    abortRef.current = null
+    const stabilized = messagesRef.current.map((message) => (
+      message.status === 'streaming' ? { ...message, status: 'error' as const } : message
+    ))
+    try {
+      chatSetMessages(chatKey, stabilized)
+    } catch {
+      // The current screen is already unmounting; the next open will fail closed.
+    }
+  }, [chatKey, chatSetMessages])
+
+  const scrollToBottom = useCallback((force = false) => {
     const container = messagesContainerRef.current
     if (!container) return
-    const threshold = 60
-    isUserScrolledUp.current =
-      container.scrollHeight - container.scrollTop - container.clientHeight > threshold
-  }
+    if (force) isUserScrolledUp.current = false
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight
+    })
+  }, [])
 
   useEffect(() => {
-    // 仅在用户未手动上滑时自动滚动
-    if (!isUserScrolledUp.current) {
-      scrollToBottom()
-    }
-  }, [messages])
+    if (!isUserScrolledUp.current) scrollToBottom()
+  }, [messages, receipts, scrollToBottom])
 
-  // 自动调整 textarea 高度
   useEffect(() => {
-    const ta = textareaRef.current
-    if (ta) {
-      ta.style.height = 'auto'
-      ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'
-    }
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
   }, [input])
 
   const sendMessage = useCallback(async (content: string) => {
-    const trimmed = content.trim()
+    const trimmed = content.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
     if (!trimmed || isLoading) return
 
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: trimmed,
-    }
-
-    setMessages((prev) => [...prev, userMsg])
-    setInput('')
-    setIsLoading(true)
-    setError('')
-    scrollToBottom(true) // 用户发消息时强制滚到底
-
-    // 构建 API 消息（基于最新状态）
-    const currentMessages = messages
-    const apiMessages: AIMessage[] = [
-      { role: 'system', content: systemPrompt },
-      ...currentMessages.map((m) => ({ role: m.role, content: m.content }) as AIMessage),
-      { role: 'user', content: trimmed },
-    ]
-
-    const assistantMsgId = (Date.now() + 1).toString()
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantMsgId, role: 'assistant', content: '', status: 'streaming' },
-    ])
-
-    let fullContent = ''
-
-    // 创建新的 AbortController 并在开始前中止上一次的
+    const requestEpoch = requestEpochRef.current + 1
+    requestEpochRef.current = requestEpoch
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
+    const snapshot = createSnapshot()
+    const requestRouteMode = routeMode
+    const requestAccountScopeId = currentScopeId
+    const history = messagesRef.current
+    const userMessage: ChatMessageRecord = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+      status: 'done',
+    }
+    const assistantMessageId = crypto.randomUUID()
+    const assistantMessage: ChatMessageRecord = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+      status: 'streaming',
+    }
+    setMessages((previous) => [...previous, userMessage, assistantMessage])
+    setInput('')
+    setError('')
+    setIsLoading(true)
+    scrollToBottom(true)
 
-    await streamAIChat(apiMessages, {
-      onContent: (content) => {
-        fullContent = content
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, content, status: 'streaming' } : m
-          )
-        )
-      },
-      onError: (err) => {
-        setError(err)
+    try {
+      const result = await executeReadOnlyAi({
+        purpose: 'plan_draft',
+        snapshot,
+        userInput: buildBoundedUserInput(history, trimmed),
+        signal: controller.signal,
+      }, { routeMode: requestRouteMode })
+      if (!shouldAcceptPlanAssistantResult({
+        epoch: requestEpoch,
+        routeMode: requestRouteMode,
+        accountScopeId: requestAccountScopeId,
+        snapshotId: snapshot.snapshotId,
+        contextHash: snapshot.contextHash,
+      }, {
+        epoch: requestEpochRef.current,
+        routeMode: useAIStore.getState().routeMode,
+        accountScopeId: currentScopeIdRef.current,
+        aborted: controller.signal.aborted,
+      })) return
+
+      const draft = parsePlanDraftV2(result.content)
+      const runId = result.run?.runId ?? crypto.randomUUID()
+      const commandDrafts = createPlanCommandDrafts(draft, runId, {
+        context: {
+          snapshotId: snapshot.snapshotId,
+          contextHash: snapshot.contextHash,
+          sourceRevision: snapshot.sourceRevision,
+          routeMode: requestRouteMode,
+          accountScopeId: requestAccountScopeId,
+        },
+      })
+      setMessages((previous) => previous.map((message) => (
+        message.id === assistantMessageId
+          ? {
+              ...message,
+              content: formatPlanDraftContent(draft),
+              status: 'done',
+              planDraft: draft,
+              commandDrafts,
+            }
+          : message
+      )))
+    } catch (caught) {
+      if (requestEpochRef.current !== requestEpoch || controller.signal.aborted) return
+      const message = caught instanceof AiGatewayError
+        ? caught.message
+        : 'AI 计划暂时无法生成，请稍后重试。'
+      setError(message)
+      setMessages((previous) => previous.map((item) => (
+        item.id === assistantMessageId ? { ...item, status: 'error' } : item
+      )))
+    } finally {
+      if (requestEpochRef.current === requestEpoch) {
         setIsLoading(false)
         abortRef.current = null
-        // 标记消息为生成失败
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId
-              ? { ...m, content: m.content || '', status: 'error' }
-              : m
-          )
-        )
-      },
-      onDone: () => {
-        setIsLoading(false)
-        abortRef.current = null
-        // 标记为完成状态（status: undefined）
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, status: undefined } : m
-          )
-        )
-        // 如果内容长度超过100字符，通知父组件生成了报告
-        if (fullContent.length > 100 && onReportGenerated) {
-          onReportGenerated(fullContent)
-        }
-        // 尝试解析 actions（简化版：从内容中提取 [ACTION:...] 标记）
-        const actions = parseActionsFromContent(fullContent)
-        if (actions.length > 0) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, actions } : m
-            )
-          )
-        }
-      },
-    }, { signal: controller.signal })
-  }, [isLoading, messages, systemPrompt, onReportGenerated])
+      }
+    }
+  }, [createSnapshot, currentScopeId, isLoading, routeMode, scrollToBottom])
 
-  const handleSend = useCallback(() => {
-    sendMessage(input)
-  }, [input, sendMessage])
-
-  // 自动发送初始查询：仅在 chatStore 中没有任何历史消息时才发送
   useEffect(() => {
     if (
-      initialQuery &&
-      isHydrated.current &&
-      messages.length === 0 &&
-      getStoreMessages(chatKey).length === 0
+      initialQuery
+      && hydratedKey === chatKey
+      && messages.length === 0
+      && getStoreMessages(chatKey).length === 0
     ) {
-      sendMessage(initialQuery)
+      void sendMessage(initialQuery)
     }
-  }, [initialQuery, messages.length, sendMessage, chatKey, getStoreMessages])
+  }, [chatKey, getStoreMessages, hydratedKey, initialQuery, messages.length, sendMessage])
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
-  const handleActionConfirm = (msgId: string, action: AIAction) => {
-    onActionConfirm?.(action)
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== msgId || !m.actions) return m
-        const ids = m.actionConfirmedIds || []
-        return { ...m, actionConfirmedIds: [...ids, action.id] }
+  const confirmDraft = useCallback(async (draft: NonNullable<ChatMessageRecord['commandDrafts']>[number]) => {
+    if (applyingRef.current.has(draft.draftId)) return
+    applyingRef.current.add(draft.draftId)
+    setApplyingIds(new Set(applyingRef.current))
+    try {
+      const receipt = await applyConfirmedAiPlanDraft(draft, {
+        routeMode,
+        accountScopeId: currentScopeId,
       })
+      setTransientReceipts((current) => ({ ...current, [draft.draftId]: receipt }))
+    } finally {
+      applyingRef.current.delete(draft.draftId)
+      setApplyingIds(new Set(applyingRef.current))
+    }
+  }, [applyConfirmedAiPlanDraft, currentScopeId, routeMode])
+
+  const rejectDraft = useCallback(async (draft: NonNullable<ChatMessageRecord['commandDrafts']>[number]) => {
+    if (applyingRef.current.has(draft.draftId)) return
+    applyingRef.current.add(draft.draftId)
+    setApplyingIds(new Set(applyingRef.current))
+    try {
+      const receipt = await rejectAiPlanDraft(draft)
+      setTransientReceipts((current) => ({ ...current, [draft.draftId]: receipt }))
+    } finally {
+      applyingRef.current.delete(draft.draftId)
+      setApplyingIds(new Set(applyingRef.current))
+    }
+  }, [rejectAiPlanDraft])
+
+  const handleScroll = () => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    isUserScrolledUp.current = (
+      container.scrollHeight - container.scrollTop - container.clientHeight > 60
     )
   }
 
   return (
-    <div className={cn('flex flex-col flex-1 min-h-0', className)}>
-      {/* 消息列表 */}
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-scroll space-y-4 px-1" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }} tabIndex={0}>
-        {/* 历史消息提示 */}
-        {getStoreMessages(chatKey).length > 0 && messages.length > 0 && !isLoading && (
+    <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1"
+        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        tabIndex={0}
+      >
+        {messages.length > 0 && !isLoading && (
           <div className="flex items-center justify-center gap-2 pt-1">
-            <span className="text-[10px] text-muted-foreground/60">已恢复历史对话</span>
+            <span className="text-[10px] text-muted-foreground/60">计划草稿保存在这台设备</span>
             <button
+              type="button"
               onClick={() => {
                 chatClearMessages(chatKey)
                 setMessages([])
               }}
-              className="text-[10px] text-muted-foreground/40 hover:text-destructive/70 transition-colors flex items-center gap-0.5"
+              className="flex min-h-8 items-center gap-1 rounded-md px-2 text-[10px] text-muted-foreground hover:bg-muted hover:text-destructive"
             >
-              <Trash2 className="h-2.5 w-2.5" />
-              清除
+              <Trash2 className="h-3 w-3" aria-hidden="true" />
+              清除对话
             </button>
           </div>
         )}
+
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
-            <Sparkles className="h-8 w-8 mb-2 text-indigo-400" />
-            <p className="text-sm">AI 助手已就绪</p>
-            <p className="text-xs mt-1">开始对话吧</p>
+          <div className="flex h-full flex-col items-center justify-center py-8 text-center text-muted-foreground">
+            <Sparkles className="mb-2 h-8 w-8 text-indigo-400" aria-hidden="true" />
+            <p className="text-sm font-medium text-foreground">先说清楚你想怎么学</p>
+            <p className="mt-1 max-w-xs text-xs leading-5">
+              AI 只会生成草稿。分类、频率和目标会完整展示，由你逐条确认后才加入计划。
+            </p>
             {suggestions && suggestions.length > 0 && (
-              <div className="mt-4 w-full max-w-[90%] space-y-2">
-                <p className="text-xs text-muted-foreground/70 text-center">试试这样问：</p>
-                {suggestions.map((s, i) => (
+              <div className="mt-4 w-full max-w-sm space-y-2">
+                {suggestions.slice(0, 4).map((suggestion) => (
                   <button
-                    key={i}
-                    onClick={() => sendMessage(s)}
-                    className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border/50 bg-background hover:bg-accent hover:border-accent transition-colors text-muted-foreground hover:text-foreground"
+                    key={suggestion}
+                    type="button"
+                    onClick={() => void sendMessage(suggestion)}
+                    className="min-h-11 w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-left text-xs leading-5 hover:border-indigo-300 hover:bg-indigo-50/60 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30"
                   >
-                    {s}
+                    {suggestion}
                   </button>
                 ))}
               </div>
@@ -356,184 +418,125 @@ export function AIChatPanel({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-            {msg.role === 'assistant' && (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/50 flex items-center justify-center shrink-0 mt-0.5 shadow-[0_0_8px_rgba(99,102,241,0.3)]">
-                <Sparkles className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn('flex gap-2', message.role === 'user' ? 'justify-end' : 'justify-start')}
+          >
+            {message.role === 'assistant' && (
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               </div>
             )}
 
             <div className={cn(
-              'relative max-w-[85%] px-3.5 py-2.5 text-sm',
-              msg.role === 'user'
-                ? 'bg-indigo-600 text-white rounded-[20px_6px_20px_20px]'
-                : 'text-foreground rounded-[6px_20px_20px_20px]'
-            )}
-              style={msg.role === 'assistant' ? {
-                background: document.documentElement.classList.contains('dark')
-                  ? 'rgba(99,102,241,0.12)'
-                  : 'linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)',
-                borderColor: document.documentElement.classList.contains('dark')
-                  ? 'rgba(129,140,248,0.3)'
-                  : 'rgba(165,180,252,0.5)',
-                borderWidth: '1px',
-                borderStyle: 'solid',
-              } : undefined}
-            >
-              {msg.role === 'assistant' ? (
-                msg.content ? (
-                  <>
-                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
-                      <ReactMarkdown>{stripActionTags(msg.content, isLoading)}</ReactMarkdown>
-                    </div>
-                    {msg.status === 'streaming' && (
-                      <div className="mt-1.5">
-                        <AILoadingState text="继续生成中" />
-                      </div>
-                    )}
-                  </>
-                ) : msg.status === 'error' ? (
-                  <div className="flex items-center gap-1.5 text-destructive text-xs">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    <span>生成失败，请重试</span>
-                  </div>
-                ) : msg.status === 'streaming' ? (
-                  <AILoadingState text={loadingText} />
-                ) : (
-                  <span className="text-muted-foreground text-xs">（内容为空）</span>
-                )
+              'min-w-0 text-sm',
+              message.role === 'user'
+                ? 'max-w-[85%] rounded-[20px_6px_20px_20px] bg-indigo-600 px-3.5 py-2.5 text-white'
+                : 'w-full max-w-[calc(100%-2.25rem)] space-y-3 rounded-[6px_20px_20px_20px] border border-indigo-200/70 bg-indigo-50/70 px-3.5 py-3 dark:border-indigo-900/50 dark:bg-indigo-950/20',
+            )}>
+              {message.role === 'user' ? (
+                <p className="whitespace-pre-wrap break-words">{message.content}</p>
+              ) : message.status === 'streaming' ? (
+                <AILoadingState text={loadingText} />
+              ) : message.status === 'error' ? (
+                <div className="flex items-start gap-2 text-xs text-destructive">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>这次没有生成可用草稿，请重新发送。</span>
+                </div>
               ) : (
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                <SafeAIContent content={message.content} />
               )}
 
-              {/* AI 建议操作卡片 */}
-              {msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && !msg.actionsConfirmed && (
-                <div className="mt-3 space-y-2 border-t border-border/50 pt-2">
-                  <p className="text-xs font-medium text-muted-foreground">AI 建议操作</p>
-                  {msg.actions.map((action) => (
-                    <AIConfirmCard
-                      key={action.id}
-                      action={action}
-                      confirmed={msg.actionConfirmedIds?.includes(action.id)}
-                      onConfirm={() => handleActionConfirm(msg.id, action)}
-                      onReject={() => {
-                        setMessages((prev) =>
-                          prev.map((m) =>
-                            m.id === msg.id
-                              ? { ...m, actions: m.actions?.filter((a) => a.id !== action.id) }
-                              : m
-                          )
-                        )
-                      }}
-                    />
-                  ))}
+              {message.role === 'assistant' && message.commandDrafts && message.commandDrafts.length > 0 && (
+                <div className="space-y-2.5 border-t border-indigo-200/70 pt-3 dark:border-indigo-900/50">
+                  <div>
+                    <p className="text-xs font-semibold">待确认计划</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                      确认只影响当前这一项；重复点击不会创建第二份计划。
+                    </p>
+                  </div>
+                  {message.commandDrafts.map((draft) => {
+                    const receipt = transientReceipts[draft.draftId]
+                      ?? receiptByKey.get(draft.idempotencyKey)
+                    return (
+                      <AIConfirmCard
+                        key={draft.draftId}
+                        draft={draft}
+                        receipt={receipt}
+                        applying={applyingIds.has(draft.draftId)}
+                        onConfirm={() => confirmDraft(draft)}
+                        onReject={() => rejectDraft(draft)}
+                      />
+                    )
+                  })}
                 </div>
               )}
             </div>
 
-            {msg.role === 'user' && (
-              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
+            {message.role === 'user' && (
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                <User className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               </div>
             )}
           </div>
         ))}
 
         {error && (
-          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}
-
-        {/* AI 生成中提示 */}
-        {isLoading && (
-          <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
-            <AlertCircle className="h-3 w-3 shrink-0" />
-            <span className="text-[11px]">请勿离开当前页面或关闭弹窗</span>
-          </div>
-        )}
       </div>
 
-      {/* 输入区域 */}
-      <div className="pt-2 mt-2">
-        {/* 建议标签胶囊（仅对话后显示，位于分隔线上方） */}
+      <div className="mt-2 border-t pt-2">
         {suggestions && suggestions.length > 0 && messages.length > 0 && (
-          <div className="mb-2 pb-2 border-b">
-            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => sendMessage(s)}
-                  className="inline-flex shrink-0 items-center rounded-full border border-border/50 bg-background px-3 py-1.5 text-xs whitespace-nowrap text-muted-foreground hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:border-indigo-700/50 dark:hover:text-indigo-300 transition-colors cursor-pointer"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+          <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => void sendMessage(suggestion)}
+                className="min-h-9 shrink-0 rounded-full border border-border/60 bg-background px-3 text-xs text-muted-foreground hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-200"
+              >
+                {suggestion}
+              </button>
+            ))}
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
           <Textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={(event) => setInput(event.target.value.slice(0, MAX_USER_MESSAGE_LENGTH))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                void sendMessage(input)
+              }
+            }}
             placeholder={placeholder}
-            className="min-h-[44px] max-h-[120px] resize-none text-sm"
+            className="max-h-[120px] min-h-11 resize-none text-sm"
             rows={1}
+            maxLength={MAX_USER_MESSAGE_LENGTH}
           />
           <Button
-            onClick={handleSend}
+            type="button"
+            onClick={() => void sendMessage(input)}
             disabled={!input.trim() || isLoading}
             size="icon"
-            className="shrink-0 h-[44px] w-[44px] bg-indigo-500 hover:bg-indigo-600 text-white"
+            className="h-11 w-11 shrink-0 bg-indigo-600 text-white hover:bg-indigo-700"
+            aria-label="发送计划请求"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground/60 mt-1.5 text-center">
-          Enter 发送，Shift+Enter 换行
-        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px] text-muted-foreground/70">
+          <span>Enter 发送 · Shift+Enter 换行</span>
+          <span>{input.length}/{MAX_USER_MESSAGE_LENGTH}</span>
+        </div>
       </div>
     </div>
   )
-}
-
-// 从 AI 回复中剥离 [ACTION:...]...[/ACTION] 标签，避免在消息气泡中显示原始标记
-function stripActionTags(content: string, streaming = false): string {
-  let result = content
-    // 先移除完整的 [ACTION:...]...[/ACTION] 标签
-    .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
-  // 流式生成期间不移除未关闭的标签，避免正常内容被误删导致闪烁
-  if (!streaming) {
-    result = result
-      // 再移除未关闭的 [ACTION:...] 标签
-      .replace(/\[ACTION:\w+\][\s\S]*/g, '')
-  }
-  return result
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-function parseActionsFromContent(content: string): AIAction[] {
-  const actions: AIAction[] = []
-  const regex = /\[ACTION:(\w+)\]([\s\S]*?)\[\/ACTION\]/g
-  let match
-  let id = 0
-  while ((match = regex.exec(content)) !== null) {
-    const type = match[1] as AIAction['type']
-    const body = match[2].trim()
-    const lines = body.split('\n').map((l) => l.trim()).filter(Boolean)
-    const title = lines[0] || '建议操作'
-    const description = lines.slice(1).join('\n') || ''
-    actions.push({
-      id: `action-${id++}`,
-      type,
-      title,
-      description,
-    })
-  }
-  return actions
 }

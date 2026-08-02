@@ -3,6 +3,11 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { PracticeRecord } from '@/lib/types'
 import { STORAGE_PREFIX } from '@/lib/constants'
 import { useStreakStore } from '@/stores/streakStore'
+import { useAchievementStore } from '@/stores/achievementStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { createActivityTransactionPlan } from '@/data/activityTransaction'
+import { commitActivityTransaction } from '@/data/activityTransactionRuntime'
+import { createEntityCollectionPatch } from '@/data/localMutationJournal'
 
 interface PracticeStore {
   records: PracticeRecord[]
@@ -14,6 +19,7 @@ interface PracticeStore {
 }
 
 const generateId = () => crypto.randomUUID()
+const PRACTICE_STORAGE_KEY = `${STORAGE_PREFIX}:practiceRecords`
 
 export const usePracticeStore = create<PracticeStore>()(
   persist(
@@ -22,67 +28,111 @@ export const usePracticeStore = create<PracticeStore>()(
       addRecord: (data) => {
         const now = new Date().toISOString()
         const record: PracticeRecord = { ...data, id: generateId(), createdAt: now, updatedAt: now }
-        set((state) => ({ records: [record, ...state.records] }))
-
-        // 记录活动到热力图
-        useStreakStore.getState().recordActivity(data.date)
-
-        // 成就联动：添加 XP + 检测徽章
-        import('@/lib/achievementService').then(
-          ({ addXP, calculatePracticeXP, checkPracticeBadges }) => {
-            const xpAmount = calculatePracticeXP(data.duration)
-            if (xpAmount !== 0) addXP(xpAmount)
-            checkPracticeBadges()
-          }
-        )
+        const plan = createActivityTransactionPlan({
+          action: 'practice.create',
+          domainPatches: [createEntityCollectionPatch({
+            storage: localStorage,
+            storageKey: PRACTICE_STORAGE_KEY,
+            collection: 'records',
+            changes: [{ id: record.id, before: null, beforeIndex: 0, expectedAfter: record }],
+          })],
+          events: [{
+            entityKind: 'practice_record',
+            entityId: record.id,
+            operation: 'created',
+            effectiveDate: record.date,
+            occurredAt: now,
+            source: 'user',
+            after: record,
+          }],
+          achievements: useAchievementStore.getState(),
+          streak: useStreakStore.getState(),
+          lastCheckinDate: useSettingsStore.getState().lastCheckinDate,
+          createdAt: now,
+        })
+        const committed = commitActivityTransaction(plan, () => {
+          set((state) => ({ records: [record, ...state.records] }))
+        })
+        if (!committed) return
+        import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+          checkPracticeBadges()
+        })
       },
       updateRecord: (id, data) => {
         const oldRecord = get().records.find((r) => r.id === id)
-        const oldDuration = oldRecord?.duration ?? 0
+        if (!oldRecord) return
+        const now = new Date().toISOString()
+        const nextRecord: PracticeRecord = { ...oldRecord, ...data, updatedAt: now }
 
-        set((state) => ({
-          records: state.records.map((r) =>
-            r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r
-          ),
-        }))
-
-        // 成就联动：根据时长变化调整 XP + 检测徽章
-        if (data.duration !== undefined) {
-          const delta = data.duration - oldDuration
-          import('@/lib/achievementService').then(
-            ({ addXP, calculatePracticeXP, checkPracticeBadges }) => {
-              const xpAmount = calculatePracticeXP(delta)
-              if (xpAmount !== 0) addXP(xpAmount)
-              checkPracticeBadges()
-            }
-          )
-        } else {
-          // 即使时长没变化，也检查徽章（比如 type 变了）
-          import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
-            checkPracticeBadges()
-          })
-        }
+        const beforeIndex = get().records.findIndex((record) => record.id === id)
+        const plan = createActivityTransactionPlan({
+          action: 'practice.update',
+          domainPatches: [createEntityCollectionPatch({
+            storage: localStorage,
+            storageKey: PRACTICE_STORAGE_KEY,
+            collection: 'records',
+            changes: [{ id, before: oldRecord, beforeIndex, expectedAfter: nextRecord }],
+          })],
+          events: [{
+            entityKind: 'practice_record',
+            entityId: id,
+            operation: 'updated',
+            effectiveDate: nextRecord.date,
+            occurredAt: now,
+            source: 'user',
+            before: oldRecord,
+            after: nextRecord,
+          }],
+          achievements: useAchievementStore.getState(),
+          streak: useStreakStore.getState(),
+          lastCheckinDate: useSettingsStore.getState().lastCheckinDate,
+          createdAt: now,
+        })
+        const committed = commitActivityTransaction(plan, () => {
+          set((state) => ({
+            records: state.records.map((record) => (record.id === id ? nextRecord : record)),
+          }))
+        })
+        if (!committed) return
+        import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+          checkPracticeBadges()
+        })
       },
       deleteRecord: (id) => {
         const record = get().records.find((r) => r.id === id)
-        const deletedDuration = record?.duration ?? 0
+        if (!record) return
+        const occurredAt = new Date().toISOString()
 
-        set((state) => ({ records: state.records.filter((r) => r.id !== id) }))
-
-        // 成就联动：扣除对应 XP + 检测徽章
-        if (deletedDuration > 0) {
-          import('@/lib/achievementService').then(
-            ({ addXP, calculatePracticeXP, checkPracticeBadges }) => {
-              const xpAmount = calculatePracticeXP(-deletedDuration)
-              if (xpAmount !== 0) addXP(xpAmount)
-              checkPracticeBadges()
-            }
-          )
-        } else {
-          import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
-            checkPracticeBadges()
-          })
-        }
+        const beforeIndex = get().records.findIndex((candidate) => candidate.id === id)
+        const plan = createActivityTransactionPlan({
+          action: 'practice.delete',
+          domainPatches: [createEntityCollectionPatch({
+            storage: localStorage,
+            storageKey: PRACTICE_STORAGE_KEY,
+            collection: 'records',
+            changes: [{ id, before: record, beforeIndex, expectedAfter: null }],
+          })],
+          events: [{
+            entityKind: 'practice_record',
+            entityId: id,
+            operation: 'deleted',
+            effectiveDate: record.date,
+            occurredAt,
+            source: 'user',
+            before: record,
+          }],
+          achievements: useAchievementStore.getState(),
+          streak: useStreakStore.getState(),
+          lastCheckinDate: useSettingsStore.getState().lastCheckinDate,
+          createdAt: occurredAt,
+        })
+        const committed = commitActivityTransaction(plan, () => {
+          set((state) => ({ records: state.records.filter((candidate) => candidate.id !== id) }))
+        })
+        if (!committed) return
+        import('@/lib/achievementService').then(({ checkPracticeBadges }) => {
+          checkPracticeBadges()
+        })
       },
       getRecordsByType: (type) => {
         return get().records.filter((r) => r.type === type)

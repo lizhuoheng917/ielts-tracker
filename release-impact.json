@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "release": "2026-08-02-tracker-production-auth-ai-connection",
+  "Frontend": {
+    "status": "changed",
+    "reason": "Tracker 的完整 UI、本地数据基础、共享 Lexi Auth、账号归属门禁、四类 Managed AI 合同与 AI artifact 流程作为一个正式候选版本收口。生产构建固定到 production project olkvqmnuyxuddgpcordp，只接受浏览器安全 publishable key，并在构建前后阻止漏配、staging ref 或 secret marker。Agnes Custom 预设修正为用户确认的 agnes-2.0-flash，v2 错误状态会迁移修复；关闭的后端 AI policy 会明确显示“此 AI 功能当前未开放”。普通学习记录仍保持 local-first。"
+  },
+  "Backend": {
+    "status": "reviewed-not-needed",
+    "reason": "已复核 production Supabase：Tracker 本次复用现有 Auth 与 ACTIVE lexi-ai-gateway v3；正式 origin、JWT 复验、四 purpose、配额/receipt 元数据和 RLS 已存在。Tracker 没有业务表或云同步实现，因此不新增空表、migration、RPC 或 RLS；普通记录继续只存浏览器。四项 Managed AI policy 在真实 smoke 前保持关闭。"
+  },
+  "Admin": {
+    "status": "reviewed-not-needed",
+    "reason": "已复核 Lexi Control：现有 /admin 已能管理 production Agnes 服务端配置、四项独立 policy、配额与聚合健康；本轮没有新增可管理的服务端状态，所以不改 Admin 代码。正式 smoke 只通过现有控制面临时开启 daily_suggestion，其他 policy 保持关闭。"
+  },
+  "Deployment": {
+    "status": "not-deployed",
+    "reason": "正式候选版本尚未提交、推送或上传 Cloudflare；当前 production 仍是未连接 Supabase 的 d0142b4。完成 verify:release 后才允许把同一 SHA 上传到 Direct Upload 项目 ielts-tracker。"
+  },
+  "Verification": {
+    "status": "passed",
+    "reason": "提交前本地门禁已通过：Tracker npm run verify:release 完成 release impact、TypeScript、oxlint、42 个测试文件共 279 项测试及 production 构建，产物确认 production URL 且无 staging URL/secret-shaped token；Lexi 写作 Gateway 跨仓 parity 通过；Lexi production 构建和全部 sync/Auth/AI/RLS/SQL 回归脚本通过。git diff --check 与高风险密钥模式扫描无异常。Cloudflare Active、真实账号数据保持和 daily_suggestion receipt 属于部署后验证，尚未执行。"
+  }
+}

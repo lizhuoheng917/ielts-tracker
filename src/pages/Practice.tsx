@@ -26,32 +26,68 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { PlusIcon, PencilIcon, TrashIcon, Sparkles, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+import {
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Search,
+  RotateCcw,
+  Download,
+  PenLine,
+} from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
-import { WritingCorrection } from '@/components/ai/WritingCorrection'
+import { WritingCorrection, type WritingWorkspaceState } from '@/components/ai/WritingCorrection'
+import { WritingFeedbackContent } from '@/components/ai/StructuredAIContent'
+import { SafeAIContent } from '@/components/ai/SafeAIContent'
+import {
+  aiArtifactToMarkdown,
+  listAiArtifactsForAccess,
+  type WritingFeedbackArtifactV2,
+} from '@/ai/artifactRepository'
+import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
+import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { useWritingReportStore, type WritingReport } from '@/stores/writingReportStore'
+import { SUBJECT_VISUALS } from '@/lib/subjectVisuals'
+import { DataToolbar } from '@/components/ui/data-toolbar'
+import { DataPagination } from '@/components/ui/data-pagination'
+import { MetricGroup } from '@/components/ui/metric-group'
+import { PageHeader } from '@/components/ui/page-header'
+import { DEFAULT_DATA_PAGE_SIZE, getDataPageCount, paginateItems } from '@/lib/dataView'
+import {
+  IELTS_SCORE_SLIDER_MAX,
+  filterAndSortPracticeRecords,
+  normalizeIeltsScore,
+  scoreToSliderIndex,
+  sliderIndexToScore,
+  type PracticeRecordSortOrder,
+} from '@/lib/practiceRecordView'
 
 // ===== 雅思分数滑轴组件（方案 B：极简 + 端点提示） =====
 function IeltsScoreSlider({
+  id,
   value,
   onChange,
 }: {
+  id: string
   value: number
   onChange: (score: number) => void
 }) {
-  // 内部步进值：0~18 对应分数 0, 1, 1.5, 2, 2.5 ... 9
-  const stepIndex = value === 0 ? 0 : Math.round((value - 1) * 2) + 1
+  // 内部步进值：0~17 对应分数 0, 1, 1.5, 2, 2.5 ... 9
+  const normalizedScore = normalizeIeltsScore(value) ?? 0
+  const stepIndex = scoreToSliderIndex(normalizedScore)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const idx = parseInt(e.target.value, 10)
-    if (idx === 0) {
-      onChange(0)
-    } else {
-      onChange(1 + (idx - 1) * 0.5)
-    }
+    onChange(sliderIndexToScore(idx))
   }
 
-  const displayScore = value > 0 ? (Number.isInteger(value) ? value.toString() : value.toFixed(1)) : '未评分'
+  const displayScore = normalizedScore > 0
+    ? (Number.isInteger(normalizedScore) ? normalizedScore.toString() : normalizedScore.toFixed(1))
+    : '未评分'
 
   return (
     <div className="flex flex-col gap-3">
@@ -61,8 +97,8 @@ function IeltsScoreSlider({
         <span
           className={cn(
             'inline-flex items-center gap-1 text-sm font-semibold px-3 py-1 rounded-md min-w-[4rem] justify-center transition-all',
-            value > 0
-              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+            normalizedScore > 0
+              ? 'bg-primary/10 text-primary'
               : 'bg-muted text-muted-foreground'
           )}
         >
@@ -74,12 +110,13 @@ function IeltsScoreSlider({
       {/* 滑轨：容器+轨道层+滑块层，确保轨道在所有浏览器中可见 */}
       <div className="relative h-7 flex items-center">
         {/* 轨道背景（独立层，确保始终可见） */}
-        <div className="absolute inset-x-0 h-1.5 rounded-full bg-muted-foreground/20 dark:bg-white/20" />
+        <div className="absolute inset-x-0 h-1.5 rounded-full bg-muted-foreground/20" />
         {/* 输入滑块（透明背景，只显示拖拽按钮） */}
         <input
+          id={id}
           type="range"
           min={0}
-          max={18}
+          max={IELTS_SCORE_SLIDER_MAX}
           step={1}
           value={stepIndex}
           onChange={handleChange}
@@ -89,24 +126,25 @@ function IeltsScoreSlider({
             [&::-webkit-slider-thumb]:appearance-none
             [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6
             [&::-webkit-slider-thumb]:rounded-full
-            [&::-webkit-slider-thumb]:bg-indigo-600 dark:[&::-webkit-slider-thumb]:bg-indigo-400
-            [&::-webkit-slider-thumb]:border-[3px] [&::-webkit-slider-thumb]:border-white dark:[&::-webkit-slider-thumb]:border-slate-900
-            [&::-webkit-slider-thumb]:shadow-[0_2px_8px_rgba(79,70,229,0.35)]
+            [&::-webkit-slider-thumb]:bg-primary
+            [&::-webkit-slider-thumb]:border-[3px] [&::-webkit-slider-thumb]:border-background
+            [&::-webkit-slider-thumb]:shadow-md
             [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:scale-95
             [&::-moz-range-track]:h-0 [&::-moz-range-track]:bg-transparent
             [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6
             [&::-moz-range-thumb]:rounded-full
-            [&::-moz-range-thumb]:bg-indigo-600 dark:[&::-moz-range-thumb]:bg-indigo-400
-            [&::-moz-range-thumb]:border-[3px] [&::-moz-range-thumb]:border-white dark:[&::-moz-range-thumb]:border-slate-900
-            [&::-moz-range-thumb]:shadow-[0_2px_8px_rgba(79,70,229,0.35)]
+            [&::-moz-range-thumb]:bg-primary
+            [&::-moz-range-thumb]:border-[3px] [&::-moz-range-thumb]:border-background
+            [&::-moz-range-thumb]:shadow-md
             [&::-moz-range-thumb]:cursor-pointer"
+          aria-valuetext={displayScore}
         />
       </div>
 
       {/* 端点提示 */}
       <div className="flex justify-between -mt-1">
-        <span className="text-[11px] text-muted-foreground/60 dark:text-white/50">未评分</span>
-        <span className="text-[11px] text-muted-foreground/60 dark:text-white/50">9</span>
+        <span className="text-[11px] text-muted-foreground/60">未评分</span>
+        <span className="text-[11px] text-muted-foreground/60">9</span>
       </div>
     </div>
   )
@@ -114,10 +152,10 @@ function IeltsScoreSlider({
 
 // ===== 科目颜色映射 =====
 const TYPE_COLOR_MAP: Record<PracticeType, string> = {
-  reading: '#3B82F6',
-  listening: '#8B5CF6',
-  writing: '#F59E0B',
-  speaking: '#10B981',
+  reading: SUBJECT_VISUALS.reading.chartColor,
+  listening: SUBJECT_VISUALS.listening.chartColor,
+  writing: SUBJECT_VISUALS.writing.chartColor,
+  speaking: SUBJECT_VISUALS.speaking.chartColor,
 }
 
 const TYPE_LABEL_MAP: Record<PracticeType, string> = {
@@ -127,10 +165,42 @@ const TYPE_LABEL_MAP: Record<PracticeType, string> = {
   speaking: '口语',
 }
 
+const SORT_LABELS: Record<PracticeRecordSortOrder, string> = {
+  newest: '日期：从新到旧',
+  oldest: '日期：从旧到新',
+  'score-desc': '分数：从高到低',
+  'score-asc': '分数：从低到高',
+  'duration-desc': '时长：从长到短',
+  'duration-asc': '时长：从短到长',
+}
+
 // ===== 格式化分数显示 =====
 const formatScore = (s: number) => {
   if (Number.isInteger(s)) return s.toString()
   return s.toFixed(1)
+}
+
+const formatDuration = (minutes: number) => {
+  if (minutes < 60) return `${minutes}分钟`
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes > 0
+    ? `${hours}小时${remainingMinutes}分`
+    : `${hours}小时`
+}
+
+const formatDateCN = (date: string) => {
+  const [, month, day] = date.split('-')
+  return `${Number(month)}月${Number(day)}日`
+}
+
+function downloadWritingReport(report: WritingFeedbackArtifactV2) {
+  const url = URL.createObjectURL(new Blob([aiArtifactToMarkdown(report)], { type: 'text/markdown;charset=utf-8' }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `lexi-writing-${report.createdAt.slice(0, 10)}.md`
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 // ===== 统计摘要卡片 =====
@@ -146,42 +216,31 @@ function StatsSummary({ type }: { type: PracticeType }) {
       ? scoredRecords.reduce((sum, r) => sum + (r.score ?? 0), 0) / scoredRecords.length
       : undefined
 
-  const color = TYPE_COLOR_MAP[type]
-
-  const formatDuration = (minutes: number) => {
-    if (minutes < 60) return `${minutes}分钟`
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return m > 0 ? `${h}小时${m}分` : `${h}小时`
-  }
-
   return (
-    <div className="grid grid-cols-3 gap-2 md:gap-3 mb-3 md:mb-4">
-      <Card size="sm" className="flex-1">
-        <CardContent className="text-center py-2 px-2">
-          <div className="text-[13px] md:text-xs text-muted-foreground mb-0.5">平均分</div>
-          <div className="text-lg md:text-lg font-bold" style={{ color }}>
-            {avgScore !== undefined ? avgScore.toFixed(1) : '--'}
-          </div>
-        </CardContent>
-      </Card>
-      <Card size="sm" className="flex-1">
-        <CardContent className="text-center py-2 px-2">
-          <div className="text-[13px] md:text-xs text-muted-foreground mb-0.5">总时长</div>
-          <div className="text-lg md:text-lg font-bold" style={{ color }}>
-            {totalDuration > 0 ? formatDuration(totalDuration) : '--'}
-          </div>
-        </CardContent>
-      </Card>
-      <Card size="sm" className="flex-1">
-        <CardContent className="text-center py-2 px-2">
-          <div className="text-[13px] md:text-xs text-muted-foreground mb-0.5">练习次数</div>
-          <div className="text-lg md:text-lg font-bold" style={{ color }}>
-            {count > 0 ? count : '--'}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <MetricGroup
+      ariaLabel={`${TYPE_LABEL_MAP[type]}模考概览`}
+      columns={3}
+      items={[
+        {
+          label: '平均分',
+          value: avgScore !== undefined ? avgScore.toFixed(1) : '—',
+          description: avgScore !== undefined ? '雅思分数' : '尚未评分',
+          tone: type,
+        },
+        {
+          label: '总时长',
+          value: totalDuration > 0 ? formatDuration(totalDuration) : '—',
+          description: '累计练习',
+          tone: type,
+        },
+        {
+          label: '练习次数',
+          value: count > 0 ? count : '—',
+          description: '条记录',
+          tone: type,
+        },
+      ]}
+    />
   )
 }
 
@@ -208,6 +267,7 @@ function PracticeFormDialog({
   const [duration, setDuration] = useState('')
   const [score, setScore] = useState<number>(0)
   const [note, setNote] = useState('')
+  const formId = `practice-${isEdit ? `edit-${editRecord?.id ?? defaultType}` : `add-${defaultType}`}`
 
   // 当弹窗打开或 editRecord 变化时，初始化表单内容
   useEffect(() => {
@@ -239,7 +299,7 @@ function PracticeFormDialog({
       date,
       topic: topic.trim() || undefined,
       duration: durationNum,
-      score: score > 0 ? score : undefined,
+      score: normalizeIeltsScore(score),
       note: note.trim() || undefined,
     }
 
@@ -267,9 +327,18 @@ function PracticeFormDialog({
         <div className="flex flex-col gap-3">
           {/* 科目选择（添加模式下可选） */}
           <div className="flex flex-col gap-1.5">
-            <Label>科目</Label>
+            <Label
+              id={`${formId}-subject-label`}
+              htmlFor={`${formId}-subject`}
+            >
+              科目
+            </Label>
             {isEdit ? (
               <div
+                id={`${formId}-subject`}
+                role="textbox"
+                aria-readonly="true"
+                aria-labelledby={`${formId}-subject-label`}
                 className="h-8 px-2.5 flex items-center rounded-lg border border-input text-sm font-medium"
                 style={{ color: TYPE_COLOR_MAP[type] }}
               >
@@ -280,8 +349,10 @@ function PracticeFormDialog({
                 value={type}
                 onValueChange={(v) => setType(v as PracticeType)}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+                <SelectTrigger id={`${formId}-subject`} className="w-full">
+                  <SelectValue>
+                    {(value) => TYPE_LABEL_MAP[value as PracticeType] ?? '选择科目'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {PRACTICE_TYPE_OPTIONS.map((opt) => (
@@ -296,8 +367,9 @@ function PracticeFormDialog({
 
           {/* 日期 */}
           <div className="flex flex-col gap-1.5">
-            <Label>日期</Label>
+            <Label htmlFor={`${formId}-date`}>日期</Label>
             <Input
+              id={`${formId}-date`}
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
@@ -306,8 +378,9 @@ function PracticeFormDialog({
 
           {/* 主题 */}
           <div className="flex flex-col gap-1.5">
-            <Label>主题</Label>
+            <Label htmlFor={`${formId}-topic`}>主题</Label>
             <Input
+              id={`${formId}-topic`}
               placeholder="例如：剑桥真题15 Test3"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
@@ -316,8 +389,9 @@ function PracticeFormDialog({
 
           {/* 时长 */}
           <div className="flex flex-col gap-1.5">
-            <Label>时长（分钟）</Label>
+            <Label htmlFor={`${formId}-duration`}>时长（分钟）</Label>
             <Input
+              id={`${formId}-duration`}
               type="number"
               min={1}
               placeholder="例如：60"
@@ -328,14 +402,15 @@ function PracticeFormDialog({
 
           {/* 评分：滑轴选择雅思分数 */}
           <div className="flex flex-col gap-1.5">
-            <Label>雅思分数</Label>
-            <IeltsScoreSlider value={score} onChange={setScore} />
+            <Label htmlFor={`${formId}-score`}>雅思分数</Label>
+            <IeltsScoreSlider id={`${formId}-score`} value={score} onChange={setScore} />
           </div>
 
           {/* 备注 */}
           <div className="flex flex-col gap-1.5">
-            <Label>备注</Label>
+            <Label htmlFor={`${formId}-note`}>备注</Label>
             <Textarea
+              id={`${formId}-note`}
               placeholder="练习心得、薄弱环节等..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -348,7 +423,7 @@ function PracticeFormDialog({
           <DialogClose render={<Button variant="outline" className="w-full sm:w-auto" />}>
             取消
           </DialogClose>
-          <Button onClick={handleSubmit} disabled={!canSubmit} className="w-full sm:w-auto">
+          <Button type="button" onClick={handleSubmit} disabled={!canSubmit} className="w-full sm:w-auto">
             {isEdit ? '保存修改' : '添加'}
           </Button>
         </DialogFooter>
@@ -391,85 +466,288 @@ function DeleteConfirmDialog({
   )
 }
 
-// ===== 记录卡片 =====
-function RecordItem({
-  record,
+// ===== 响应式记录视图 =====
+function PracticeRecordList({
+  records,
+  type,
+  hasAnyRecords,
+  hasActiveFilters,
+  onAdd,
+  onClearFilters,
   onEdit,
   onDelete,
-  className,
 }: {
-  record: PracticeRecord
-  onEdit: () => void
-  onDelete: () => void
-  className?: string
+  records: PracticeRecord[]
+  type: PracticeType
+  hasAnyRecords: boolean
+  hasActiveFilters: boolean
+  onAdd: () => void
+  onClearFilters: () => void
+  onEdit: (record: PracticeRecord) => void
+  onDelete: (record: PracticeRecord) => void
 }) {
-  const color = TYPE_COLOR_MAP[record.type]
+  const typeLabel = TYPE_LABEL_MAP[type]
+  const color = TYPE_COLOR_MAP[type]
+
+  if (records.length === 0) {
+    if (!hasAnyRecords) {
+      return (
+        <EmptyState
+          scene="practice"
+          title={`还没有${typeLabel}模考记录`}
+          description="创建第一条记录，之后可以按主题、备注和日期快速回顾"
+          action={(
+            <Button type="button" onClick={onAdd}>
+              <PlusIcon className="h-4 w-4" aria-hidden="true" />
+              添加第一条记录
+            </Button>
+          )}
+        />
+      )
+    }
+
+    return (
+      <EmptyState
+        scene="practice"
+        title="没有匹配的模考记录"
+        description="试试调整关键词、日期范围或排序方式"
+        action={hasActiveFilters ? (
+          <Button type="button" variant="outline" onClick={onClearFilters}>
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            清空筛选
+          </Button>
+        ) : undefined}
+      />
+    )
+  }
+
+  const recordLabel = (record: PracticeRecord) =>
+    `${record.date} ${record.topic || typeLabel}`
 
   return (
-    <div className={cn('group/row flex items-start justify-between gap-3 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors', className)}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <span
-            className="inline-block w-2 h-2 rounded-full shrink-0"
-            style={{ backgroundColor: color }}
-          />
-          <span className="text-[13px] text-muted-foreground">{record.date}</span>
-          {record.topic && (
-            <span className="text-[15px] font-medium truncate">{record.topic}</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-          <span className="text-[13px] text-muted-foreground">
-            时长：{record.duration}分钟
-          </span>
-          {record.score !== undefined && record.score > 0 && (
-            <span className="text-[13px] font-medium" style={{ color }}>
-              雅思 {formatScore(record.score)}
-            </span>
-          )}
-        </div>
-
-        {record.note && (
-          <p className="text-[13px] text-muted-foreground mt-1.5 line-clamp-2">
-            {record.note}
-          </p>
-        )}
+    <Card className="py-0">
+      <div className="hidden max-h-[65vh] overflow-auto lg:block">
+        <table className="w-full min-w-[780px] table-fixed border-collapse text-sm">
+          <caption className="sr-only">{typeLabel}模考记录列表</caption>
+          <colgroup>
+            <col className="w-28" />
+            <col className="w-48" />
+            <col className="w-28" />
+            <col className="w-24" />
+            <col />
+            <col className="w-24" />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-card/95 text-xs text-muted-foreground shadow-[0_1px_0_0_var(--border)] backdrop-blur">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left font-medium">日期</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">主题</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">时长</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">分数</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">备注</th>
+              <th scope="col" className="px-4 py-3 text-right font-medium">
+                <span className="sr-only">操作</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {records.map((record) => (
+              <tr key={record.id} className="group/row transition-colors hover:bg-accent/50">
+                <td className="whitespace-nowrap px-4 py-3 font-medium">
+                  <time dateTime={record.date} title={record.date}>{formatDateCN(record.date)}</time>
+                </td>
+                <td className="px-4 py-3">
+                  <p className={cn('truncate font-medium', !record.topic && 'text-muted-foreground')} title={record.topic}>
+                    {record.topic || '未填写主题'}
+                  </p>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 tabular-nums text-muted-foreground">
+                  {formatDuration(record.duration)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums" style={{ color }}>
+                  {record.score && record.score > 0 ? formatScore(record.score) : '—'}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  <p className="truncate" title={record.note}>{record.note || '—'}</p>
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <div className="flex justify-end gap-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onEdit(record)}
+                      className="h-8 w-8"
+                      aria-label={`编辑 ${recordLabel(record)} 模考记录`}
+                    >
+                      <PencilIcon className="size-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onDelete(record)}
+                      className="h-8 w-8"
+                      aria-label={`删除 ${recordLabel(record)} 模考记录`}
+                    >
+                      <TrashIcon className="size-3.5 text-destructive" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity">
-        <Button variant="ghost" size="icon-xs" onClick={onEdit} aria-label="编辑" className="h-8 w-8">
-          <PencilIcon className="size-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon-xs" onClick={onDelete} aria-label="删除" className="h-8 w-8">
-          <TrashIcon className="size-3.5 text-destructive" />
-        </Button>
-      </div>
-    </div>
+      <ul className="divide-y divide-border lg:hidden" aria-label={`${typeLabel}模考记录列表`}>
+        {records.map((record) => (
+          <li key={record.id} className="px-3 py-3 transition-colors hover:bg-accent/50 sm:px-4">
+            <article className="space-y-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="size-2 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+                    <time dateTime={record.date} className="text-xs text-muted-foreground">{formatDateCN(record.date)}</time>
+                  </div>
+                  <h3 className="mt-1 truncate text-[15px] font-semibold">
+                    {record.topic || '未填写主题'}
+                  </h3>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-lg font-bold tabular-nums" style={{ color }}>
+                    {record.score && record.score > 0 ? formatScore(record.score) : '—'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">雅思分数</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>时长 {formatDuration(record.duration)}</span>
+                {record.note && <span className="line-clamp-1 min-w-0 flex-1">{record.note}</span>}
+              </div>
+
+              <div className="flex justify-end gap-1 border-t border-border/60 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onEdit(record)}
+                  aria-label={`编辑 ${recordLabel(record)} 模考记录`}
+                >
+                  <PencilIcon className="size-3.5" aria-hidden="true" />
+                  编辑
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onDelete(record)}
+                  aria-label={`删除 ${recordLabel(record)} 模考记录`}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <TrashIcon className="size-3.5" aria-hidden="true" />
+                  删除
+                </Button>
+              </div>
+            </article>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 
 // ===== Tab 内容 =====
-function TabPanel({ type }: { type: PracticeType }) {
+function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
   const allRecords = usePracticeStore((s) => s.records)
   const [editingRecord, setEditingRecord] = useState<PracticeRecord | null>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PracticeRecord | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [writingCloseConfirmOpen, setWritingCloseConfirmOpen] = useState(false)
+  const [writingWorkspaceState, setWritingWorkspaceState] = useState<WritingWorkspaceState>({
+    generating: false,
+    hasUnsavedResult: false,
+  })
   const [reportsExpanded, setReportsExpanded] = useState(true)
+  const [selectedWritingReportId, setSelectedWritingReportId] = useState<string | null>(null)
+  const [pendingWritingDeleteId, setPendingWritingDeleteId] = useState<string | null>(null)
+  const [writingDeleteError, setWritingDeleteError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortOrder, setSortOrder] = useState<PracticeRecordSortOrder>('newest')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const deleteRecord = usePracticeStore((s) => s.deleteRecord)
   const writingReports = useWritingReportStore((s) => s.reports)
   const deleteWritingReport = useWritingReportStore((s) => s.deleteReport)
-
-  const records = useMemo(
-    () =>
-      allRecords
-        .filter((r) => r.type === type)
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
-    [allRecords, type]
+  const artifactAccess = useAiArtifactAccess()
+  const aiArtifacts = useAiArtifactStore((state) => state.artifacts)
+  const deleteAiArtifact = useAiArtifactStore((state) => state.deleteArtifact)
+  const writingArtifacts = useMemo(
+    () => listAiArtifactsForAccess(aiArtifacts, artifactAccess, 'writing_feedback')
+      .filter((artifact): artifact is WritingFeedbackArtifactV2 => artifact.outputSchemaVersion === 2),
+    [aiArtifacts, artifactAccess],
   )
+  const selectedWritingReport = selectedWritingReportId
+    ? writingArtifacts.find((artifact) => artifact.recordId === selectedWritingReportId) ?? null
+    : null
+  const pendingWritingDelete = pendingWritingDeleteId
+    ? writingArtifacts.find((artifact) => artifact.recordId === pendingWritingDeleteId) ?? null
+    : null
+
+  const subjectRecordCount = useMemo(
+    () => allRecords.filter((record) => record.type === type).length,
+    [allRecords, type],
+  )
+  const filteredRecords = useMemo(
+    () => filterAndSortPracticeRecords(allRecords, {
+      type,
+      searchQuery,
+      dateFrom,
+      dateTo,
+      sortOrder,
+    }),
+    [allRecords, type, searchQuery, dateFrom, dateTo, sortOrder],
+  )
+  const totalPages = getDataPageCount(filteredRecords.length)
+  const resolvedPage = Math.min(currentPage, totalPages)
+  const paginatedRecords = useMemo(
+    () => paginateItems(filteredRecords, resolvedPage),
+    [filteredRecords, resolvedPage],
+  )
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo) ||
+    sortOrder !== 'newest'
+  const dateRangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, dateFrom, dateTo, sortOrder])
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
+
+  useEffect(() => {
+    if (selectedWritingReportId && !selectedWritingReport) setSelectedWritingReportId(null)
+    if (pendingWritingDeleteId && !pendingWritingDelete) {
+      setPendingWritingDeleteId(null)
+      setWritingDeleteError('')
+    }
+  }, [pendingWritingDelete, pendingWritingDeleteId, selectedWritingReport, selectedWritingReportId])
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setDateFrom('')
+    setDateTo('')
+    setSortOrder('newest')
+    setCurrentPage(1)
+  }
 
   const handleEdit = (record: PracticeRecord) => {
     setEditingRecord(record)
@@ -490,52 +768,145 @@ function TabPanel({ type }: { type: PracticeType }) {
   }
 
   return (
-    <>
+    <div className="space-y-4 md:space-y-5">
       <StatsSummary type={type} />
 
       {/* 写作 Tab AI 批改入口 */}
       {type === 'writing' && (
-        <Card className="mb-4 py-0 cursor-pointer hover:border-amber-300/60 dark:hover:border-amber-700/40 hover:bg-amber-50/30 dark:hover:bg-amber-950/20 transition-all active:scale-[0.99]" onClick={() => setAiOpen(true)}>
-          <CardContent className="flex items-center justify-between py-0 px-3 md:px-4 min-h-[60px]">
+        <Card interactive className="py-0">
+          <button
+            type="button"
+            onClick={() => setAiOpen(true)}
+            aria-label="打开 AI 写作批改"
+            className="flex min-h-[64px] w-full items-center justify-between gap-3 px-3 text-left md:px-4"
+          >
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
-                <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-subject-writing-soft text-subject-writing">
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm font-semibold">AI 写作批改</p>
-                <p className="text-xs text-muted-foreground">粘贴作文，AI 按评分标准批改</p>
+                <p className="text-xs text-muted-foreground">填写题目与作文，按公开标准生成学习反馈</p>
               </div>
             </div>
             <span className="text-xs text-muted-foreground shrink-0">点击展开 →</span>
-          </CardContent>
+          </button>
         </Card>
       )}
 
-      {records.length === 0 ? (
-        <EmptyState
-          scene="practice"
-          title="暂无练习记录"
-          description="开始你的第一次练习吧，勤加练习才能稳步提升"
-        />
-      ) : (
-        <Card className="py-0">
-          <div className="divide-y divide-border">
-            {records.map((record) => (
-              <RecordItem
-                key={record.id}
-                record={record}
-                onEdit={() => handleEdit(record)}
-                onDelete={() => handleDeleteClick(record)}
+      <DataToolbar
+        aria-label={`筛选${TYPE_LABEL_MAP[type]}模考记录`}
+        mobileFilterTitle={`筛选${TYPE_LABEL_MAP[type]}模考记录`}
+        mobileFilterCount={
+          Number(sortOrder !== 'newest')
+          + Number(Boolean(dateFrom))
+          + Number(Boolean(dateTo))
+        }
+        search={(
+          <div className="space-y-1.5">
+            <Label htmlFor={`practice-${type}-search`} className="text-xs text-muted-foreground">搜索</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                id={`practice-${type}-search`}
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="搜索主题、备注或日期"
+                className="pl-8"
               />
-            ))}
+            </div>
           </div>
-        </Card>
-      )}
+        )}
+        filters={(
+          <div className="w-full space-y-1.5 sm:max-w-xs">
+            <Label htmlFor={`practice-${type}-sort`} className="text-xs text-muted-foreground">排序</Label>
+            <Select value={sortOrder} onValueChange={(value) => value && setSortOrder(value as PracticeRecordSortOrder)}>
+              <SelectTrigger id={`practice-${type}-sort`} className="w-full">
+                <SelectValue>{SORT_LABELS[sortOrder]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(SORT_LABELS) as Array<[PracticeRecordSortOrder, string]>).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        actions={(
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearFilters}
+            disabled={!hasActiveFilters}
+            className="w-full sm:w-auto"
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            清空筛选
+          </Button>
+        )}
+        summary={(
+          <span>
+            找到 <strong className="font-semibold tabular-nums text-foreground">{filteredRecords.length}</strong> 条记录，每页最多 {DEFAULT_DATA_PAGE_SIZE} 条
+          </span>
+        )}
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={`practice-${type}-date-from`} className="text-xs text-muted-foreground">开始日期</Label>
+            <Input
+              id={`practice-${type}-date-from`}
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              aria-invalid={dateRangeInvalid}
+              onChange={(event) => setDateFrom(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`practice-${type}-date-to`} className="text-xs text-muted-foreground">结束日期</Label>
+            <Input
+              id={`practice-${type}-date-to`}
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              aria-invalid={dateRangeInvalid}
+              onChange={(event) => setDateTo(event.target.value)}
+            />
+          </div>
+        </div>
+        {dateRangeInvalid && (
+          <p className="mt-2 text-xs text-destructive" role="alert">开始日期不能晚于结束日期</p>
+        )}
+      </DataToolbar>
+
+      <PracticeRecordList
+        records={paginatedRecords}
+        type={type}
+        hasAnyRecords={subjectRecordCount > 0}
+        hasActiveFilters={hasActiveFilters}
+        onAdd={onAdd}
+        onClearFilters={clearFilters}
+        onEdit={handleEdit}
+        onDelete={handleDeleteClick}
+      />
+
+      <DataPagination
+        currentPage={resolvedPage}
+        totalPages={totalPages}
+        totalItems={filteredRecords.length}
+        onPageChange={setCurrentPage}
+        itemLabel="条记录"
+        aria-label={`${TYPE_LABEL_MAP[type]}模考记录分页`}
+      />
 
       {/* 编辑弹窗 */}
       <PracticeFormDialog
         open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open)
+          if (!open) setEditingRecord(null)
+        }}
         editRecord={editingRecord}
         defaultType={type}
       />
@@ -550,50 +921,210 @@ function TabPanel({ type }: { type: PracticeType }) {
 
       {/* AI 写作批改弹窗 */}
       {type === 'writing' && (
-        <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-          <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg max-h-[90vh] flex flex-col p-0">
-            <DialogHeader className="px-4 pt-4 pb-2">
+        <Dialog
+          open={aiOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              setAiOpen(true)
+              return
+            }
+            if (writingWorkspaceState.generating || writingWorkspaceState.hasUnsavedResult) {
+              setWritingCloseConfirmOpen(true)
+              return
+            }
+            setAiOpen(false)
+            setWritingWorkspaceState({ generating: false, hasUnsavedResult: false })
+          }}
+        >
+          <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)] p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-auto sm:!max-h-[92dvh] sm:!max-w-3xl sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
+            <DialogHeader className="border-b px-4 pb-3 pt-4 sm:px-5">
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-amber-500" />
-                AI 写作批改
+                IELTS 写作反馈
               </DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col flex-1 min-h-0 px-4 pb-4 overflow-y-auto">
-              <WritingCorrection onSuccess={() => setAiOpen(false)} />
+            <div className="min-h-0 overflow-y-auto px-4 pb-4 pt-3 sm:px-5">
+              <WritingCorrection onWorkspaceStateChange={setWritingWorkspaceState} />
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* AI 写作批改报告列表 */}
-      {type === 'writing' && writingReports.length > 0 && (
+      <Dialog open={writingCloseConfirmOpen} onOpenChange={setWritingCloseConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{writingWorkspaceState.generating ? '停止本次写作反馈？' : '放弃未保存的写作报告？'}</DialogTitle>
+            <DialogDescription>
+              {writingWorkspaceState.generating
+                ? '关闭会停止当前请求；题目和作文草稿仍会保留。'
+                : '这份 AI 反馈还没有保存。关闭后反馈会丢失，但题目和作文草稿仍会保留。'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setWritingCloseConfirmOpen(false)}>继续查看</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                setWritingCloseConfirmOpen(false)
+                setAiOpen(false)
+                setWritingWorkspaceState({ generating: false, hasUnsavedResult: false })
+              }}
+            >
+              {writingWorkspaceState.generating ? '停止并关闭' : '放弃并关闭'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI 写作报告：V2 使用账号隔离的统一内容仓库；旧报告只读保留。 */}
+      {type === 'writing' && (writingArtifacts.length > 0 || writingReports.length > 0) && (
         <Card size="sm" className="mt-3">
           <CardContent>
             <button
+              type="button"
               onClick={() => setReportsExpanded(!reportsExpanded)}
+              aria-expanded={reportsExpanded}
+              aria-controls="writing-report-list"
               className="w-full flex items-center justify-between"
             >
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-amber-500" />
-                <h4 className="font-semibold text-sm">AI 写作批改报告 ({writingReports.length})</h4>
+                <PenLine className="h-4 w-4 text-amber-500" />
+                <h4 className="font-semibold text-sm">写作反馈报告 ({writingArtifacts.length + writingReports.length})</h4>
               </div>
               {reportsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {reportsExpanded && (
-              <div className="mt-2 space-y-2">
-                {writingReports.map((report) => (
-                  <WritingReportItem
-                    key={report.id}
-                    report={report}
-                    onDelete={() => deleteWritingReport(report.id)}
-                  />
+              <div id="writing-report-list" className="mt-2 space-y-2">
+                {writingArtifacts.map((report) => (
+                  <div key={report.recordId} className="flex items-center gap-2 rounded-lg border border-border/70 px-2.5 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWritingReportId(report.recordId)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-subject-writing-soft text-subject-writing">
+                        <FileText className="size-4" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{report.title}</span>
+                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                          {report.content.submission.wordCount} 词 · {report.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'} · {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
+                        </span>
+                      </span>
+                    </button>
+                    <Button type="button" variant="ghost" size="icon-sm" className="size-10 sm:size-8" onClick={() => downloadWritingReport(report)} aria-label={`导出${report.title}`}>
+                      <Download className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-10 text-destructive hover:text-destructive sm:size-8"
+                      onClick={() => {
+                        setWritingDeleteError('')
+                        setPendingWritingDeleteId(report.recordId)
+                      }}
+                      aria-label={`删除${report.title}`}
+                    >
+                      <TrashIcon className="size-3.5" />
+                    </Button>
+                  </div>
                 ))}
+
+                {writingReports.length > 0 && (
+                  <details className="rounded-lg border border-dashed border-border/70 px-2.5 py-2">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                      旧版报告（{writingReports.length}）· 缺少题目与评分依据
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {writingReports.map((report) => (
+                        <WritingReportItem
+                          key={report.id}
+                          report={report}
+                          onDelete={() => deleteWritingReport(report.id)}
+                        />
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       )}
-    </>
+
+      <Dialog open={selectedWritingReport !== null} onOpenChange={(open) => { if (!open) setSelectedWritingReportId(null) }}>
+        <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)_auto] p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-auto sm:!max-h-[90dvh] sm:!max-w-3xl sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
+          {selectedWritingReport && (
+            <>
+              <DialogHeader className="border-b px-4 pb-3 pt-4 sm:px-5">
+                <DialogTitle className="pr-8">{selectedWritingReport.title}</DialogTitle>
+                <DialogDescription>
+                  {selectedWritingReport.content.submission.wordCount} 词 · {selectedWritingReport.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'} · {format(new Date(selectedWritingReport.createdAt), 'yyyy-MM-dd HH:mm')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-5">
+                <WritingFeedbackContent
+                  submission={selectedWritingReport.content.submission}
+                  feedback={selectedWritingReport.content.feedback}
+                  overallBand={selectedWritingReport.content.overallBand}
+                />
+                <details className="mt-5 rounded-lg border border-border/70 px-3 py-2">
+                  <summary className="cursor-pointer text-sm font-medium">查看原始作文</summary>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{selectedWritingReport.content.submission.essayText}</p>
+                </details>
+              </div>
+              <DialogFooter className="mx-0 mb-0 px-4 py-3 sm:px-5">
+                <Button type="button" variant="outline" onClick={() => downloadWritingReport(selectedWritingReport)}>
+                  <Download className="size-4" aria-hidden="true" />导出 Markdown
+                </Button>
+                <Button type="button" onClick={() => setSelectedWritingReportId(null)}>关闭</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingWritingDelete !== null} onOpenChange={(open) => {
+        if (!open) {
+          setPendingWritingDeleteId(null)
+          setWritingDeleteError('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>删除这份写作报告？</DialogTitle>
+            <DialogDescription>删除不会影响作文练习记录；之后只能通过此前导出的备份恢复。</DialogDescription>
+          </DialogHeader>
+          {writingDeleteError && <p className="text-sm text-destructive" role="alert">{writingDeleteError}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingWritingDeleteId(null)}>取消</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (!pendingWritingDelete) return
+                try {
+                  const deleted = deleteAiArtifact(pendingWritingDelete.recordId, artifactAccess)
+                  if (!deleted) {
+                    setWritingDeleteError('账号状态已变化，这份报告没有被删除。')
+                    return
+                  }
+                  if (selectedWritingReportId === pendingWritingDelete.recordId) setSelectedWritingReportId(null)
+                  setPendingWritingDeleteId(null)
+                  setWritingDeleteError('')
+                } catch {
+                  setWritingDeleteError('删除结果无法写入当前设备，报告保持不变。')
+                }
+              }}
+            >
+              删除报告
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -602,34 +1133,47 @@ export default function Practice() {
   const [activeTab, setActiveTab] = useState<PracticeType>('reading')
   const [addDialogOpen, setAddDialogOpen] = useState(false)
 
+  const openAddDialog = (type: PracticeType) => {
+    setActiveTab(type)
+    setAddDialogOpen(true)
+  }
+
   // 动态 Tab 样式：为每个 Tab 自定义底部指示器颜色
   const tabStyle = (type: PracticeType) => ({
     '--tab-color': TYPE_COLOR_MAP[type],
   }) as React.CSSProperties
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 顶部标题和操作 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-[22px] md:text-2xl font-bold">模考</h1>
-        <p className="mt-1 text-[15px] text-muted-foreground">记录你的雅思模拟考试</p>
-        <Button onClick={() => setAddDialogOpen(true)} className="w-full sm:w-auto">
-          <PlusIcon className="h-4 w-4" />
-          添加模考
-        </Button>
-      </div>
+    <div className="space-y-5 md:space-y-6">
+      <PageHeader
+        eyebrow="Mock test log"
+        title="模考记录"
+        description="按听说读写整理模拟考试，用筛选和分数变化定位下一轮训练重点。"
+        actions={(
+          <Button
+            type="button"
+            onClick={() => openAddDialog(activeTab)}
+            aria-label={`添加${TYPE_LABEL_MAP[activeTab]}模考记录`}
+            className="w-full sm:w-auto"
+          >
+            <PlusIcon className="h-4 w-4" aria-hidden="true" />
+            添加模考
+          </Button>
+        )}
+      />
 
       {/* Tabs 区域 */}
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as PracticeType)}
-        className="flex-1 flex flex-col"
+        className="flex flex-col"
       >
-        <TabsList variant="line" className="mb-2 w-full overflow-x-auto">
+        <TabsList variant="line" className="mb-2 w-full overflow-x-auto" aria-label="雅思模考科目">
           {PRACTICE_TYPE_OPTIONS.map((opt) => (
             <TabsTrigger
               key={opt.value}
               value={opt.value}
+              aria-label={`${opt.label}模考记录`}
               className={cn(
                 'data-active:text-foreground px-3 md:px-4 py-1.5 text-sm md:text-base',
                 'transition-colors transition-transform whitespace-nowrap active:scale-95'
@@ -652,8 +1196,11 @@ export default function Practice() {
         </TabsList>
 
         {PRACTICE_TYPE_OPTIONS.map((opt) => (
-          <TabsContent key={opt.value} value={opt.value} className="flex-1 overflow-y-auto">
-            <TabPanel type={opt.value as PracticeType} />
+          <TabsContent key={opt.value} value={opt.value} className="flex-1" keepMounted>
+            <TabPanel
+              type={opt.value as PracticeType}
+              onAdd={() => openAddDialog(opt.value as PracticeType)}
+            />
           </TabsContent>
         ))}
       </Tabs>
@@ -699,7 +1246,10 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
   return (
     <div className="rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors">
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls={`writing-report-${report.id}`}
         className="w-full flex items-center justify-between p-2 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -724,7 +1274,7 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
       </button>
       
       {expanded && (
-        <div className="px-2 pb-2 border-t border-border">
+        <div id={`writing-report-${report.id}`} className="px-2 pb-2 border-t border-border">
           {/* 评分详情 */}
           <div className="grid grid-cols-4 gap-1.5 mt-2 mb-2">
             <div className="text-center">
@@ -748,7 +1298,7 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
           {/* 点评 */}
           <div className="mb-2">
             <p className="text-[11px] font-medium text-muted-foreground mb-0.5">详细点评</p>
-            <p className="text-sm whitespace-pre-wrap">{report.feedback}</p>
+            <SafeAIContent content={report.feedback} className="mt-0.5" />
           </div>
           
           {/* 建议 */}
@@ -772,7 +1322,9 @@ function WritingReportItem({ report, onDelete }: { report: WritingReport; onDele
           
           {/* 删除按钮 */}
           <button
+            type="button"
             onClick={handleDelete}
+            aria-label={`${confirmDelete ? '确认删除' : '删除'}这份写作批改报告`}
             className={cn(
               'text-xs px-2 py-0.5 rounded transition-colors',
               confirmDelete 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { WordRecord } from '@/lib/types'
 import { DEFAULT_WORD_CATEGORIES } from '@/lib/constants'
 import { useWordStore } from '@/stores/wordStore'
@@ -33,8 +33,21 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Search,
+  RotateCcw,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { DataToolbar } from '@/components/ui/data-toolbar'
+import { MetricGroup } from '@/components/ui/metric-group'
+import { PageHeader } from '@/components/ui/page-header'
+import { DataPagination } from '@/components/ui/data-pagination'
+import {
+  filterAndSortWordRecords,
+  getWordRecordPageCount,
+  paginateWordRecords,
+  WORD_RECORD_PAGE_SIZE,
+  type WordRecordSortOrder,
+} from '@/lib/wordRecordView'
 
 // ===== Helper Functions =====
 
@@ -95,6 +108,13 @@ interface FormData {
   customCategory: string
 }
 
+const SORT_LABELS: Record<WordRecordSortOrder, string> = {
+  newest: '日期：从新到旧',
+  oldest: '日期：从旧到新',
+  'count-desc': '数量：从多到少',
+  'count-asc': '数量：从少到多',
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   '学术词汇': 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-700',
   '高频词汇': 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700',
@@ -128,6 +148,11 @@ export default function Words() {
 
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortOrder, setSortOrder] = useState<WordRecordSortOrder>('newest')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -148,15 +173,38 @@ export default function Words() {
 
   // ===== Computed =====
 
-  const sortedRecords = useMemo(() => {
-    const filtered =
-      filterCategory === 'all'
-        ? [...records]
-        : records.filter((r) => r.category === filterCategory)
-    return filtered.sort(
-      (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
-    )
-  }, [records, filterCategory])
+  const filteredRecords = useMemo(() => {
+    return filterAndSortWordRecords(records, {
+      searchQuery,
+      category: filterCategory,
+      dateFrom,
+      dateTo,
+      sortOrder,
+    })
+  }, [records, filterCategory, searchQuery, dateFrom, dateTo, sortOrder])
+
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 ||
+    filterCategory !== 'all' ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo) ||
+    sortOrder !== 'newest'
+
+  const dateRangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+  const totalPages = getWordRecordPageCount(filteredRecords.length)
+  const resolvedPage = Math.min(currentPage, totalPages)
+  const paginatedRecords = useMemo(
+    () => paginateWordRecords(filteredRecords, resolvedPage),
+    [filteredRecords, resolvedPage],
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filterCategory, dateFrom, dateTo, sortOrder])
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
 
   const allCategories = useMemo(() => {
     const presetNames: string[] = DEFAULT_WORD_CATEGORIES.map((c) => c.name)
@@ -282,6 +330,15 @@ export default function Words() {
     }
   }
 
+  const clearFilters = () => {
+    setSearchQuery('')
+    setFilterCategory('all')
+    setDateFrom('')
+    setDateTo('')
+    setSortOrder('newest')
+    setCurrentPage(1)
+  }
+
   const prevMonth = () => {
     if (calMonth === 0) {
       setCalYear((y) => y - 1)
@@ -304,65 +361,189 @@ export default function Words() {
 
   return (
     <div className="space-y-5 md:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] md:text-2xl font-bold">单词记录</h1>
-          <p className="mt-1 text-[15px] text-muted-foreground">
-            记录每日单词背诵数量和分类
-          </p>
-        </div>
-        <Button onClick={openAddForm} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4" />
-          添加记录
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Vocabulary log"
+        title="单词记录"
+        description="记录每日背诵量，用筛选和趋势回顾词汇积累。"
+        actions={(
+          <Button onClick={openAddForm} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            添加记录
+          </Button>
+        )}
+      />
 
-      {/* View toggle & filter */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex rounded-lg border p-0.5">
+      {/* Stats summary */}
+      <MetricGroup
+        ariaLabel="单词背诵概览"
+        columns={3}
+        items={[
+          { label: '今日背诵', value: todayCount, description: '词', tone: 'primary' },
+          { label: '本周背诵', value: weekCount, description: '词' },
+          { label: '本月背诵', value: monthCount, description: '词' },
+        ]}
+      />
+
+      {/* View toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex rounded-lg border bg-card p-0.5" role="group" aria-label="单词记录视图">
           <Button
             variant={viewMode === 'list' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setViewMode('list')}
+            aria-label="切换到列表视图"
+            aria-pressed={viewMode === 'list'}
           >
-            <List className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">列表</span>
+            <List className="h-4 w-4" aria-hidden="true" />
+            <span className="ml-1">列表</span>
           </Button>
           <Button
             variant={viewMode === 'calendar' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setViewMode('calendar')}
+            aria-label="切换到日历视图"
+            aria-pressed={viewMode === 'calendar'}
           >
-            <CalendarDays className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">日历</span>
+            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+            <span className="ml-1">日历</span>
           </Button>
         </div>
-
         {viewMode === 'list' && (
-          <Select value={filterCategory} onValueChange={(v) => v && setFilterCategory(v)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="全部分类" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部分类</SelectItem>
-              {allCategories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            共 <span className="font-medium tabular-nums text-foreground">{filteredRecords.length}</span> 条记录
+          </p>
         )}
       </div>
 
       {/* Content area */}
       {viewMode === 'list' ? (
-        <ListView
-          records={sortedRecords}
-          onEdit={openEditForm}
-          onDelete={setDeleteTarget}
-        />
+        <div className="space-y-4">
+          <DataToolbar
+            aria-label="筛选单词记录"
+            mobileFilterTitle="筛选单词记录"
+            mobileFilterCount={
+              Number(filterCategory !== 'all')
+              + Number(sortOrder !== 'newest')
+              + Number(Boolean(dateFrom))
+              + Number(Boolean(dateTo))
+            }
+            search={(
+              <div className="space-y-1.5">
+                <Label htmlFor="word-search" className="text-xs text-muted-foreground">搜索</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    id="word-search"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="搜索分类、备注或日期"
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+            )}
+            filters={(
+              <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="word-category-filter" className="text-xs text-muted-foreground">分类</Label>
+                  <Select value={filterCategory} onValueChange={(value) => value && setFilterCategory(value)}>
+                    <SelectTrigger id="word-category-filter" className="w-full">
+                      <SelectValue>{filterCategory === 'all' ? '全部分类' : filterCategory}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部分类</SelectItem>
+                      {allCategories.map((category) => (
+                        <SelectItem key={category} value={category}>{category}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="word-sort-order" className="text-xs text-muted-foreground">排序</Label>
+                  <Select value={sortOrder} onValueChange={(value) => value && setSortOrder(value as WordRecordSortOrder)}>
+                    <SelectTrigger id="word-sort-order" className="w-full">
+                      <SelectValue>{SORT_LABELS[sortOrder]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(SORT_LABELS) as Array<[WordRecordSortOrder, string]>).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            actions={(
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearFilters}
+                disabled={!hasActiveFilters}
+                className="w-full sm:w-auto"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                清空筛选
+              </Button>
+            )}
+            summary={(
+              <span>
+                找到 <strong className="font-semibold tabular-nums text-foreground">{filteredRecords.length}</strong> 条记录，每页最多 {WORD_RECORD_PAGE_SIZE} 条
+              </span>
+            )}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="word-date-from" className="text-xs text-muted-foreground">开始日期</Label>
+                  <Input
+                    id="word-date-from"
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    aria-invalid={dateRangeInvalid}
+                    onChange={(event) => setDateFrom(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="word-date-to" className="text-xs text-muted-foreground">结束日期</Label>
+                  <Input
+                    id="word-date-to"
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    aria-invalid={dateRangeInvalid}
+                    onChange={(event) => setDateTo(event.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {dateRangeInvalid && (
+              <p className="mt-2 text-xs text-destructive" role="alert">开始日期不能晚于结束日期</p>
+            )}
+          </DataToolbar>
+
+          <ListView
+            records={paginatedRecords}
+            hasAnyRecords={records.length > 0}
+            hasActiveFilters={hasActiveFilters}
+            onAdd={openAddForm}
+            onClearFilters={clearFilters}
+            onEdit={openEditForm}
+            onDelete={setDeleteTarget}
+          />
+
+          <DataPagination
+            aria-label="单词记录分页"
+            currentPage={resolvedPage}
+            totalPages={totalPages}
+            totalItems={filteredRecords.length}
+            pageSize={WORD_RECORD_PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
+        </div>
       ) : (
         <CalendarView
           calMonthLabel={`${calYear}年${calMonth + 1}月`}
@@ -373,34 +554,6 @@ export default function Words() {
           onNextMonth={nextMonth}
         />
       )}
-
-      {/* Stats summary */}
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 py-3 md:py-4">
-            <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {todayCount}
-            </span>
-            <span className="text-[13px] md:text-xs text-muted-foreground">今日背诵</span>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 py-3 md:py-4">
-            <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {weekCount}
-            </span>
-            <span className="text-[13px] md:text-xs text-muted-foreground">本周背诵</span>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex flex-col items-center gap-1 py-3 md:py-4">
-            <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {monthCount}
-            </span>
-            <span className="text-[13px] md:text-xs text-muted-foreground">本月背诵</span>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Add / Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -414,8 +567,9 @@ export default function Words() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>日期</Label>
+              <Label htmlFor="word-form-date">日期</Label>
               <Input
+                id="word-form-date"
                 type="date"
                 value={form.date}
                 onChange={(e) =>
@@ -425,10 +579,11 @@ export default function Words() {
             </div>
 
             <div className="space-y-2">
-              <Label>分类</Label>
+              <Label htmlFor={form.isCustomCategory ? 'word-form-custom-category' : 'word-form-category'}>分类</Label>
               {form.isCustomCategory ? (
                 <div className="flex gap-2">
                   <Input
+                    id="word-form-custom-category"
                     placeholder="输入自定义分类名称"
                     value={form.customCategory}
                     onChange={(e) =>
@@ -456,7 +611,7 @@ export default function Words() {
                 </div>
               ) : (
                 <Select value={form.category} onValueChange={(v) => v && handleCategoryChange(v)}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger id="word-form-category" className="w-full">
                     <SelectValue placeholder="选择分类" />
                   </SelectTrigger>
                   <SelectContent>
@@ -472,8 +627,9 @@ export default function Words() {
             </div>
 
             <div className="space-y-2">
-              <Label>数量</Label>
+              <Label htmlFor="word-form-count">数量</Label>
               <Input
+                id="word-form-count"
                 type="number"
                 min={1}
                 value={form.count || ''}
@@ -488,8 +644,9 @@ export default function Words() {
             </div>
 
             <div className="space-y-2">
-              <Label>备注</Label>
+              <Label htmlFor="word-form-note">备注</Label>
               <Textarea
+                id="word-form-note"
                 value={form.note}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, note: e.target.value }))
@@ -555,75 +712,172 @@ export default function Words() {
 
 function ListView({
   records,
+  hasAnyRecords,
+  hasActiveFilters,
+  onAdd,
+  onClearFilters,
   onEdit,
   onDelete,
 }: {
   records: WordRecord[]
+  hasAnyRecords: boolean
+  hasActiveFilters: boolean
+  onAdd: () => void
+  onClearFilters: () => void
   onEdit: (record: WordRecord) => void
   onDelete: (record: WordRecord) => void
 }) {
   if (records.length === 0) {
+    if (!hasAnyRecords) {
+      return (
+        <EmptyState
+          scene="words"
+          title="还没有记录任何单词"
+          description="创建第一条单词背诵记录，之后可以按分类、日期和备注快速查找"
+          action={<Button onClick={onAdd}><Plus className="h-4 w-4" aria-hidden="true" />添加第一条记录</Button>}
+        />
+      )
+    }
+
     return (
       <EmptyState
         scene="words"
-        title="还没有记录任何单词"
-        description="开始你的第一个单词背诵记录吧，每天积累一点点"
+        title="没有匹配的记录"
+        description="试试调整关键词、分类或日期范围"
+        action={hasActiveFilters ? (
+          <Button variant="outline" onClick={onClearFilters}>
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            清空筛选
+          </Button>
+        ) : undefined}
       />
     )
   }
 
   return (
     <Card className="py-0">
-      <div className="divide-y divide-border">
-        {records.map((record) => (
-          <div key={record.id} className="group/row flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 md:py-3.5 hover:bg-accent/50 transition-colors">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium">
+      {/* Desktop table */}
+      <div className="hidden max-h-[65vh] overflow-auto lg:block">
+        <table className="w-full min-w-[680px] table-fixed border-collapse text-sm">
+          <caption className="sr-only">单词背诵记录列表</caption>
+          <colgroup>
+            <col className="w-28" />
+            <col className="w-40" />
+            <col />
+            <col className="w-24" />
+            <col className="w-24" />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-card/95 text-xs text-muted-foreground shadow-[0_1px_0_0_var(--border)] backdrop-blur">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left font-medium">日期</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">分类</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">备注</th>
+              <th scope="col" className="px-4 py-3 text-right font-medium">数量</th>
+              <th scope="col" className="px-4 py-3 text-right font-medium">
+                <span className="sr-only">操作</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {records.map((record) => (
+              <tr key={record.id} className="group/row transition-colors hover:bg-accent/50">
+                <td className="whitespace-nowrap px-4 py-3 font-medium" title={record.date}>
                   {formatDateCN(record.date)}
-                </span>
-                <Badge
-                  variant="outline"
-                  className={cn('border text-[12px] md:text-xs', getCategoryColor(record.category))}
-                >
-                  {record.category}
-                </Badge>
-              </div>
-              {record.note && (
-                <p className="mt-1 truncate text-xs md:text-sm text-muted-foreground">
-                  {record.note}
-                </p>
-              )}
-            </div>
-
-            <div className="flex shrink-0 items-baseline gap-0.5">
-              <span className="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                {record.count}
-              </span>
-              <span className="text-xs text-muted-foreground">词</span>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-0.5">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onEdit(record)}
-                className="h-8 w-8"
-              >
-                <Pencil className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onDelete(record)}
-                className="h-8 w-8"
-              >
-                <Trash2 className="size-3.5 text-destructive" />
-              </Button>
-            </div>
-          </div>
-        ))}
+                </td>
+                <td className="px-4 py-3">
+                  <Badge
+                    variant="outline"
+                    className={cn('max-w-full border text-xs', getCategoryColor(record.category))}
+                  >
+                    <span className="truncate">{record.category}</span>
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  <p className="truncate" title={record.note}>{record.note || '—'}</p>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span className="font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">{record.count}</span>
+                  <span className="ml-1 text-xs text-muted-foreground">词</span>
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <div className="flex justify-end gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onEdit(record)}
+                      className="h-8 w-8"
+                      aria-label={`编辑 ${record.date} ${record.category} 记录`}
+                    >
+                      <Pencil className="size-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onDelete(record)}
+                      className="h-8 w-8"
+                      aria-label={`删除 ${record.date} ${record.category} 记录`}
+                    >
+                      <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+
+      {/* Mobile and tablet cards */}
+      <ul className="divide-y divide-border lg:hidden" aria-label="单词背诵记录列表">
+        {records.map((record) => (
+          <li key={record.id} className="px-3 py-3 transition-colors hover:bg-accent/50 sm:px-4">
+            <article className="space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <time dateTime={record.date} className="text-sm font-medium">{formatDateCN(record.date)}</time>
+                    <Badge
+                      variant="outline"
+                      className={cn('max-w-full border text-xs', getCategoryColor(record.category))}
+                    >
+                      <span className="truncate">{record.category}</span>
+                    </Badge>
+                  </div>
+                  {record.note && (
+                    <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{record.note}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-baseline gap-0.5">
+                  <span className="text-xl font-bold tabular-nums text-indigo-600 dark:text-indigo-400">{record.count}</span>
+                  <span className="text-xs text-muted-foreground">词</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-1 border-t border-border/60 pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onEdit(record)}
+                  aria-label={`编辑 ${record.date} ${record.category} 记录`}
+                >
+                  <Pencil className="size-3.5" aria-hidden="true" />
+                  编辑
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onDelete(record)}
+                  aria-label={`删除 ${record.date} ${record.category} 记录`}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  删除
+                </Button>
+              </div>
+            </article>
+          </li>
+        ))}
+      </ul>
     </Card>
   )
 }
@@ -649,16 +903,16 @@ function CalendarView({
   const todayStr = getTodayStr()
 
   return (
-    <Card>
+    <Card className="mx-auto w-full max-w-3xl">
       <CardContent className="py-3 md:py-4 px-3 md:px-4">
         {/* Month navigation */}
         <div className="mb-3 md:mb-4 flex items-center justify-between">
-          <Button variant="outline" size="icon-sm" onClick={onPrevMonth} className="h-8 w-8">
-            <ChevronLeft className="h-4 w-4" />
+          <Button variant="outline" size="icon-sm" onClick={onPrevMonth} className="h-8 w-8" aria-label="查看上个月">
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
           <span className="font-semibold text-sm md:text-base">{calMonthLabel}</span>
-          <Button variant="outline" size="icon-sm" onClick={onNextMonth} className="h-8 w-8">
-            <ChevronRight className="h-4 w-4" />
+          <Button variant="outline" size="icon-sm" onClick={onNextMonth} className="h-8 w-8" aria-label="查看下个月">
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
 

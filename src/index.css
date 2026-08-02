@@ -17,6 +17,55 @@
     --color-sidebar-foreground: var(--sidebar-foreground);
     --color-sidebar: var(--sidebar);
     --color-chart-5: var(--chart-5);
+    --color-chart-6: var(--chart-6);
+    --color-chart-7: var(--chart-7);
+    --color-chart-8: var(--chart-8);
+    --color-chart-grid: var(--chart-grid);
+    --color-chart-tick: var(--chart-tick);
+    --color-chart-label: var(--chart-label);
+    --color-surface: var(--surface);
+    --color-surface-raised: var(--surface-raised);
+    --color-surface-subtle: var(--surface-subtle);
+    --color-surface-emphasis: var(--surface-emphasis);
+    --color-surface-inverse: var(--surface-inverse);
+    --color-surface-inverse-foreground: var(--surface-inverse-foreground);
+    --color-success: var(--status-success);
+    --color-success-foreground: var(--status-success-foreground);
+    --color-success-surface: var(--status-success-surface);
+    --color-success-border: var(--status-success-border);
+    --color-warning: var(--status-warning);
+    --color-warning-foreground: var(--status-warning-foreground);
+    --color-warning-surface: var(--status-warning-surface);
+    --color-warning-border: var(--status-warning-border);
+    --color-info: var(--status-info);
+    --color-info-foreground: var(--status-info-foreground);
+    --color-info-surface: var(--status-info-surface);
+    --color-info-border: var(--status-info-border);
+    --color-danger: var(--status-danger);
+    --color-danger-foreground: var(--status-danger-foreground);
+    --color-danger-surface: var(--status-danger-surface);
+    --color-danger-border: var(--status-danger-border);
+    --color-subject-reading: var(--subject-reading);
+    --color-subject-reading-soft: var(--subject-reading-soft);
+    --color-subject-reading-border: var(--subject-reading-border);
+    --color-subject-listening: var(--subject-listening);
+    --color-subject-listening-soft: var(--subject-listening-soft);
+    --color-subject-listening-border: var(--subject-listening-border);
+    --color-subject-writing: var(--subject-writing);
+    --color-subject-writing-soft: var(--subject-writing-soft);
+    --color-subject-writing-border: var(--subject-writing-border);
+    --color-subject-speaking: var(--subject-speaking);
+    --color-subject-speaking-soft: var(--subject-speaking-soft);
+    --color-subject-speaking-border: var(--subject-speaking-border);
+    --color-subject-general: var(--subject-general);
+    --color-subject-general-soft: var(--subject-general-soft);
+    --color-subject-general-border: var(--subject-general-border);
+    --color-illustration-primary: var(--illustration-primary);
+    --color-illustration-secondary: var(--illustration-secondary);
+    --color-illustration-accent: var(--illustration-accent);
+    --color-illustration-line: var(--illustration-line);
+    --color-illustration-muted: var(--illustration-muted);
+    --color-illustration-surface: var(--illustration-surface);
     --color-chart-4: var(--chart-4);
     --color-chart-3: var(--chart-3);
     --color-chart-2: var(--chart-2);
@@ -49,6 +98,7 @@
 }
 
 :root {
+    color-scheme: light;
     --background: oklch(0.985 0.002 270);
     --foreground: oklch(0.17 0.02 270);
     --card: oklch(0.998 0 0);
@@ -67,11 +117,62 @@
     --border: oklch(0.91 0.015 270);
     --input: oklch(0.91 0.015 270);
     --ring: oklch(0.437 0.18 275);
-    --chart-1: oklch(0.87 0.02 270);
-    --chart-2: oklch(0.556 0.05 275);
-    --chart-3: oklch(0.439 0.1 275);
-    --chart-4: oklch(0.371 0.15 275);
-    --chart-5: oklch(0.269 0.2 275);
+    /* 容器层级 */
+    --surface: oklch(0.985 0.002 270);
+    --surface-raised: oklch(0.998 0 0);
+    --surface-subtle: oklch(0.965 0.008 270);
+    --surface-emphasis: oklch(0.925 0.018 270);
+    --surface-inverse: oklch(0.22 0.03 275);
+    --surface-inverse-foreground: oklch(0.98 0.005 270);
+    /* 状态语义 */
+    --status-success: oklch(0.46 0.13 151);
+    --status-success-foreground: oklch(0.32 0.095 151);
+    --status-success-surface: oklch(0.965 0.035 151);
+    --status-success-border: oklch(0.82 0.085 151);
+    --status-warning: oklch(0.54 0.14 70);
+    --status-warning-foreground: oklch(0.36 0.095 70);
+    --status-warning-surface: oklch(0.97 0.04 80);
+    --status-warning-border: oklch(0.84 0.1 78);
+    --status-info: oklch(0.49 0.16 255);
+    --status-info-foreground: oklch(0.34 0.115 255);
+    --status-info-surface: oklch(0.96 0.035 255);
+    --status-info-border: oklch(0.82 0.085 255);
+    --status-danger: oklch(0.53 0.2 27);
+    --status-danger-foreground: oklch(0.38 0.16 27);
+    --status-danger-surface: oklch(0.965 0.035 27);
+    --status-danger-border: oklch(0.82 0.09 27);
+    /* IELTS 四科语义色：阅读蓝、听力紫、写作琥珀、口语绿 */
+    --subject-reading: oklch(0.49 0.17 255);
+    --subject-reading-soft: oklch(0.96 0.035 255);
+    --subject-reading-border: oklch(0.82 0.085 255);
+    --subject-listening: oklch(0.48 0.19 293);
+    --subject-listening-soft: oklch(0.96 0.035 293);
+    --subject-listening-border: oklch(0.82 0.085 293);
+    --subject-writing: oklch(0.54 0.14 70);
+    --subject-writing-soft: oklch(0.97 0.04 80);
+    --subject-writing-border: oklch(0.84 0.1 78);
+    --subject-speaking: oklch(0.46 0.13 151);
+    --subject-speaking-soft: oklch(0.965 0.035 151);
+    --subject-speaking-border: oklch(0.82 0.085 151);
+    --subject-general: oklch(0.46 0.17 275);
+    --subject-general-soft: oklch(0.96 0.035 275);
+    --subject-general-border: oklch(0.82 0.085 275);
+    /* 离散图表色，避免仅靠明度区分 */
+    --chart-1: oklch(0.49 0.17 275);
+    --chart-2: var(--subject-reading);
+    --chart-3: var(--subject-listening);
+    --chart-4: var(--subject-writing);
+    --chart-5: var(--subject-speaking);
+    --chart-6: oklch(0.53 0.19 350);
+    --chart-7: oklch(0.52 0.11 205);
+    --chart-8: oklch(0.55 0.16 45);
+    /* 代码矢量插图专用色 */
+    --illustration-primary: oklch(0.52 0.18 275);
+    --illustration-secondary: oklch(0.58 0.15 293);
+    --illustration-accent: oklch(0.62 0.14 70);
+    --illustration-line: oklch(0.43 0.065 275);
+    --illustration-muted: oklch(0.72 0.045 275);
+    --illustration-surface: oklch(0.96 0.025 275);
     --radius: 0.625rem;
     --sidebar: oklch(0.995 0.005 270);
     --sidebar-foreground: oklch(0.17 0.02 270);
@@ -94,6 +195,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.155 0.02 275);
     --foreground: oklch(0.95 0.01 270);
     --card: oklch(0.2 0.025 275);
@@ -112,11 +214,57 @@
     --border: oklch(1 0 0 / 8%);
     --input: oklch(1 0 0 / 12%);
     --ring: oklch(0.65 0.2 275);
-    --chart-1: oklch(0.87 0.02 270);
-    --chart-2: oklch(0.65 0.08 275);
-    --chart-3: oklch(0.5 0.12 275);
-    --chart-4: oklch(0.4 0.16 275);
-    --chart-5: oklch(0.3 0.2 275);
+    --surface: oklch(0.155 0.02 275);
+    --surface-raised: oklch(0.2 0.025 275);
+    --surface-subtle: oklch(0.235 0.027 275);
+    --surface-emphasis: oklch(0.29 0.032 275);
+    --surface-inverse: oklch(0.94 0.01 270);
+    --surface-inverse-foreground: oklch(0.18 0.025 275);
+    --status-success: oklch(0.73 0.12 151);
+    --status-success-foreground: oklch(0.82 0.1 151);
+    --status-success-surface: oklch(0.27 0.055 151);
+    --status-success-border: oklch(0.42 0.085 151);
+    --status-warning: oklch(0.79 0.13 80);
+    --status-warning-foreground: oklch(0.86 0.105 80);
+    --status-warning-surface: oklch(0.29 0.06 70);
+    --status-warning-border: oklch(0.45 0.095 74);
+    --status-info: oklch(0.73 0.13 255);
+    --status-info-foreground: oklch(0.82 0.1 255);
+    --status-info-surface: oklch(0.27 0.055 255);
+    --status-info-border: oklch(0.42 0.085 255);
+    --status-danger: oklch(0.72 0.17 27);
+    --status-danger-foreground: oklch(0.82 0.13 27);
+    --status-danger-surface: oklch(0.28 0.065 27);
+    --status-danger-border: oklch(0.44 0.1 27);
+    --subject-reading: oklch(0.73 0.13 255);
+    --subject-reading-soft: oklch(0.27 0.055 255);
+    --subject-reading-border: oklch(0.42 0.085 255);
+    --subject-listening: oklch(0.75 0.14 293);
+    --subject-listening-soft: oklch(0.28 0.06 293);
+    --subject-listening-border: oklch(0.44 0.09 293);
+    --subject-writing: oklch(0.79 0.13 80);
+    --subject-writing-soft: oklch(0.29 0.06 70);
+    --subject-writing-border: oklch(0.45 0.095 74);
+    --subject-speaking: oklch(0.73 0.12 151);
+    --subject-speaking-soft: oklch(0.27 0.055 151);
+    --subject-speaking-border: oklch(0.42 0.085 151);
+    --subject-general: oklch(0.74 0.14 275);
+    --subject-general-soft: oklch(0.28 0.06 275);
+    --subject-general-border: oklch(0.44 0.09 275);
+    --chart-1: oklch(0.74 0.14 275);
+    --chart-2: var(--subject-reading);
+    --chart-3: var(--subject-listening);
+    --chart-4: var(--subject-writing);
+    --chart-5: var(--subject-speaking);
+    --chart-6: oklch(0.72 0.15 350);
+    --chart-7: oklch(0.72 0.11 205);
+    --chart-8: oklch(0.76 0.14 45);
+    --illustration-primary: oklch(0.72 0.15 275);
+    --illustration-secondary: oklch(0.75 0.13 293);
+    --illustration-accent: oklch(0.79 0.12 80);
+    --illustration-line: oklch(0.75 0.045 275);
+    --illustration-muted: oklch(0.54 0.04 275);
+    --illustration-surface: oklch(0.27 0.045 275);
     --sidebar: oklch(0.17 0.025 275);
     --sidebar-foreground: oklch(0.95 0.01 270);
     --sidebar-primary: oklch(0.65 0.2 275);
@@ -143,6 +291,9 @@
     }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
     }
   html {
     @apply font-sans;
@@ -160,10 +311,8 @@
     @apply transition-colors duration-150;
   }
 
-  /* 按钮按压反馈 */
-  button:active:not(:disabled) {
-    transform: scale(0.98);
-    transition: transform 0.1s ease;
+  button {
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* 滚动条美化 */
@@ -220,12 +369,43 @@
 
 @keyframes page-enter {
   from {
-    opacity: 0;
-    transform: translateY(16px);
+    opacity: 0.72;
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+  }
+}
+
+.route-page {
+  min-width: 0;
+  animation: page-enter 160ms ease-out both;
+}
+
+.route-fallback {
+  display: grid;
+  gap: 1rem;
+  min-height: 14rem;
+  animation: fade-in 140ms ease-out both;
+}
+
+.route-fallback > * {
+  animation: loading-pulse 1.35s ease-in-out infinite;
+}
+
+.mobile-bottom-nav {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+.mobile-more-sheet {
+  padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+}
+
+@keyframes loading-pulse {
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
   }
 }
 
@@ -315,6 +495,29 @@
   }
   to {
     transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .route-page,
+  .route-fallback,
+  .route-fallback > * {
+    animation: none;
   }
 }
 

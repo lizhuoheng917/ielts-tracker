@@ -1,89 +1,9 @@
 import { useAIStore } from '@/stores/aiStore'
-import { useStreakStore } from '@/stores/streakStore'
-import { useWordStore } from '@/stores/wordStore'
-import { usePracticeStore } from '@/stores/practiceStore'
-import { useTimerStore } from '@/stores/timerStore'
-import { usePlanStore } from '@/stores/planStore'
-import { useDiaryStore } from '@/stores/diaryStore'
-import { useAchievementStore } from '@/stores/achievementStore'
+import { createCurrentLearningContext } from '@/ai/runtimeContext'
 
-// ===== AI 工具：获取用户全部学习数据 =====
+/** @deprecated Prefer a purpose-specific snapshot from createCurrentLearningContext. */
 export function getAllLearningData() {
-  const streak = useStreakStore.getState()
-  const words = useWordStore.getState()
-  const practice = usePracticeStore.getState()
-  const timer = useTimerStore.getState()
-  const plans = usePlanStore.getState()
-  const diary = useDiaryStore.getState()
-  const achievement = useAchievementStore.getState()
-
-  // 汇总统计
-  const totalPractice = practice.records.length
-  const totalTimer = timer.records.length
-  const totalWords = words.records.reduce((sum, r) => sum + r.count, 0)
-  const totalDiary = diary.entries.length
-
-  // 模考按科目分组统计
-  const practiceByType: Record<string, { count: number; avgScore: number; avgDuration: number }> = {}
-  for (const type of ['reading', 'listening', 'writing', 'speaking'] as const) {
-    const records = practice.records.filter((r) => r.type === type)
-    const scored = records.filter((r) => r.score && r.score > 0)
-    practiceByType[type] = {
-      count: records.length,
-      avgScore: scored.length > 0 ? scored.reduce((s, r) => s + (r.score || 0), 0) / scored.length : 0,
-      avgDuration: records.length > 0 ? records.reduce((s, r) => s + r.duration, 0) / records.length : 0,
-    }
-  }
-
-  // 计时练习按科目分组
-  const timerBySubject: Record<string, { count: number; totalDuration: number }> = {}
-  for (const subject of ['reading', 'listening', 'writing', 'speaking'] as const) {
-    const records = timer.records.filter((r) => r.subject === subject)
-    timerBySubject[subject] = {
-      count: records.length,
-      totalDuration: records.reduce((s, r) => s + r.duration, 0),
-    }
-  }
-
-  // 连续打卡天数
-  const today = new Date().toISOString().split('T')[0]
-  const streakDays = streak.currentStreak
-  const activeDates = Object.keys(streak.heatmapData).filter((k) => streak.heatmapData[k] > 0).sort()
-
-  // 最近 30 天数据
-  const last30Days: Record<string, { activity: boolean; wordCount: number; practiceCount: number }> = {}
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    const dateStr = d.toISOString().split('T')[0]
-    last30Days[dateStr] = {
-      activity: (streak.heatmapData[dateStr] ?? 0) > 0,
-      wordCount: words.records.filter((r) => r.date === dateStr).reduce((s, r) => s + r.count, 0),
-      practiceCount: practice.records.filter((r) => r.date === dateStr).length + timer.records.filter((r) => r.date === dateStr).length,
-    }
-  }
-
-  // 清理字符串中的非法字符，防止 JSON 序列化问题
-  const sanitize = (str: string) => str.replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF\u3000-\u303F\uFF00-\uFFEF]/g, '')
-
-  return {
-    today,
-    streakDays,
-    totalActiveDays: activeDates.length,
-    totalPractice,
-    totalTimer,
-    totalWords,
-    totalDiary,
-    currentLevel: achievement.getCurrentLevel(),
-    totalXP: achievement.totalXP,
-    practiceByType,
-    timerBySubject,
-    last30Days,
-    plans: plans.plans.map((p) => ({ title: p.title, category: p.category, isActive: p.isActive })),
-    recentDiaries: diary.entries.slice(0, 5).map((d) => ({ date: d.date, mood: d.mood, content: sanitize(d.content).substring(0, 80) + (d.content.length > 80 ? '...' : '') })),
-    recentPractice: practice.records.slice(0, 5).map((r) => ({ date: r.date, type: r.type, score: r.score, duration: r.duration })),
-    recentTimer: timer.records.slice(0, 5).map((r) => ({ date: r.date, subject: r.subject, duration: r.duration })),
-  }
+  return createCurrentLearningContext({ purpose: 'learning_analysis' }).data
 }
 
 // ===== AI 对话消息类型 =====
@@ -110,29 +30,121 @@ export interface AIStreamCallbacks {
   onDone?: () => void
 }
 
-// ===== 调用 Agnes AI API（流式） =====
+export class AIConnectionConfigError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AIConnectionConfigError'
+  }
+}
+
+export function normalizeOpenAICompatibleBaseURL(value: string): string {
+  const input = value.trim()
+  if (!input) throw new AIConnectionConfigError('请填写 API 地址。')
+  if (input.length > 2_048) throw new AIConnectionConfigError('API 地址过长，请检查后重试。')
+
+  let url: URL
+  try {
+    url = new URL(input)
+  } catch {
+    throw new AIConnectionConfigError('API 地址格式无效，请填写完整的 HTTPS 地址。')
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new AIConnectionConfigError('为保护 API Key，自定义 AI 只允许使用 HTTPS 地址。')
+  }
+  if (url.username || url.password) {
+    throw new AIConnectionConfigError('API 地址不能包含用户名或密码。')
+  }
+  if (url.search || url.hash) {
+    throw new AIConnectionConfigError('API 地址不能包含查询参数或页面锚点。')
+  }
+
+  let pathname = url.pathname.replace(/\/+$/, '')
+  if (pathname.endsWith('/chat/completions')) {
+    pathname = pathname.slice(0, -'/chat/completions'.length)
+  }
+  url.pathname = pathname || '/'
+
+  const normalizedPath = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '')
+  return `${url.origin}${normalizedPath}`
+}
+
+export function buildOpenAICompatibleChatCompletionsURL(baseURL: string): string {
+  return `${normalizeOpenAICompatibleBaseURL(baseURL)}/chat/completions`
+}
+
+interface CustomAIConnection {
+  apiKey: string
+  baseURL: string
+  model: string
+}
+
+function containsControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0)
+    return codePoint !== undefined && (codePoint < 32 || codePoint === 127)
+  })
+}
+
+function readCustomAIConnection(): CustomAIConnection {
+  const state = useAIStore.getState()
+  const apiKey = state.apiKey.trim()
+  const model = state.model.trim()
+
+  if (!apiKey) throw new AIConnectionConfigError('请先在 AI 高级设置中填写自定义 AI 的 API Key。')
+  if (apiKey.length > 4_096 || containsControlCharacter(apiKey)) {
+    throw new AIConnectionConfigError('API Key 格式无效，请检查后重试。')
+  }
+  if (!model) throw new AIConnectionConfigError('请填写要使用的模型名称。')
+  if (model.length > 200 || containsControlCharacter(model)) {
+    throw new AIConnectionConfigError('模型名称格式无效，请检查后重试。')
+  }
+
+  return {
+    apiKey,
+    baseURL: normalizeOpenAICompatibleBaseURL(state.baseURL),
+    model,
+  }
+}
+
+export function customAIHttpErrorMessage(status: number): string {
+  if (status === 401 || status === 403) return `API 错误 (${status})：凭证无效或没有访问权限。`
+  if (status === 404) return 'API 错误 (404)：接口地址或模型不可用。'
+  if (status === 408 || status === 504) return `API 错误 (${status})：服务商响应超时，请稍后重试。`
+  if (status === 413) return 'API 错误 (413)：本次请求内容过大。'
+  if (status === 429) return 'API 错误 (429)：调用过于频繁或已达服务商限额。'
+  if (status >= 500) return `API 错误 (${status})：服务商暂时无法完成请求。`
+  return `API 错误 (${status})：自定义 AI 无法完成请求。`
+}
+
+function safeCustomAINetworkMessage(): string {
+  return '无法连接自定义 AI，请检查网络、API 地址与服务商的浏览器跨域支持。'
+}
+
+// ===== 调用 OpenAI-compatible 自定义 AI（流式） =====
 export async function streamAIChat(
   messages: AIMessage[],
   callbacks: AIStreamCallbacks,
   options?: { temperature?: number; max_tokens?: number; signal?: AbortSignal }
 ) {
-  const { apiKey, baseURL, model } = useAIStore.getState()
-
-  if (!apiKey) {
-    callbacks.onError?.('请先配置 AI API Key')
+  let connection: CustomAIConnection
+  try {
+    connection = readCustomAIConnection()
+  } catch (error) {
+    callbacks.onError?.(error instanceof AIConnectionConfigError ? error.message : safeCustomAINetworkMessage())
     return
   }
 
   try {
-    const response = await fetch(`${baseURL}/chat/completions`, {
+    const response = await fetch(buildOpenAICompatibleChatCompletionsURL(connection.baseURL), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${connection.apiKey}`,
       },
       signal: options?.signal,
       body: JSON.stringify({
-        model,
+        model: connection.model,
         messages,
         stream: true,
         temperature: options?.temperature ?? 0.7,
@@ -141,8 +153,7 @@ export async function streamAIChat(
     })
 
     if (!response.ok) {
-      const err = await response.text()
-      callbacks.onError?.(`API 错误 (${response.status}): ${err}`)
+      callbacks.onError?.(customAIHttpErrorMessage(response.status))
       return
     }
 
@@ -207,71 +218,73 @@ export async function streamAIChat(
       callbacks.onError?.('流式生成已中断')
       return
     }
-    callbacks.onError?.(error instanceof Error ? error.message : '网络请求失败')
+    callbacks.onError?.(safeCustomAINetworkMessage())
   }
 }
 
 // ===== 非流式调用（用于简单请求） =====
 export async function chatAI(messages: AIMessage[], options?: { temperature?: number; max_tokens?: number }) {
-  const { apiKey, baseURL, model } = useAIStore.getState()
+  const connection = readCustomAIConnection()
 
-  if (!apiKey) {
-    throw new Error('请先配置 AI API Key')
+  let response: Response
+  try {
+    response = await fetch(buildOpenAICompatibleChatCompletionsURL(connection.baseURL), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${connection.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: connection.model,
+        messages,
+        stream: false,
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.max_tokens ?? 4096,
+      }),
+    })
+  } catch {
+    throw new Error(safeCustomAINetworkMessage())
   }
-
-  const response = await fetch(`${baseURL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.max_tokens ?? 4096,
-    }),
-  })
 
   if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`API 错误 (${response.status}): ${err}`)
+    throw new Error(customAIHttpErrorMessage(response.status))
   }
 
-  const data = await response.json()
+  let data: { choices?: Array<{ message?: unknown }> }
+  try {
+    data = await response.json() as { choices?: Array<{ message?: unknown }> }
+  } catch {
+    throw new Error('自定义 AI 返回了无法识别的内容，请稍后重试。')
+  }
   return data.choices?.[0]?.message
 }
 
 // ===== 检测 API 连接 =====
 export async function testAIConnection(): Promise<{ ok: boolean; message: string }> {
-  const { apiKey, baseURL, model } = useAIStore.getState()
-
-  if (!apiKey) {
-    return { ok: false, message: '未配置 API Key' }
-  }
-
   try {
-    const response = await fetch(`${baseURL}/chat/completions`, {
+    const connection = readCustomAIConnection()
+    const response = await fetch(buildOpenAICompatibleChatCompletionsURL(connection.baseURL), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${connection.apiKey}`,
       },
       body: JSON.stringify({
-        model,
+        model: connection.model,
         messages: [{ role: 'user', content: 'Hi' }],
+        stream: false,
         max_tokens: 5,
       }),
     })
 
     if (response.ok) {
       return { ok: true, message: '连接成功' }
-    } else {
-      const err = await response.text()
-      return { ok: false, message: `连接失败: ${err}` }
     }
+    return { ok: false, message: customAIHttpErrorMessage(response.status) }
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : '网络错误' }
+    return {
+      ok: false,
+      message: error instanceof AIConnectionConfigError ? error.message : safeCustomAINetworkMessage(),
+    }
   }
 }

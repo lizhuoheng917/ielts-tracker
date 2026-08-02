@@ -1,4 +1,5 @@
 import type { Level, Achievement, AchievementState } from './types'
+import { SUBJECT_VISUALS } from './subjectVisuals'
 
 // ===== 单词分类预设 =====
 export const DEFAULT_WORD_CATEGORIES = [
@@ -20,10 +21,10 @@ export const PLAN_CATEGORY_OPTIONS = [
 
 // ===== 练习类型 =====
 export const PRACTICE_TYPE_OPTIONS = [
-  { value: 'reading', label: '阅读', color: '#3B82F6' },
-  { value: 'listening', label: '听力', color: '#8B5CF6' },
-  { value: 'writing', label: '写作', color: '#F59E0B' },
-  { value: 'speaking', label: '口语', color: '#10B981' },
+  { value: 'reading', label: SUBJECT_VISUALS.reading.label, color: SUBJECT_VISUALS.reading.chartColor },
+  { value: 'listening', label: SUBJECT_VISUALS.listening.label, color: SUBJECT_VISUALS.listening.chartColor },
+  { value: 'writing', label: SUBJECT_VISUALS.writing.label, color: SUBJECT_VISUALS.writing.chartColor },
+  { value: 'speaking', label: SUBJECT_VISUALS.speaking.label, color: SUBJECT_VISUALS.speaking.chartColor },
 ] as const
 
 // ===== 心情选项 =====

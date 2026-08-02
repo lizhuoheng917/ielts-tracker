@@ -1,109 +1,265 @@
-import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, Menu, UserRound, X } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
-  LayoutDashboard, BookA, ListTodo, PenTool, Timer,
-  BarChart3, Trophy, BookOpen, Settings, Menu, X
-} from 'lucide-react'
+  findRoute,
+  isRouteActive,
+  mobileMoreRoutes,
+  mobilePrimaryRoutes,
+  preloadRoute,
+} from '@/app/navigation'
+import { LEVELS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useAchievementStore } from '@/stores/achievementStore'
-import { LEVELS } from '@/lib/constants'
-
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: '仪表盘' },
-  { to: '/words', icon: BookA, label: '单词' },
-  { to: '/plans', icon: ListTodo, label: '计划' },
-  { to: '/practice', icon: Timer, label: '练习' },
-  { to: '/exam', icon: PenTool, label: '模考' },
-  { to: '/stats', icon: BarChart3, label: '统计' },
-  { to: '/achievements', icon: Trophy, label: '成就' },
-  { to: '/diary', icon: BookOpen, label: '日记' },
-  { to: '/settings', icon: Settings, label: '设置' },
-]
+import { BrandMark } from '@/components/brand/brand-mark'
+import { useAuth } from '@/auth/authContext'
+import { useAccountDialog } from '@/components/account/accountDialogContext'
 
 export function MobileNav() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const menuPanelRef = useRef<HTMLElement>(null)
+  const firstMenuItemRef = useRef<HTMLAnchorElement>(null)
+  const { pathname } = useLocation()
   const { level } = useAchievementStore()
-  const currentLevel = LEVELS.find(l => l.level === level) || LEVELS[0]
+  const { status: authStatus, user } = useAuth()
+  const { openAccountDialog } = useAccountDialog()
+  const currentLevel = LEVELS.find((item) => item.level === level) || LEVELS[0]
+  const currentRoute = findRoute(pathname)
+  const moreIsActive = mobileMoreRoutes.some((route) => isRouteActive(pathname, route))
+  const accountDetail = user?.email
+    ?? (authStatus === 'signed-out' ? '登录已有账号' : authStatus === 'initializing' ? '读取账号状态…' : '本地模式')
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const menuButton = menuButtonRef.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    firstMenuItemRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        return
+      }
+
+      if (event.key !== 'Tab' || !menuPanelRef.current) return
+
+      const focusableElements = Array.from(
+        menuPanelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      )
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements.at(-1)
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault()
+        lastElement?.focus()
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault()
+        firstElement?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+      menuButton?.focus()
+    }
+  }, [menuOpen])
+
+  const openMenu = () => {
+    setMenuOpen(true)
+  }
 
   return (
     <>
-      {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-border bg-card/95 backdrop-blur-md supports-[backdrop-filter]:bg-card/80 shadow-[0_1px_3px_0_oklch(0_0_0/0.04)] flex items-center justify-between px-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-sm">
-            雅
-          </div>
-          <div>
-            <h1 className="font-semibold text-[15px] leading-tight">IELTS Tracker</h1>
-            <p className="text-[12px] text-muted-foreground leading-tight">{currentLevel.name} · Lv.{level}</p>
+      <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-border/80 bg-card/85 px-4 shadow-[0_1px_8px_-4px_oklch(0_0_0/0.18)] backdrop-blur-xl supports-[backdrop-filter]:bg-card/75">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <BrandMark className="size-9" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-tight">
+              {currentRoute?.label ?? 'Lexi Tracker'}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">
+              {currentRoute?.description ?? '雅思学习总控台'}
+            </p>
           </div>
         </div>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent active:scale-95 transition-transform"
-          aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
+        <div
+          className="ml-2 shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary min-[380px]:px-2.5 min-[380px]:text-xs"
+          aria-label={`${currentLevel.name}，等级 ${level}`}
         >
-          <div className={cn('transition-transform duration-300', menuOpen && 'rotate-90')}>
-            {menuOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </div>
-        </button>
+          <span className="hidden min-[380px]:inline">{currentLevel.name} · </span>Lv.{level}
+        </div>
       </header>
 
-      {/* Full Screen Menu Overlay */}
+      <nav
+        aria-label="移动端主导航"
+        className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-border/80 bg-card/90 px-2 pt-1.5 shadow-[0_-8px_24px_-20px_oklch(0_0_0/0.45)] backdrop-blur-xl supports-[backdrop-filter]:bg-card/80"
+      >
+        {mobilePrimaryRoutes.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.path === '/'}
+            onMouseEnter={() => preloadRoute(item)}
+            onFocus={() => preloadRoute(item)}
+            onTouchStart={() => preloadRoute(item)}
+            className={({ isActive }) =>
+              cn(
+                'relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-medium outline-none transition-[color,background-color,transform] focus-visible:ring-2 focus-visible:ring-ring',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground active:scale-95',
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span
+                  className={cn(
+                    'absolute top-0 h-0.5 w-5 rounded-full bg-primary transition-opacity',
+                    isActive ? 'opacity-100' : 'opacity-0',
+                  )}
+                  aria-hidden="true"
+                />
+                <item.icon className="h-5 w-5" aria-hidden="true" />
+                <span>{item.shortLabel}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+
+        <button
+          ref={menuButtonRef}
+          type="button"
+          onClick={menuOpen ? () => setMenuOpen(false) : openMenu}
+          className={cn(
+            'relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-medium outline-none transition-[color,background-color,transform] focus-visible:ring-2 focus-visible:ring-ring',
+            menuOpen || moreIsActive
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground active:scale-95',
+          )}
+          aria-expanded={menuOpen}
+          aria-controls="mobile-more-menu"
+        >
+          <span
+            className={cn(
+              'absolute top-0 h-0.5 w-5 rounded-full bg-primary transition-opacity',
+              menuOpen || moreIsActive ? 'opacity-100' : 'opacity-0',
+            )}
+            aria-hidden="true"
+          />
+          <Menu className="h-5 w-5" aria-hidden="true" />
+          <span>更多</span>
+        </button>
+      </nav>
+
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-background/95 backdrop-blur-md transition-all duration-300 ease-out',
-          menuOpen
-            ? 'opacity-100 pointer-events-auto visible'
-            : 'opacity-0 pointer-events-none invisible'
+          'fixed inset-0 z-[60] transition-[opacity,visibility] duration-200',
+          menuOpen ? 'visible opacity-100' : 'invisible pointer-events-none opacity-0',
         )}
+        aria-hidden={!menuOpen}
       >
-        <div
-          className={cn(
-            'h-full w-full transition-transform duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
-            menuOpen ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
-          <div
-            className={cn(
-              'flex flex-col h-full pt-14 transition-opacity duration-300 delay-150',
-              menuOpen ? 'opacity-100' : 'opacity-0'
-            )}
-          >
-            <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-              {navItems.map((item, index) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-3 rounded-xl px-4 py-4 text-[17px] font-medium transition-all active:scale-[0.97]',
-                      menuOpen && 'animate-menu-item-in',
-                      `stagger-${index + 1}`,
-                      isActive
-                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent/80'
-                    )
-                  }
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
+        <button
+          type="button"
+          className="absolute inset-0 h-full w-full cursor-default bg-foreground/25 backdrop-blur-[2px]"
+          onClick={() => setMenuOpen(false)}
+          aria-label="关闭更多菜单"
+          tabIndex={-1}
+        />
 
-            <div className="p-4 border-t border-border">
-              <p className="text-[13px] text-muted-foreground text-center">
-                坚持每天进步一点点
-              </p>
+        <section
+          ref={menuPanelRef}
+          id="mobile-more-menu"
+          className={cn(
+            'mobile-more-sheet absolute inset-x-0 bottom-0 rounded-t-3xl border border-b-0 border-border bg-card px-4 pb-5 pt-3 shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+            menuOpen ? 'translate-y-0' : 'translate-y-full',
+          )}
+          role={menuOpen ? 'dialog' : undefined}
+          aria-modal={menuOpen ? 'true' : undefined}
+          aria-labelledby={menuOpen ? 'mobile-more-title' : undefined}
+          aria-hidden={!menuOpen}
+        >
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" aria-hidden="true" />
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div>
+              <h2 id="mobile-more-title" className="text-base font-semibold">更多功能</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">记录、回顾与个人设置</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="关闭更多菜单"
+              tabIndex={menuOpen ? 0 : -1}
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
-        </div>
+
+          <nav aria-label="更多功能" className="grid grid-cols-2 gap-2">
+            {mobileMoreRoutes.map((item, index) => (
+              <NavLink
+                ref={index === 0 ? firstMenuItemRef : undefined}
+                key={item.path}
+                to={item.path}
+                onClick={() => setMenuOpen(false)}
+                onMouseEnter={() => preloadRoute(item)}
+                onFocus={() => preloadRoute(item)}
+                onTouchStart={() => preloadRoute(item)}
+                tabIndex={menuOpen ? 0 : -1}
+                className={({ isActive }) =>
+                  cn(
+                    'flex min-h-[4.5rem] items-center gap-3 rounded-2xl border px-3 py-2.5 text-left outline-none transition-[color,background-color,border-color,transform,box-shadow] focus-visible:ring-2 focus-visible:ring-ring',
+                    isActive
+                      ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+                      : 'border-border/70 bg-background/60 text-foreground hover:border-primary/20 hover:bg-accent active:scale-[0.98]',
+                  )
+                }
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{item.shortLabel}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                    {item.description}
+                  </span>
+                </span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="mt-3 border-t border-border/80 pt-3">
+            <button
+              type="button"
+              tabIndex={menuOpen ? 0 : -1}
+              onClick={() => {
+                const returnFocus = menuButtonRef.current
+                setMenuOpen(false)
+                window.requestAnimationFrame(() => openAccountDialog(returnFocus))
+              }}
+              className="group flex min-h-14 w-full items-center gap-3 rounded-2xl border border-border/70 bg-background/60 px-3 py-2.5 text-left outline-none transition-colors hover:border-primary/20 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="打开 Lexi 账号"
+            >
+              <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <UserRound className="size-[18px]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-foreground">Lexi 账号</span>
+                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{accountDetail}</span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
       </div>
     </>
   )
