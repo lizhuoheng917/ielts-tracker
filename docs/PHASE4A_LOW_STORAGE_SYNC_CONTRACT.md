@@ -1,7 +1,7 @@
 # Phase 4A: low-storage Tracker sync contract
 
 Date: 2026-08-02  
-Status: coordinated local implementation complete; remote rollout remains disabled until staging acceptance
+Status: production shadow acceptance complete; broad rollout remains disabled
 
 ## Outcome
 
@@ -245,8 +245,10 @@ sync remains a separate opt-in phase with its own retention choice.
 - oversized content fails instead of being silently cut;
 - TypeScript and the focused contract test pass locally.
 
-The coordinated backend migration and Admin mutation are now implemented in the
-formal Lexi checkout but remain unapplied while this document is at the local
-gate. IndexedDB promotion is intentionally deferred until more than one
-canonical entity type enters the runtime queue. Production data writes and sync
-deployment require staging plus cross-account acceptance first.
+The coordinated backend migration, Admin mutation and Tracker runtime are now
+deployed. A controlled production smoke created one 21-byte preferences entity
+whose only payload key is `examDate`; the matching receipt was applied without
+diagnostics and a rolled-back second-account check saw zero foreign entities.
+The global switch and allowlist were closed again after acceptance. IndexedDB
+promotion remains intentionally deferred until more than one canonical entity
+type enters the runtime queue.

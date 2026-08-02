@@ -14,11 +14,11 @@
     "reason": "协调发布的 Lexi Control 新增 AAL2 Tracker 云同步面板与二次确认开关，展示真实聚合容量、请求、重复回放、冲突、设备和清理状态；为节省空间不保存逐次 pull 明细，也不返回日记、备注、AI 报告、邮箱或设备名称。"
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "共享 Supabase migration 已在 staging 以默认关闭状态通过真实事务、RLS、重复请求与双账号隔离验收；Admin 和 Tracker 客户端尚未发布，生产线上仍是账号与 Agnes 验收版本。"
+    "status": "deployed",
+    "reason": "Supabase 正式 migration 已验证；Lexi Control 的 43c6cd2 部署与 Tracker 的 39ea581 部署均上线。受控灰度成功生成 1 条仅含 examDate 的 21 字节实体和 1 条无诊断回执，Admin 指标同步更新；验收后全局开关与白名单均已重新关闭。"
   },
   "Verification": {
     "status": "passed",
-    "reason": "npm run verify:release 已通过：47 个测试文件、304 项测试、typecheck、lint、生产构建和 bundle guard 全部通过；配套 Lexi 完整发布门禁及 staging SQL/RLS/重复重试/跨账号事务验收也通过。生产部署后仍需做浏览器冒烟。"
+    "reason": "npm run verify:release 已通过：47 个测试文件、304 项测试、typecheck、lint、生产构建和 bundle guard 全部通过；配套 Lexi 完整门禁、staging 与 production 的 RLS/重复重试/跨账号事务验收，以及登录状态下的正式浏览器冒烟也全部通过。"
   }
 }
