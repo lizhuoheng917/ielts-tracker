@@ -7,18 +7,18 @@
   },
   "Backend": {
     "status": "reviewed-not-needed",
-    "reason": "已复核 production Supabase：Tracker 本次复用现有 Auth 与 ACTIVE lexi-ai-gateway v3；正式 origin、JWT 复验、四 purpose、配额/receipt 元数据和 RLS 已存在。Tracker 没有业务表或云同步实现，因此不新增空表、migration、RPC 或 RLS；普通记录继续只存浏览器。四项 Managed AI policy 在真实 smoke 前保持关闭。"
+    "reason": "已实时复核 production Supabase olkvqmnuyxuddgpcordp 为 ACTIVE_HEALTHY、lexi-ai-gateway v3 为 ACTIVE，正式 Tracker origin 的 CORS 预检返回 204，未登录 POST 返回 401 且不产生 receipt。四项 Tracker policy 均为 version 2 且保持关闭，当前 usage rows、request count 与 receipt count 均为 0。Tracker 没有业务表或云同步实现，因此不新增空表、migration、RPC 或 RLS；普通记录继续只存浏览器。"
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "已复核 Lexi Control：现有 /admin 已能管理 production Agnes 服务端配置、四项独立 policy、配额与聚合健康；本轮没有新增可管理的服务端状态，所以不改 Admin 代码。正式 smoke 只通过现有控制面临时开启 daily_suggestion，其他 policy 保持关闭。"
+    "reason": "已复核 Lexi Control：现有 /admin 已能管理 production Agnes 服务端配置、四项独立 policy、配额与聚合健康；本轮没有新增可管理的服务端状态，所以不改 Admin 代码。生产查询确认四项 policy 当前全部关闭；真实账号 smoke 将只通过现有控制面临时开启 daily_suggestion，完成后再关闭。"
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "正式候选版本尚未提交、推送或上传 Cloudflare；当前 production 仍是未连接 Supabase 的 d0142b4。完成 verify:release 后才允许把同一 SHA 上传到 Direct Upload 项目 ielts-tracker。"
+    "status": "deployed",
+    "reason": "正式候选 SHA a260b613ab6648dbe5a3ab164c7b409b0198472a 已推送到 origin/main，并部署到 Cloudflare Pages 项目 ielts-tracker；正式部署 ID 为 2301e50e-f558-42df-b734-6be0a5433206。https://ielts-tracker-6km.pages.dev/ 返回 200，线上 bundle 使用 production ref olkvqmnuyxuddgpcordp，未发现 staging URL 或 secret-shaped token。"
   },
   "Verification": {
-    "status": "passed",
-    "reason": "提交前本地门禁已通过：Tracker npm run verify:release 完成 release impact、TypeScript、oxlint、42 个测试文件共 279 项测试及 production 构建，产物确认 production URL 且无 staging URL/secret-shaped token；Lexi 写作 Gateway 跨仓 parity 通过；Lexi production 构建和全部 sync/Auth/AI/RLS/SQL 回归脚本通过。git diff --check 与高风险密钥模式扫描无异常。Cloudflare Active、真实账号数据保持和 daily_suggestion receipt 属于部署后验证，尚未执行。"
+    "status": "required",
+    "reason": "本地 npm run verify:release 已通过 release impact、TypeScript、oxlint、42 个测试文件共 279 项测试、production 构建与 bundle guard。正式站桌面主要路由、设置页和账号弹窗均正常，390px 首页无横向溢出且移动导航正常，浏览器 console 无 error/warning；生产 CORS 与未登录 401 边界也已通过。仍待用户在 Tracker 正式域名单独登录、确认本机数据归属，核对登录前后数据数量不变，并完成一次 daily_suggestion 的真实结构化结果、local artifact 与单条 receipt/usage 验收。"
   }
 }
