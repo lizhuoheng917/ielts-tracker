@@ -44,7 +44,42 @@ export interface TrackerShadowSyncRpc {
   getSnapshot(accessToken: string, input: { deviceId: string }): Promise<unknown>
 }
 
-async function invokePinnedRpc(
+const TRACKER_RPC_TIMEOUT_MS = 20_000
+const TRACKER_RPC_TIMEOUT_RETRIES = 1
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+function createSingleFlight<Key, Value>() {
+  let active: { key: Key; promise: Promise<Value> } | null = null
+  return (key: Key, load: () => Promise<Value>): Promise<Value> => {
+    if (active?.key === key) return active.promise
+    const promise = load().finally(() => {
+      if (active?.promise === promise) active = null
+    })
+    active = { key, promise }
+    return promise
+  }
+}
+
+async function withAbortRetry<Value>(
+  attempt: () => Promise<Value>,
+  retries = TRACKER_RPC_TIMEOUT_RETRIES,
+): Promise<Value> {
+  for (let index = 0; ; index += 1) {
+    try {
+      return await attempt()
+    } catch (error) {
+      if (!isAbortError(error) || index >= retries) throw error
+    }
+  }
+}
+
+const singleFlightIdentity = createSingleFlight<'current-session', TrackerShadowSyncIdentity | null>()
+const singleFlightCapabilities = createSingleFlight<string, unknown>()
+
+async function invokePinnedRpcAttempt(
   functionName: string,
   accessToken: string,
   body: Record<string, unknown>,
@@ -53,7 +88,7 @@ async function invokePinnedRpc(
     throw new Error('Tracker shadow sync is not configured.')
   }
   const controller = new AbortController()
-  const timeout = globalThis.setTimeout(() => controller.abort(), 12_000)
+  const timeout = globalThis.setTimeout(() => controller.abort(), TRACKER_RPC_TIMEOUT_MS)
   try {
     const response = await fetch(`${authConfiguration.url}/rest/v1/rpc/${functionName}`, {
       method: 'POST',
@@ -90,22 +125,39 @@ async function invokePinnedRpc(
   }
 }
 
-export const browserTrackerShadowSyncRpc: TrackerShadowSyncRpc = {
-  getVerifiedIdentity: async () => {
-    const { supabase } = await import('@/lib/supabase')
-    if (!supabase) return null
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-    const accessToken = sessionData.session?.access_token
-    if (sessionError || !accessToken) return null
-    const { data, error } = await supabase.auth.getUser(accessToken)
-    if (error || !data.user) return null
-    return { accountUserId: data.user.id, accessToken }
-  },
-  getCapabilities: (accessToken) => invokePinnedRpc(
-    'tracker_get_sync_capabilities',
+async function invokePinnedRpc(
+  functionName: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return withAbortRetry(() => invokePinnedRpcAttempt(functionName, accessToken, body))
+}
+
+function getCapabilitiesSingleFlight(accessToken: string): Promise<unknown> {
+  return singleFlightCapabilities(
     accessToken,
-    {},
-  ),
+    () => invokePinnedRpc('tracker_get_sync_capabilities', accessToken, {}),
+  )
+}
+
+async function loadVerifiedIdentity(): Promise<TrackerShadowSyncIdentity | null> {
+  const { supabase } = await import('@/lib/supabase')
+  if (!supabase) return null
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  const accessToken = sessionData.session?.access_token
+  if (sessionError || !accessToken) return null
+  const { data, error } = await supabase.auth.getUser(accessToken)
+  if (error || !data.user) return null
+  return { accountUserId: data.user.id, accessToken }
+}
+
+function getVerifiedIdentitySingleFlight(): Promise<TrackerShadowSyncIdentity | null> {
+  return singleFlightIdentity('current-session', loadVerifiedIdentity)
+}
+
+export const browserTrackerShadowSyncRpc: TrackerShadowSyncRpc = {
+  getVerifiedIdentity: getVerifiedIdentitySingleFlight,
+  getCapabilities: getCapabilitiesSingleFlight,
   applyBatch: (accessToken, input) => invokePinnedRpc(
     'tracker_apply_sync_batch',
     accessToken,
@@ -131,4 +183,9 @@ export const browserTrackerShadowSyncRpc: TrackerShadowSyncRpc = {
     accessToken,
     { p_device_id: input.deviceId },
   ),
+}
+
+export const trackerShadowSyncRpcInternals = {
+  createSingleFlight,
+  withAbortRetry,
 }
