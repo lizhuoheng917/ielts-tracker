@@ -33,6 +33,13 @@ function readPersistedExamDate(): string | undefined {
   }
 }
 
+function reportSyncFailure(stream: 'exam-date' | 'learning-records', error: unknown): void {
+  const detail = error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : 'Unknown sync failure'
+  console.warn(`[tracker-sync:${stream}] ${detail}`)
+}
+
 export function TrackerShadowSyncBridge() {
   const { status, user, managedAiDataBinding } = useAuth()
   const accountUserId = status === 'signed-in' && managedAiDataBinding.status === 'bound'
@@ -138,7 +145,8 @@ export function TrackerShadowSyncBridge() {
     })
     const removeExamDateTriggers = installTrackerShadowSyncTriggers({
       flush: (examDate) => {
-        void examDateRuntime.flush(examDate).catch(() => {
+        void examDateRuntime.flush(examDate).catch((error) => {
+          reportSyncFailure('exam-date', error)
           updateFailureStatus('exam')
         })
       },
@@ -157,7 +165,8 @@ export function TrackerShadowSyncBridge() {
     })
     const removeLearningTriggers = installTrackerPhase4bSyncTriggers({
       flush: () => {
-        void learningRuntime.flush().catch(() => {
+        void learningRuntime.flush().catch((error) => {
+          reportSyncFailure('learning-records', error)
           updateFailureStatus('learning')
         })
       },
