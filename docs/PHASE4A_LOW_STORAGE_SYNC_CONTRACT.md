@@ -1,7 +1,7 @@
 # Phase 4A: low-storage Tracker sync contract
 
 Date: 2026-08-03
-Status: visible `examDate` release candidate verified; production sync paused for deployment
+Status: visible `examDate` sync deployed and accepted in production
 
 ## Outcome
 
@@ -13,13 +13,14 @@ Lexi Supabase project.
 This phase deliberately does not upload every `localStorage` key. It separates
 irreplaceable learner input from projections that the app can recompute. The
 domain contract is implemented in `src/sync/trackerSyncContract.ts`. The
-production runtime has completed a controlled shadow acceptance for `examDate`:
-it validates remote pull/snapshot data without installing the value into visible
-settings, and the backend switch was closed again after acceptance. The current
-local release candidate expands **only `examDate`** to guarded visible
-bidirectional sync and adds a concise Settings status. It has not been committed,
-pushed or deployed. The companion Lexi checkout already contains the
-disabled-by-default backend and AAL2 Admin controls used by this slice.
+production runtime first completed a controlled shadow acceptance for
+`examDate`, then promoted **only `examDate`** to guarded visible bidirectional
+sync with a concise Settings status. Source commit
+`7031bb0a0c751d7c7650ff160ee1413b4b31ae14` is live in Cloudflare Pages
+deployment `56b1c9e3-948f-40d7-ae0b-7d0b4319adae`. The companion Lexi checkout provides the shared backend
+and AAL2 Admin controls used by this slice. The final production control state
+is globally enabled for eligible accounts with only `tracker_preferences`
+allowed.
 
 ## Data boundary
 
@@ -276,18 +277,19 @@ sync remains a separate opt-in phase with its own retention choice.
 ## Visible phase release review
 
 - **Frontend — changed:** visible guarded install, first-baseline conflict
-  choice, echo suppression and compact Settings status are part of the local
-  release candidate.
+  choice, echo suppression and compact Settings status are deployed.
 - **Backend — reviewed-not-needed:** the existing Tracker preferences entity,
   capability/apply/pull/snapshot RPCs, RLS and payload allowlist already carry
   `examDate`; this phase does not change schema, RPC, grants, RLS or retention.
 - **Admin — reviewed-not-needed:** the existing Tracker controls and aggregate
   sync health already cover the same preference entity and operations; no new
   administrator-visible field, body, policy or metric is introduced.
-- **Deployment — not-deployed:** these visible-sync changes remain local. The
-  production client is still the accepted hidden-shadow build. The global
-  switch is temporarily off for the deployment window while the existing
-  `tracker_preferences` allowlist remains selected.
+- **Deployment — deployed:** Cloudflare Pages production deployment
+  `56b1c9e3-948f-40d7-ae0b-7d0b4319adae`
+  serves the verified bundle `/assets/index-BvRHY4e4.js` from source commit
+  `7031bb0a0c751d7c7650ff160ee1413b4b31ae14`. The existing Supabase contract
+  required no migration; global sync is on and `tracker_preferences` remains
+  the only allowed entity kind.
 
 ## Verification
 
@@ -304,14 +306,22 @@ The coordinated backend migration, Admin mutation and hidden Tracker runtime
 were previously deployed. A controlled production smoke created one 21-byte
 preferences entity whose only payload key is `examDate`; the matching receipt
 was applied without diagnostics and a rolled-back second-account check saw zero
-foreign entities. The global switch and allowlist were closed again after that
-acceptance.
+foreign entities. That hidden acceptance was followed by the visible production
+release below.
 
 The visible candidate passed the complete `npm run verify:release` gate: 47 test
 files and 311 tests passed together with typecheck, lint, production build and
 the bundle guard. Focused coverage includes fresh empty-device install with zero
 apply, no null-row creation, first and optimistic conflicts without silent
 overwrite, explicit clear, remote install without echo, stable replay and real
-calendar-date validation. Production round-trip acceptance remains pending.
+calendar-date validation. A real signed-in production account then completed
+the bounded round trip: a local date advanced the entity from version 3 to 4,
+a second-device operation advanced it to 5 and installed visibly without an
+echo write, and clearing the temporary date restored the original `null` value
+at version 6. Admin reported 6 Apply requests and 6 applied results with zero
+replay, conflict or rejection; the database also reported zero diagnostic
+receipts, RLS enabled, one active cleanup job and only the `examDate` payload
+key. Production API logs showed Tracker capability/apply/pull/snapshot requests
+returning HTTP 200 with no matching 4xx/5xx response.
 IndexedDB promotion remains intentionally deferred until more than one canonical
 entity type enters the runtime queue.

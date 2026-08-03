@@ -14,11 +14,11 @@
     "reason": "已检查现有 Lexi Control Tracker 开关、字段白名单和聚合健康指标；本阶段仍使用同一个 preferences/examDate 实体，没有新增管理员可见字段、内容正文、策略、容量口径或可管理对象。"
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "候选版已通过完整门禁，发布窗口中已暂时关闭全局同步并保留 tracker_preferences 白名单；尚未提交、推送或部署 Cloudflare Pages。Supabase schema、RPC、RLS 与清理任务无需重新部署。"
+    "status": "deployed",
+    "reason": "可见 examDate 双向同步已提交为 7031bb0a0c751d7c7650ff160ee1413b4b31ae14，并推送到分支与 main。Cloudflare Pages 生产部署 56b1c9e3-948f-40d7-ae0b-7d0b4319adae 已激活，正式域名返回新资源 /assets/index-BvRHY4e4.js。共享 Supabase schema、RPC、RLS 与清理任务保持原部署，管理员已为所有合格账号开启全局同步并仅允许 tracker_preferences。"
   },
   "Verification": {
     "status": "passed",
-    "reason": "npm run verify:release 已通过：47 个测试文件、311 项测试、typecheck、oxlint、生产构建与 bundle guard 全部成功。同步定向测试覆盖首次空设备零 apply、空云端不建 null 行、首次与并发冲突不静默覆盖、选择分支、显式清除、远端写回零回声、稳定重试和非法日历日期拒绝；线上往返仍待部署后完成。"
+    "reason": "npm run verify:release 已通过：47 个测试文件、311 项测试、typecheck、oxlint、生产构建与 bundle guard 全部成功。生产真实账号完成本机→云端→第二设备→本机→恢复原值的完整往返：实体版本 3→4→5→6，6 条 Apply 全部 applied，0 replay、0 conflict、0 rejected、0 diagnostic；远端安装后版本与回执未增长，证明无回声写入。最终 examDate 恢复为 null，全局同步开启且唯一白名单为 tracker_preferences。"
   }
 }
