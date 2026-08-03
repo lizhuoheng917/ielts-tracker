@@ -746,6 +746,12 @@ export class TrackerPhase4bSyncRuntime {
       ...rejected,
     ].slice(-5_000)
     state.sealedBatch = null
+    // The server has durably accepted this idempotent request. Checkpoint that
+    // fact before the follow-up pull/local install so a transient validation
+    // failure cannot keep replaying the old batch and starve newer mutations.
+    state.updatedAt = this.now()
+    await this.persistence.save(state)
+    this.assertActive()
     const remote = await this.pullOrSnapshot(state, token, apply.accountEpoch)
     this.assertActive()
     const latestLocal = this.readLocal()

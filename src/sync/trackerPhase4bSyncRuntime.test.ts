@@ -341,6 +341,90 @@ describe('Phase 4B runtime contract', () => {
     expect(persistence.state?.pendingOperations).toEqual([])
   })
 
+  it('checkpoints an accepted batch before post-apply validation so later mutations are not starved', async () => {
+    const local = snapshot()
+    const persistence = new MemoryPersistence()
+    let serverCursor = 0
+    let applyCount = 0
+    let failPostApplyPull = true
+    let applied: TrackerPhase4bSyncOperation | null = null
+    const rpc: TrackerPhase4bSyncRpc = {
+      getVerifiedIdentity: async () => ({ accountUserId, accessToken: 'token' }),
+      getCapabilities: async () => capabilities(serverCursor),
+      getSnapshot: async () => ({
+        enabled: true,
+        accountEpoch: 1,
+        cursor: 0,
+        generatedAt: t0,
+        snapshotHash: 'empty',
+        entities: [],
+      }),
+      applyBatch: async (_token, input) => {
+        applyCount += 1
+        applied = structuredClone(input.operations[0]) as TrackerPhase4bSyncOperation
+        serverCursor = 1
+        return {
+          status: 'applied',
+          requestId: input.requestId,
+          requestHash: input.requestHash,
+          accountEpoch: 1,
+          cursor: serverCursor,
+          results: [{
+            operationId: input.operations[0].operationId,
+            entityKind: input.operations[0].entityKind,
+            entityId: input.operations[0].entityId,
+            status: 'applied',
+            version: 1,
+            cursor: serverCursor,
+          }],
+        }
+      },
+      pull: async () => {
+        if (failPostApplyPull) {
+          failPostApplyPull = false
+          throw new TypeError('post-apply validation network failure')
+        }
+        if (!applied) throw new Error('expected an applied operation')
+        return {
+          enabled: true,
+          accountEpoch: 1,
+          cursor: 0,
+          nextCursor: serverCursor,
+          hasMore: false,
+          changes: [{
+            cursor: serverCursor,
+            entityKind: applied.entityKind,
+            entityId: applied.entityId,
+            version: 1,
+            payload: applied.payload,
+            deletedAt: null,
+            updatedAt: t1,
+          }],
+        }
+      },
+    }
+    const runtime = new TrackerPhase4bSyncRuntime({
+      accountUserId,
+      persistence,
+      rpc,
+      inspectBinding: () => ({ status: 'bound' }),
+      readLocalDataEpoch: () => 'initial',
+      readLocalSnapshot: () => local,
+      installLocalSnapshot: async ({ snapshot: installed }) => ({ status: 'unchanged', snapshot: installed }),
+      now: () => new Date(t1),
+      createId: idFactory(),
+    })
+
+    await expect(runtime.flush()).rejects.toThrow('post-apply validation network failure')
+    expect(persistence.state?.sealedBatch).toBeNull()
+
+    await runtime.flush()
+
+    expect(applyCount).toBe(1)
+    expect(persistence.state?.cursor).toBe(1)
+    expect(persistence.state?.sealedBatch).toBeNull()
+  })
+
   it('inherits the execution business key when the real tombstone has payload null', () => {
     const payload = createTrackerPhase4bPayload('plan_execution', {
       id: 'execution-random',

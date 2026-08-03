@@ -1,7 +1,7 @@
 # Phase 4B: core learning data sync gate
 
 Date: 2026-08-03
-Status: local implementation; production rollout pending
+Status: production rollout active; validation hotfix pending
 
 ## Outcome
 
