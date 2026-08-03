@@ -40,6 +40,15 @@ function reportSyncFailure(stream: 'exam-date' | 'learning-records', error: unkn
   console.warn(`[tracker-sync:${stream}] ${detail}`)
 }
 
+function syncDebugDetail(error: unknown): string | null {
+  if (typeof window === 'undefined' || !new URLSearchParams(window.location.search).has('syncDebug')) {
+    return null
+  }
+  return error instanceof Error
+    ? `诊断：${error.name}: ${error.message}`
+    : '诊断：Unknown sync failure'
+}
+
 export function TrackerShadowSyncBridge() {
   const { status, user, managedAiDataBinding } = useAuth()
   const accountUserId = status === 'signed-in' && managedAiDataBinding.status === 'bound'
@@ -78,11 +87,12 @@ export function TrackerShadowSyncBridge() {
       ...next,
       lastSyncedAt: next.lastSyncedAt ?? current.lastSyncedAt,
     })
-    const updateFailureStatus = (stream: 'exam' | 'learning') => {
+    const updateFailureStatus = (stream: 'exam' | 'learning', error?: unknown) => {
+      const diagnostic = syncDebugDetail(error)
       const failure: TrackerSyncStreamStatus = {
         phase: navigator.onLine ? 'error' : 'offline',
         detail: navigator.onLine
-          ? '暂时无法同步，稍后会自动重试；本机记录不受影响'
+          ? diagnostic ?? '暂时无法同步，稍后会自动重试；本机记录不受影响'
           : '当前离线，学习数据已保存在本机',
         lastSyncedAt: stream === 'exam'
           ? examDateStatus.lastSyncedAt
@@ -147,7 +157,7 @@ export function TrackerShadowSyncBridge() {
       flush: (examDate) => {
         void examDateRuntime.flush(examDate).catch((error) => {
           reportSyncFailure('exam-date', error)
-          updateFailureStatus('exam')
+          updateFailureStatus('exam', error)
         })
       },
       // Read the persisted source so a stale background tab cannot upload an
@@ -167,7 +177,7 @@ export function TrackerShadowSyncBridge() {
       flush: () => {
         void learningRuntime.flush().catch((error) => {
           reportSyncFailure('learning-records', error)
-          updateFailureStatus('learning')
+          updateFailureStatus('learning', error)
         })
       },
       subscribeChanges: (listener) => {
