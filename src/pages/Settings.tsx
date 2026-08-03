@@ -6,6 +6,7 @@ import {
   Cloud,
   CloudOff,
   LoaderCircle,
+  MessageCircleMore,
   Monitor,
   Moon,
   Palette,
@@ -38,6 +39,7 @@ import { parseLocalDate } from '@/lib/localDate'
 import { useAIPrivacyStore, type AIContextRangeDays } from '@/stores/aiPrivacyStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useTrackerSyncStatusStore } from '@/sync/trackerSyncStatusStore'
+import { FeedbackDialog } from '@/features/support'
 
 const THEME_OPTIONS = [
   { value: 'light', label: '浅色', icon: Sun },
@@ -93,6 +95,7 @@ export default function Settings() {
   const setIncludePriorAIArtifacts = useAIPrivacyStore((state) => state.setIncludePriorAIArtifacts)
 
   const [aiHelpDialogOpen, setAiHelpDialogOpen] = useState(false)
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
 
   const daysUntilExam = useMemo(() => {
     if (!examDate) return null
@@ -418,6 +421,42 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardContent>
+          <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-background/70 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <MessageCircleMore className="size-4.5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-semibold leading-5 text-foreground">帮助与反馈</h2>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">提交 Tracker 使用问题，并持续查看管理员回复。</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFeedbackDialogOpen(true)}
+              className="min-h-10 w-full shrink-0 sm:w-auto"
+            >
+              <MessageCircleMore aria-hidden="true" />
+              问题反馈
+            </Button>
+          </section>
+        </CardContent>
+      </Card>
+
+      <FeedbackDialog
+        open={feedbackDialogOpen}
+        onOpenChange={setFeedbackDialogOpen}
+        page="/settings"
+        theme={theme}
+        onRequestLogin={() => {
+          setFeedbackDialogOpen(false)
+          window.requestAnimationFrame(() => openAccountDialog())
+        }}
+      />
 
       <Dialog open={aiHelpDialogOpen} onOpenChange={setAiHelpDialogOpen}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
