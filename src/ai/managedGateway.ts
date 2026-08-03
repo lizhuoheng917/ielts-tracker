@@ -64,11 +64,22 @@ function outcomeUnknownFromPayload(payload: unknown): boolean {
 export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGatewayError {
   const retryAfterSeconds = retryAfterFromPayload(payload)
   const outcomeUnknown = outcomeUnknownFromPayload(payload)
-  if (status === 503 && gatewayCodeFromPayload(payload) === 'feature_unavailable') {
+  const gatewayCode = gatewayCodeFromPayload(payload)
+  if (status === 503 && gatewayCode === 'feature_unavailable') {
     return new AiGatewayError(
       'SERVICE_UNAVAILABLE',
       '此 AI 功能当前未开放。',
       false,
+      status,
+      undefined,
+      outcomeUnknown,
+    )
+  }
+  if (status === 502 && gatewayCode === 'generation_failed') {
+    return new AiGatewayError(
+      'INVALID_RESPONSE',
+      '本次 AI 未生成可用结果，未保存。请重试。',
+      true,
       status,
       undefined,
       outcomeUnknown,

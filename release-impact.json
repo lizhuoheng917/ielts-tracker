@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-03-tracker-shared-auth-and-support-feedback",
+  "release": "2026-08-03-tracker-ai-format-reliability",
   "Frontend": {
     "status": "changed",
-    "reason": "新增与 Lexi Words 共享身份的 Tracker 登录、注册、找回密码、邮箱确认与游客本机模式页面，并将原账号弹窗收敛为账号管理入口。注册会读取既有准入策略，仅在邀请制下安全哈希邀请码；未登录用户可显式选择本机模式，首次登录仍须确认本机学习记录归属才会启动同步与内置 AI。客户端自定义模型、地址和 API Key 入口已移除，所有 AI 请求统一走既有 Lexi 内置 Gateway；此前的应用级 AI 任务协调与真实状态提示继续保留。设置页新增紧凑的“问题反馈”入口：登录后可提交、查看仅属于 Tracker 的工单与管理员公开回复、补充信息、确认解决或重新打开；未登录时只保存本机草稿。每次共享工单 RPC 都固定附带 p_product_id='tracker'，诊断信息默认关闭、由用户显式开启且只含页面与运行环境，不含账号、学习内容或本机存储数据。"
+    "reason": "Tracker now recognizes the shared gateway's definitive generation_failed response and tells the learner that no usable AI result was generated or saved, with a retry action, instead of incorrectly reporting that the provider did not respond. Route-independent task state, cancellation and unknown-outcome behavior are unchanged."
   },
   "Backend": {
     "status": "changed",
-    "reason": "共享 Lexi Supabase Auth、lexi-ai-gateway 与既有 Tracker user_id RLS 继续覆盖登录、同步和内置 AI。正式仓库新增兼容的共享工单 product_id 迁移，并以同一组受控 RPC 区分 words 与 tracker；Tracker 客户端只传固定 tracker 值，服务端仍按当前登录用户与产品来源过滤、写入和读取。工单表、RLS 与管理员控制由 Formal 后端维护；Tracker 不读取服务端密钥或私有表。上线顺序必须先应用并验证该兼容迁移，再部署本客户端。"
+    "reason": "The coordinated Formal lexi-ai-gateway release adds one bounded in-reservation format-repair attempt for Agnes default prompt-only non-writing requests after a completed response fails strict validation. It preserves one daily request reservation, cumulative token receipts, existing RLS and privacy boundaries; no Tracker browser secret or direct provider call is introduced."
   },
   "Admin": {
-    "status": "changed",
-    "reason": "共享 Lexi /admin 继续管理注册模式、邀请码、认证邮件及 AI 模型/策略。Formal 的共享工单视图新增产品来源筛选、来源徽标、分项目统计，并禁止跨产品合并重复工单；Tracker 不增加独立管理员入口或权限。"
+    "status": "reviewed-not-needed",
+    "reason": "The shared admin AI controls retain the same policy, alias, daily-count and token metrics surfaces. No Tracker-specific administrator control or database schema update is needed for an internal, already-metered retry."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "本次客户端、Formal 工单迁移与共享 /admin 改动尚未在此干净工作树中提交、推送或部署。正式发布必须先应用并验证兼容的共享工单 product_id migration，再以同一协调窗口发布 Formal 管理端与 Tracker 前端；不能先部署依赖新末位 RPC 参数的客户端。"
+    "reason": "The coordinated Formal Edge Function and Tracker Pages build still need local release gates, commit, production deployment and signed-in browser verification before this status can become deployed."
   },
   "Verification": {
     "status": "passed",
-    "reason": "此干净工作树的完整发布门禁已通过：release-impact、TypeScript、oxlint、59 个 Vitest 文件共 369 项测试、生产构建与 production bundle 校验均成功；git diff --check 也通过。新增共享工单合同测试覆盖固定 p_product_id='tracker'、末位 RPC 参数、诊断信息 opt-in、安全错误映射和账号隔离草稿。远端迁移与正式浏览器会话尚未验收；发布前仍需验证两项目工单隔离、管理员来源筛选、管理员回复及账号隔离。"
+    "reason": "Tracker verify:release passed: release-impact validation, TypeScript, oxlint, all 59 Vitest files with 369 tests, the production build and production bundle guard. Formal verify:release, the shared AI gateway function scenarios and cross-repository Writing contract parity also passed; production deployment and signed-in browser verification remain required."
   }
 }
