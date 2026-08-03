@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import type { PracticeType, PracticeRecord } from '@/lib/types'
 import { PRACTICE_TYPE_OPTIONS } from '@/lib/constants'
@@ -267,6 +267,8 @@ function PracticeFormDialog({
   const [duration, setDuration] = useState('')
   const [score, setScore] = useState<number>(0)
   const [note, setNote] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const formId = `practice-${isEdit ? `edit-${editRecord?.id ?? defaultType}` : `add-${defaultType}`}`
 
   // 当弹窗打开或 editRecord 变化时，初始化表单内容
@@ -290,7 +292,8 @@ function PracticeFormDialog({
     }
   }, [open, isEdit, editRecord, defaultType])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (submittingRef.current) return
     const durationNum = parseInt(duration, 10)
     if (!date || !durationNum || durationNum <= 0) return
 
@@ -303,20 +306,39 @@ function PracticeFormDialog({
       note: note.trim() || undefined,
     }
 
-    if (isEdit && editRecord) {
-      updateRecord(editRecord.id, data)
-    } else {
-      addRecord(data)
-    }
+    submittingRef.current = true
+    setIsSubmitting(true)
+    try {
+      const result = isEdit && editRecord
+        ? await updateRecord(editRecord.id, data)
+        : await addRecord(data)
 
-    onOpenChange(false)
+      if (result.status !== 'applied') {
+        window.alert(result.error?.message ?? '模考记录暂时无法保存，请稍后重试。')
+        return
+      }
+
+      onOpenChange(false)
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
+    }
   }
 
   const canSubmit = date && parseInt(duration, 10) > 0
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && submittingRef.current) return
+        onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent
+        aria-busy={isSubmitting}
+        className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑模考' : '添加模考'}</DialogTitle>
           <DialogDescription>
@@ -420,11 +442,17 @@ function PracticeFormDialog({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <DialogClose render={<Button variant="outline" className="w-full sm:w-auto" />}>
+          <DialogClose render={<Button variant="outline" disabled={isSubmitting} className="w-full sm:w-auto" />}>
             取消
           </DialogClose>
-          <Button type="button" onClick={handleSubmit} disabled={!canSubmit} className="w-full sm:w-auto">
-            {isEdit ? '保存修改' : '添加'}
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
+            aria-busy={isSubmitting}
+            className="w-full sm:w-auto"
+          >
+            {isSubmitting ? '保存中…' : isEdit ? '保存修改' : '添加'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -438,15 +466,22 @@ function DeleteConfirmDialog({
   onOpenChange,
   onConfirm,
   recordTitle,
+  pending,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: () => void
+  onConfirm: () => void | Promise<void>
   recordTitle: string
+  pending: boolean
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!pending) onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent aria-busy={pending} className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>确认删除</DialogTitle>
           <DialogDescription>
@@ -454,11 +489,17 @@ function DeleteConfirmDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <DialogClose render={<Button variant="outline" className="w-full sm:w-auto" />}>
+          <DialogClose render={<Button variant="outline" disabled={pending} className="w-full sm:w-auto" />}>
             取消
           </DialogClose>
-          <Button variant="destructive" onClick={onConfirm} className="w-full sm:w-auto">
-            删除
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={pending}
+            aria-busy={pending}
+            className="w-full sm:w-auto"
+          >
+            {pending ? '删除中…' : '删除'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -664,6 +705,8 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PracticeRecord | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const deletingRef = useRef(false)
   const [aiOpen, setAiOpen] = useState(false)
   const [writingCloseConfirmOpen, setWritingCloseConfirmOpen] = useState(false)
   const [writingWorkspaceState, setWritingWorkspaceState] = useState<WritingWorkspaceState>({
@@ -759,12 +802,22 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteConfirm = () => {
-    if (deleteTarget) {
-      deleteRecord(deleteTarget.id)
+  const handleDeleteConfirm = async () => {
+    if (deletingRef.current || !deleteTarget) return
+    deletingRef.current = true
+    setIsDeleting(true)
+    try {
+      const result = await deleteRecord(deleteTarget.id)
+      if (result.status !== 'applied' && result.status !== 'not_found') {
+        window.alert(result.error?.message ?? '模考记录暂时无法删除，请稍后重试。')
+        return
+      }
+      setDeleteDialogOpen(false)
+      setDeleteTarget(null)
+    } finally {
+      deletingRef.current = false
+      setIsDeleting(false)
     }
-    setDeleteDialogOpen(false)
-    setDeleteTarget(null)
   }
 
   return (
@@ -917,6 +970,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
         onOpenChange={setDeleteDialogOpen}
         onConfirm={handleDeleteConfirm}
         recordTitle={deleteTarget?.topic || deleteTarget?.date || '该条记录'}
+        pending={isDeleting}
       />
 
       {/* AI 写作批改弹窗 */}

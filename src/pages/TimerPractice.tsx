@@ -625,6 +625,8 @@ function RecordFormDialog({
   const [durationMinutes, setDurationMinutes] = useState('')
   const [durationEdited, setDurationEdited] = useState(false)
   const [note, setNote] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
 
   // 弹窗打开时初始化表单
   useEffect(() => {
@@ -637,7 +639,8 @@ function RecordFormDialog({
     }
   }, [open, defaultSubject, defaultDuration])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (submittingRef.current) return
     const resolvedDuration = resolveTimerRecordDuration(
       defaultDuration,
       durationMinutes,
@@ -645,15 +648,27 @@ function RecordFormDialog({
     )
     if (resolvedDuration === undefined) return
 
-    addRecord({
-      subject,
-      date: format(new Date(), 'yyyy-MM-dd'),
-      duration: resolvedDuration,
-      note: note.trim() || undefined,
-    })
+    submittingRef.current = true
+    setIsSubmitting(true)
+    try {
+      const result = await addRecord({
+        subject,
+        date: format(new Date(), 'yyyy-MM-dd'),
+        duration: resolvedDuration,
+        note: note.trim() || undefined,
+      })
 
-    onSaved?.()
-    onOpenChange(false)
+      if (result.status !== 'applied') {
+        window.alert(result.error?.message ?? '练习记录暂时无法保存，请稍后重试。')
+        return
+      }
+
+      onSaved?.()
+      onOpenChange(false)
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
+    }
   }
 
   const canSubmit = resolveTimerRecordDuration(
@@ -663,8 +678,17 @@ function RecordFormDialog({
   ) !== undefined
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && submittingRef.current) return
+        onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent
+        aria-busy={isSubmitting}
+        className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>记录练习</DialogTitle>
           <DialogDescription>记录本次练习的科目、时长和心得。</DialogDescription>
@@ -732,11 +756,17 @@ function RecordFormDialog({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <DialogClose render={<Button type="button" variant="outline" className="w-full sm:w-auto" />}>
+          <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} className="w-full sm:w-auto" />}>
             取消
           </DialogClose>
-          <Button type="button" onClick={handleSubmit} disabled={!canSubmit} className="w-full sm:w-auto">
-            保存记录
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
+            aria-busy={isSubmitting}
+            className="w-full sm:w-auto"
+          >
+            {isSubmitting ? '保存中…' : '保存记录'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -765,6 +795,8 @@ function EditRecordDialog({
   const [durationMinutes, setDurationMinutes] = useState('')
   const [durationEdited, setDurationEdited] = useState(false)
   const [note, setNote] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
 
   // 弹窗打开时初始化
   useEffect(() => {
@@ -776,8 +808,8 @@ function EditRecordDialog({
     }
   }, [open, record])
 
-  const handleSubmit = () => {
-    if (!record) return
+  const handleSubmit = async () => {
+    if (submittingRef.current || !record) return
     const resolvedDuration = resolveTimerRecordDuration(
       record.duration,
       durationMinutes,
@@ -785,13 +817,25 @@ function EditRecordDialog({
     )
     if (resolvedDuration === undefined) return
 
-    updateRecord(record.id, {
-      subject,
-      duration: resolvedDuration,
-      note: note.trim() || undefined,
-    })
+    submittingRef.current = true
+    setIsSubmitting(true)
+    try {
+      const result = await updateRecord(record.id, {
+        subject,
+        duration: resolvedDuration,
+        note: note.trim() || undefined,
+      })
 
-    onOpenChange(false)
+      if (result.status !== 'applied') {
+        window.alert(result.error?.message ?? '练习记录暂时无法保存，请稍后重试。')
+        return
+      }
+
+      onOpenChange(false)
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
+    }
   }
 
   const canSubmit = record !== null && resolveTimerRecordDuration(
@@ -801,8 +845,17 @@ function EditRecordDialog({
   ) !== undefined
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && submittingRef.current) return
+        onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent
+        aria-busy={isSubmitting}
+        className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>编辑记录</DialogTitle>
           <DialogDescription>修改这条练习记录的信息。</DialogDescription>
@@ -876,11 +929,17 @@ function EditRecordDialog({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <DialogClose render={<Button type="button" variant="outline" className="w-full sm:w-auto" />}>
+          <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} className="w-full sm:w-auto" />}>
             取消
           </DialogClose>
-          <Button type="button" onClick={handleSubmit} disabled={!canSubmit} className="w-full sm:w-auto">
-            保存修改
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
+            aria-busy={isSubmitting}
+            className="w-full sm:w-auto"
+          >
+            {isSubmitting ? '保存中…' : '保存修改'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -894,15 +953,22 @@ function DeleteConfirmDialog({
   onOpenChange,
   onConfirm,
   recordTitle,
+  pending,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: () => void
+  onConfirm: () => void | Promise<void>
   recordTitle: string
+  pending: boolean
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!pending) onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent aria-busy={pending} className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>确认删除</DialogTitle>
           <DialogDescription>
@@ -910,11 +976,18 @@ function DeleteConfirmDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <DialogClose render={<Button type="button" variant="outline" className="w-full sm:w-auto" />}>
+          <DialogClose render={<Button type="button" variant="outline" disabled={pending} className="w-full sm:w-auto" />}>
             取消
           </DialogClose>
-          <Button type="button" variant="destructive" onClick={onConfirm} className="w-full sm:w-auto">
-            删除
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={pending}
+            aria-busy={pending}
+            className="w-full sm:w-auto"
+          >
+            {pending ? '删除中…' : '删除'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -974,6 +1047,8 @@ function RecordList({ onAdd }: { onAdd: () => void }) {
   // 删除弹窗状态
   const [deleteTarget, setDeleteTarget] = useState<TimerRecord | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const deletingRef = useRef(false)
 
   const handleEdit = (record: TimerRecord) => {
     setEditTarget(record)
@@ -985,12 +1060,22 @@ function RecordList({ onAdd }: { onAdd: () => void }) {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteConfirm = () => {
-    if (deleteTarget) {
-      deleteRecord(deleteTarget.id)
+  const handleDeleteConfirm = async () => {
+    if (deletingRef.current || !deleteTarget) return
+    deletingRef.current = true
+    setIsDeleting(true)
+    try {
+      const result = await deleteRecord(deleteTarget.id)
+      if (result.status !== 'applied' && result.status !== 'not_found') {
+        window.alert(result.error?.message ?? '练习记录暂时无法删除，请稍后重试。')
+        return
+      }
+      setDeleteDialogOpen(false)
+      setDeleteTarget(null)
+    } finally {
+      deletingRef.current = false
+      setIsDeleting(false)
     }
-    setDeleteDialogOpen(false)
-    setDeleteTarget(null)
   }
 
   const clearFilters = () => {
@@ -1301,6 +1386,7 @@ function RecordList({ onAdd }: { onAdd: () => void }) {
         onOpenChange={setDeleteDialogOpen}
         onConfirm={handleDeleteConfirm}
         recordTitle={deleteTarget ? `${SUBJECT_CONFIG[deleteTarget.subject].label} ${deleteTarget.date}` : '该条记录'}
+        pending={isDeleting}
       />
     </>
   )

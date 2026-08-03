@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { PlanExecution } from '@/lib/types'
 import {
   canonicalizePlanExecutions,
+  createPlanExecutionId,
   findPlanExecutionForDate,
   planExecutionKey,
   samePlanExecutionValue,
@@ -16,6 +17,12 @@ const executions: PlanExecution[] = [
 ]
 
 describe('plan execution semantic key', () => {
+  it('creates a deterministic identity for the same plan and local date', () => {
+    expect(createPlanExecutionId('plan-1', '2026-08-03')).toBe(
+      'execution:plan-1:2026-08-03',
+    )
+  })
+
   it('uses plan and local date as the unique semantic key', () => {
     expect(planExecutionKey(executions[0])).toBe(planExecutionKey(executions[2]))
     expect(planExecutionKey(executions[0])).not.toBe(planExecutionKey(executions[1]))

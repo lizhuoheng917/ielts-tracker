@@ -46,10 +46,10 @@ export type TrackerSyncEntityKind =
   | 'account_checkpoint'
 
 export type TrackerSyncWordPayload = Omit<WordRecord, 'id'>
-export type TrackerSyncPracticePayload = Omit<PracticeRecord, 'id'>
-export type TrackerSyncTimerPayload = Omit<TimerRecord, 'id'>
-export type TrackerSyncPlanPayload = Omit<StudyPlan, 'id'>
-export type TrackerSyncPlanExecutionPayload = Omit<PlanExecution, 'id'>
+export type TrackerSyncPracticePayload = Omit<PracticeRecord, 'id' | 'updatedAt'>
+export type TrackerSyncTimerPayload = Omit<TimerRecord, 'id' | 'updatedAt'>
+export type TrackerSyncPlanPayload = Omit<StudyPlan, 'id' | 'updatedAt'>
+export type TrackerSyncPlanExecutionPayload = Omit<PlanExecution, 'id' | 'updatedAt'>
 export type TrackerSyncDiaryPayload = Omit<DiaryEntry, 'id'>
 export type TrackerSyncDailyCheckinPayload = Omit<DailyCheckinAward, 'id'>
 
@@ -223,7 +223,6 @@ export function createTrackerSyncPayload<K extends TrackerSyncEntityKind>(
         score: value.score,
         note: value.note,
         createdAt: value.createdAt,
-        updatedAt: value.updatedAt,
       })
       break
     }
@@ -235,7 +234,6 @@ export function createTrackerSyncPayload<K extends TrackerSyncEntityKind>(
         duration: value.duration,
         note: value.note,
         createdAt: value.createdAt,
-        updatedAt: value.updatedAt,
       })
       break
     }
@@ -252,7 +250,6 @@ export function createTrackerSyncPayload<K extends TrackerSyncEntityKind>(
         targetCount: value.targetCount,
         isActive: value.isActive,
         createdAt: value.createdAt,
-        updatedAt: value.updatedAt,
       })
       break
     }

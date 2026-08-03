@@ -18,6 +18,7 @@ import { addLocalDays, toLocalDate } from '@/lib/localDate'
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
   private failingKey: string | null = null
+  private failCommittedJournalWrite = false
 
   get length() {
     return this.values.size
@@ -26,6 +27,7 @@ class MemoryStorage implements Storage {
   clear() {
     this.values.clear()
     this.failingKey = null
+    this.failCommittedJournalWrite = false
   }
 
   getItem(key: string) {
@@ -41,6 +43,14 @@ class MemoryStorage implements Storage {
   }
 
   setItem(key: string, value: string) {
+    if (
+      this.failCommittedJournalWrite
+      && key === LOCAL_MUTATION_JOURNAL_KEY
+      && (JSON.parse(value) as { phase?: unknown }).phase === 'committed'
+    ) {
+      this.failCommittedJournalWrite = false
+      throw new DOMException('simulated committed marker failure', 'QuotaExceededError')
+    }
     if (this.failingKey === key) {
       this.failingKey = null
       throw new DOMException('simulated quota limit', 'QuotaExceededError')
@@ -50,6 +60,10 @@ class MemoryStorage implements Storage {
 
   failNextWriteForKey(key: string) {
     this.failingKey = key
+  }
+
+  failNextCommittedJournalMarker() {
+    this.failCommittedJournalWrite = true
   }
 }
 
@@ -75,6 +89,8 @@ let rebuildActivityLedger:
 let ensureDailyCheckinAwardsInitialized:
   typeof import('@/data/dailyCheckinBootstrap').ensureDailyCheckinAwardsInitialized
 let browserBackupAdapter: typeof import('@/data/browserBackupAdapter').browserBackupAdapter
+let refreshTrackerCanonicalStores:
+  typeof import('@/data/trackerCanonicalCrossTabSync').refreshTrackerCanonicalStores
 
 beforeAll(async () => {
   vi.stubGlobal('localStorage', memoryStorage)
@@ -101,13 +117,14 @@ beforeAll(async () => {
   ))
   ;({ ensureDailyCheckinAwardsInitialized } = await import('@/data/dailyCheckinBootstrap'))
   ;({ browserBackupAdapter } = await import('@/data/browserBackupAdapter'))
+  ;({ refreshTrackerCanonicalStores } = await import('@/data/trackerCanonicalCrossTabSync'))
 })
 
 beforeEach(() => {
   localStorage.clear()
   useWordStore.setState({ records: [] })
-  usePracticeStore.setState({ records: [] })
-  useTimerStore.setState({ records: [] })
+  usePracticeStore.setState({ records: [], mutationRevision: 0 })
+  useTimerStore.setState({ records: [], mutationRevision: 0 })
   useDiaryStore.setState({ entries: [] })
   usePlanStore.setState({ plans: [], executions: [], aiCommandReceipts: [], mutationRevision: 0 })
   useDailyCheckinStore.setState({ migrationVersion: 1, awards: [] })
@@ -154,6 +171,12 @@ function replayCurrentLedger() {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function readPersistedState(key: string): Record<string, unknown> {
+  const raw = localStorage.getItem(key)
+  if (!raw) throw new Error(`Missing persisted state for ${key}`)
+  return (JSON.parse(raw) as { state: Record<string, unknown> }).state
 }
 
 function expectReplayMatchesCurrentProjection() {
@@ -432,16 +455,16 @@ describe('activity ledger store integration', () => {
     expectReplayMatchesCurrentProjection()
   })
 
-  it('keeps practice minutes, timer seconds and diary entries on the same reversible ledger', () => {
+  it('keeps practice minutes, timer seconds and diary entries on the same reversible ledger', async () => {
     const firstDate = toLocalDate()
     const secondDate = firstDate === '2026-08-01' ? '2026-07-31' : '2026-08-01'
 
-    usePracticeStore.getState().addRecord({
+    await usePracticeStore.getState().addRecord({
       type: 'reading',
       date: firstDate,
       duration: 1,
     })
-    useTimerStore.getState().addRecord({
+    await useTimerStore.getState().addRecord({
       subject: 'listening',
       date: firstDate,
       duration: 60,
@@ -459,16 +482,16 @@ describe('activity ledger store integration', () => {
     expect(useStreakStore.getState().heatmapData).toEqual({ [firstDate]: 3 })
     expectReplayMatchesCurrentProjection()
 
-    usePracticeStore.getState().updateRecord(practice.id, { date: secondDate, duration: 4 })
-    useTimerStore.getState().updateRecord(timer.id, { date: secondDate, duration: 240 })
+    await usePracticeStore.getState().updateRecord(practice.id, { date: secondDate, duration: 4 })
+    await useTimerStore.getState().updateRecord(timer.id, { date: secondDate, duration: 240 })
     useDiaryStore.getState().updateEntry(diary.id, { date: secondDate })
 
     expect(useAchievementStore.getState().totalXP).toBe(12)
     expect(useStreakStore.getState().heatmapData).toEqual({ [secondDate]: 3 })
     expectReplayMatchesCurrentProjection()
 
-    usePracticeStore.getState().deleteRecord(practice.id)
-    useTimerStore.getState().deleteRecord(timer.id)
+    await usePracticeStore.getState().deleteRecord(practice.id)
+    await useTimerStore.getState().deleteRecord(timer.id)
     useDiaryStore.getState().deleteEntry(diary.id)
 
     expect(useAchievementStore.getState().totalXP).toBe(0)
@@ -480,6 +503,120 @@ describe('activity ledger store integration', () => {
         .toEqual([1, 2, 3])
     }
     expectReplayMatchesCurrentProjection()
+  })
+
+  it('rolls back practice and timer revisions with their records when commit marking fails', async () => {
+    memoryStorage.failNextCommittedJournalMarker()
+    const practiceResult = await usePracticeStore.getState().addRecord({
+      type: 'reading',
+      date: toLocalDate(),
+      duration: 30,
+    })
+
+    expect(practiceResult.status).toBe('failed')
+    expect(usePracticeStore.getState()).toMatchObject({ records: [], mutationRevision: 0 })
+    expect(readPersistedState('ielts-tracker:practiceRecords')).toMatchObject({
+      records: [],
+      mutationRevision: 0,
+    })
+    expect(useAchievementStore.getState().totalXP).toBe(0)
+    expect(useStreakStore.getState().heatmapData).toEqual({})
+    expect(readPendingLocalMutation()).toBeNull()
+
+    memoryStorage.failNextCommittedJournalMarker()
+    const timerResult = await useTimerStore.getState().addRecord({
+      subject: 'listening',
+      date: toLocalDate(),
+      duration: 30 * 60,
+    })
+
+    expect(timerResult.status).toBe('failed')
+    expect(useTimerStore.getState()).toMatchObject({ records: [], mutationRevision: 0 })
+    expect(readPersistedState('ielts-tracker:timerRecords')).toMatchObject({
+      records: [],
+      mutationRevision: 0,
+    })
+    expect(useAchievementStore.getState().totalXP).toBe(0)
+    expect(useStreakStore.getState().heatmapData).toEqual({})
+    expect(useActivityLedgerStore.getState().events).toEqual([])
+    expect(readPendingLocalMutation()).toBeNull()
+  })
+
+  it('awaits badge reconciliation under the lock after refreshing both practice sources', async () => {
+    const timestamp = '2026-08-03T00:00:00.000Z'
+    localStorage.setItem('ielts-tracker:timerRecords', JSON.stringify({
+      state: {
+        mutationRevision: 3,
+        records: [
+          { id: 'remote-writing', subject: 'writing', date: toLocalDate(), duration: 60, createdAt: timestamp, updatedAt: timestamp },
+          { id: 'remote-speaking', subject: 'speaking', date: toLocalDate(), duration: 60, createdAt: timestamp, updatedAt: timestamp },
+          { id: 'remote-listening', subject: 'listening', date: toLocalDate(), duration: 60, createdAt: timestamp, updatedAt: timestamp },
+        ],
+      },
+      version: 0,
+    }))
+
+    const result = await usePracticeStore.getState().addRecord({
+      type: 'reading',
+      date: toLocalDate(),
+      duration: 1,
+    })
+
+    expect(result.status).toBe('applied')
+    expect(useTimerStore.getState().records.map((record) => record.id)).toEqual([
+      'remote-writing',
+      'remote-speaking',
+      'remote-listening',
+    ])
+    expect(useAchievementStore.getState().unlockedBadges).toEqual(expect.arrayContaining([
+      'first-writing',
+      'first-speaking',
+      'all-practice',
+    ]))
+  })
+
+  it('rehydrates plan, practice and timer records through one canonical refresh', async () => {
+    const timestamp = '2026-08-03T01:00:00.000Z'
+    localStorage.setItem('ielts-tracker:practiceRecords', JSON.stringify({
+      state: {
+        mutationRevision: 7,
+        records: [{
+          id: 'cross-tab-practice',
+          type: 'speaking',
+          date: toLocalDate(),
+          duration: 15,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }],
+      },
+      version: 0,
+    }))
+    localStorage.setItem('ielts-tracker:timerRecords', JSON.stringify({
+      state: {
+        mutationRevision: 8,
+        records: [{
+          id: 'cross-tab-timer',
+          subject: 'reading',
+          date: toLocalDate(),
+          duration: 90,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }],
+      },
+      version: 0,
+    }))
+
+    const status = await refreshTrackerCanonicalStores()
+
+    expect(status).toBe('refreshed')
+    expect(usePracticeStore.getState()).toMatchObject({
+      mutationRevision: 7,
+      records: [{ id: 'cross-tab-practice' }],
+    })
+    expect(useTimerStore.getState()).toMatchObject({
+      mutationRevision: 8,
+      records: [{ id: 'cross-tab-timer' }],
+    })
   })
 
   it('awards a manual daily checkin even after another learning action', () => {
@@ -614,12 +751,13 @@ describe('activity ledger store integration', () => {
     expect(repeatedTrue.status).toBe('duplicate')
     expect(cleared).toMatchObject({ status: 'applied', targetId: firstId })
     expect(repeatedFalse).toMatchObject({ status: 'duplicate', targetId: firstId })
-    expect(usePlanStore.getState().executions).toEqual([{
+    expect(usePlanStore.getState().executions).toEqual([expect.objectContaining({
       id: firstId,
       planId: 'stable-plan',
       date: today,
       isCompleted: false,
-    }])
+      updatedAt: expect.any(String),
+    })])
     expect(useStreakStore.getState().heatmapData).toEqual({})
     expect(useAchievementStore.getState().totalXP).toBe(10)
     expect(useActivityLedgerStore.getState().events.filter(

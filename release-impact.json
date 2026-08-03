@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-03-tracker-visible-exam-date-sync",
+  "release": "2026-08-03-tracker-phase4b-core-learning-sync",
   "Frontend": {
     "status": "changed",
-    "reason": "将已通过影子验收的 examDate 扩展为本地候选版可见双向同步：首次本机为空时可安装云端值且不回传，本机与云端均有不同值时停止写入并要求用户明确选择；建立基线后用预期本机值保护远端安装，并先持久化回声抑制状态。设置页仅增加紧凑同步状态和冲突选择，其余学习记录仍只保存在本机。"
+    "reason": "在已上线的考试日期同步之外，新增学习计划、计划执行、普通练习计时与模考记录的本地优先双向同步。用户操作先在本机事务中完成，后台以 5 秒合并窗口上传严格白名单小载荷；跨设备拉取采用基线、乐观版本、删除墓碑和原子本机安装，网络失败不阻塞记录。"
   },
   "Backend": {
-    "status": "reviewed-not-needed",
-    "reason": "已检查现有 Tracker preferences 实体、capability/apply/pull/snapshot RPC、RLS、授权、字段白名单与保留规则；它们已经支持唯一同步字段 examDate。本地可见安装和基线选择不改变 Supabase schema、RPC、RLS、grant、清理策略或服务端数据合同。"
+    "status": "changed",
+    "reason": "共享 Lexi Supabase 新增向前兼容的 Phase 4B 迁移：四类实体各 8 KiB 上限、严格字段白名单、upsert/delete、无正文墓碑、计划与执行父子约束、同一计划同一天执行唯一性及设备游标确认后的有界清理；现有 RLS 和账号隔离边界保持。"
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "已检查现有 Lexi Control Tracker 开关、字段白名单和聚合健康指标；本阶段仍使用同一个 preferences/examDate 实体，没有新增管理员可见字段、内容正文、策略、容量口径或可管理对象。"
+    "status": "changed",
+    "reason": "共享 Lexi /admin 增加四类同步开关、类型说明、正文总字节、平均/P95/单条上限和安全清除墓碑数；管理员只能查看聚合容量与健康指标，不能读取计划、备注、练习或模考正文。"
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "可见 examDate 双向同步已提交为 7031bb0a0c751d7c7650ff160ee1413b4b31ae14，并推送到分支与 main。Cloudflare Pages 生产部署 56b1c9e3-948f-40d7-ae0b-7d0b4319adae 已激活，正式域名返回新资源 /assets/index-BvRHY4e4.js。共享 Supabase schema、RPC、RLS 与清理任务保持原部署，管理员已为所有合格账号开启全局同步并仅允许 tracker_preferences。"
+    "status": "not-deployed",
+    "reason": "Phase 4B 当前仅在本地实现并在 staging 回滚事务中验证，尚未提交、推送或部署。生产仍保持已上线的 Phase 4A：全局同步开启但 allowlist 只有 tracker_preferences；四类新实体必须在后端迁移、管理端和兼容客户端协同上线后才放量。"
   },
   "Verification": {
     "status": "passed",
-    "reason": "npm run verify:release 已通过：47 个测试文件、311 项测试、typecheck、oxlint、生产构建与 bundle guard 全部成功。生产真实账号完成本机→云端→第二设备→本机→恢复原值的完整往返：实体版本 3→4→5→6，6 条 Apply 全部 applied，0 replay、0 conflict、0 rejected、0 diagnostic；远端安装后版本与回执未增长，证明无回声写入。最终 examDate 恢复为 null，全局同步开启且唯一白名单为 tracker_preferences。"
+    "reason": "本地发布门禁已通过：53 个测试文件共 365 项测试、TypeScript、Lint、生产构建、生产连接与无密钥形态检查全部成功；前后端逐字段合同检查未发现 P0/P1 代码阻塞。远端迁移、RLS/RPC、账号隔离、第二设备与真实账号四类记录验收属于部署窗口内的生产验证，仍须在放量前完成。"
   }
 }

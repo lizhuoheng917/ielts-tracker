@@ -9,8 +9,9 @@ import { reconcileAchievementBadges } from '@/data/achievementReconciliation'
 import { ensureActivityLedgerInitialized } from '@/data/activityLedgerBootstrap'
 import { ensureDailyCheckinAwardsInitialized } from '@/data/dailyCheckinBootstrap'
 import type { LocalRecoveryReport } from '@/data/localMutationJournal'
+import { installTrackerCanonicalCrossTabSync } from '@/data/trackerCanonicalCrossTabSync'
 import { ensureAiArtifactRepositoryInitialized } from '@/stores/aiArtifactStore'
-import { installPlanStoreCrossTabSync, usePlanStore } from '@/stores/planStore'
+import { usePlanStore } from '@/stores/planStore'
 
 export async function renderApp(recoveryReport: LocalRecoveryReport) {
   const root = createRoot(document.getElementById('root')!)
@@ -53,7 +54,7 @@ export async function renderApp(recoveryReport: LocalRecoveryReport) {
     return
   }
 
-  installPlanStoreCrossTabSync()
+  installTrackerCanonicalCrossTabSync()
 
   try {
     reconcileAchievementBadges()

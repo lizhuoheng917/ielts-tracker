@@ -37,6 +37,8 @@ export interface PlanExecution {
   actualDuration?: number
   actualCount?: number
   note?: string
+  /** Added for deterministic cross-device conflict ordering; legacy rows may omit it. */
+  updatedAt?: string
 }
 
 // ===== 练习记录 =====

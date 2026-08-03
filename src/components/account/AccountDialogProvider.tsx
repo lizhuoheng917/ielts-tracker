@@ -139,7 +139,7 @@ function LexiAccountDialog({
           <div className="flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary/5 p-3.5 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
             <p>
-              登录后仅考试日期会在你的设备间同步；其余 Tracker 学习记录仍只保存在这个浏览器，登录或退出不会上传、合并、清空或覆盖它们。
+              登录并确认这台设备的数据归属后，学习计划、计划执行、练习、模考与考试日期可在你的设备间同步。日记、AI 对话、报告和自定义 AI 配置仍只保存在本机；退出账号不会清空本机记录。
             </p>
           </div>
 
@@ -177,9 +177,9 @@ function LexiAccountDialog({
                   <div className="flex items-start gap-2.5">
                     <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                     <div>
-                      <p className="text-sm font-semibold text-foreground">确认内置 AI 的记录归属</p>
+                      <p className="text-sm font-semibold text-foreground">确认本机学习数据的账号归属</p>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        确认后，这台设备的本机学习快照只能以当前账号身份发送。登录、退出和确认本身都不会上传记录。
+                        确认后，这台设备会以当前账号开始同步计划、执行、练习、模考与考试日期，并可调用内置 AI。日记、AI 对话和报告不会随普通学习同步上传。
                       </p>
                     </div>
                   </div>
@@ -198,14 +198,14 @@ function LexiAccountDialog({
               {managedAiDataBinding.status === 'bound' && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-success/25 bg-success-surface/45 p-3.5 text-xs leading-5 text-muted-foreground">
                   <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-                  <p>账号归属已确认。内置 AI 只会在当前账号下接收这台设备的学习快照。</p>
+                  <p>账号归属已确认。云同步与内置 AI 都只会在当前账号下读取这台设备的学习数据。</p>
                 </div>
               )}
               {managedAiDataBinding.status === 'mismatch' && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/5 p-3.5 text-xs leading-5 text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
                   <p>
-                    这些本机记录已确认归属于另一个账号，内置 AI 已停止发送。请切回原账号；若要开始一套新记录，请先导出备份并清空本机数据。
+                    这些本机记录已确认归属于另一个账号，云同步与内置 AI 均已暂停。请切回原账号；若要开始一套新记录，请先导出备份并清空本机数据。
                   </p>
                 </div>
               )}
@@ -213,14 +213,14 @@ function LexiAccountDialog({
                 <div className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning-surface/50 p-3.5 text-xs leading-5 text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
                   <p>
-                    本机账号归属信息异常，内置 AI 不会发送数据。请先到设置导出 JSON 备份，再重新导入该备份使旧绑定失效并重新确认；或确认无需保留后清空所有数据。
+                    本机账号归属信息异常，云同步与内置 AI 不会发送数据。请先到设置导出 JSON 备份，再重新导入该备份使旧绑定失效并重新确认；或确认无需保留后清空本机数据。
                   </p>
                 </div>
               )}
               {managedAiDataBinding.status === 'unavailable' && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning-surface/50 p-3.5 text-xs leading-5 text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-                  <p>当前浏览器无法安全确认本机记录归属，内置 AI 不会发送数据。学习与自定义 AI 不受影响。</p>
+                  <p>当前浏览器无法确认本机记录归属，云同步与内置 AI 不会发送数据。本机学习与自定义 AI 不受影响。</p>
                 </div>
               )}
               <Button

@@ -21,10 +21,12 @@ import {
   type TrackerShadowSyncBatch,
   type TrackerShadowSyncOperation,
   type TrackerSyncCapabilities,
+  type TrackerSyncPullResult,
   type TrackerSyncSnapshotResult,
 } from '@/sync/trackerShadowSyncProtocol'
 import {
   browserTrackerShadowSyncRpc,
+  TrackerShadowSyncRpcError,
   type TrackerShadowSyncRpc,
 } from '@/sync/trackerShadowSyncRpc'
 
@@ -120,9 +122,24 @@ function snapshotExamDate(snapshot: TrackerSyncSnapshotResult): {
     ))
     .sort((left, right) => right.version - left.version)[0]
   if (!entity || entity.deletedAt !== null) return { exists: false, examDate: null }
+  return { exists: true, examDate: remoteEntityExamDate(entity) }
+}
+
+function remoteEntityExamDate(
+  entity: TrackerSyncPullResult['changes'][number],
+): string | null {
   assertShadowRemoteEntity(entity)
+  if (entity.deletedAt !== null) return null
   const payload = entity.payload as { examDate?: string | null }
-  return { exists: true, examDate: payload.examDate ?? null }
+  return payload.examDate ?? null
+}
+
+function requiresFullSnapshot(error: unknown): boolean {
+  return error instanceof TrackerShadowSyncRpcError
+    && (
+      error.rpcCode === '40001'
+      || error.serverMessage === 'TRACKER_SNAPSHOT_REQUIRED'
+    )
 }
 
 export class TrackerShadowSyncRuntime {
@@ -139,6 +156,7 @@ export class TrackerShadowSyncRuntime {
   private readonly createId: () => string
   private activeFlush: Promise<void> | null = null
   private queuedFlush: { examDate: string | undefined } | null = null
+  private disposed = false
 
   constructor(options: TrackerShadowSyncRuntimeOptions) {
     this.accountUserId = options.accountUserId
@@ -157,6 +175,7 @@ export class TrackerShadowSyncRuntime {
   }
 
   flush(localExamDate: string | undefined): Promise<void> {
+    if (this.disposed) return Promise.resolve()
     this.queuedFlush = { examDate: localExamDate }
     if (this.activeFlush) return this.activeFlush
     this.reportStatus({ phase: 'checking', detail: '正在检查考试日期云同步' })
@@ -171,10 +190,17 @@ export class TrackerShadowSyncRuntime {
   }
 
   private reportStatus(status: TrackerShadowSyncStatusEvent): void {
+    if (this.disposed) return
     this.onStatusChange?.(status)
   }
 
+  dispose(): void {
+    this.disposed = true
+    this.queuedFlush = null
+  }
+
   async resolveBaselineConflict(choice: 'local' | 'remote'): Promise<void> {
+    if (this.disposed) return
     this.reportStatus({ phase: 'syncing', detail: '正在应用你选择的考试日期' })
     let nextFlushValue: string | null | undefined
     await this.withMutationLock(async () => {
@@ -225,6 +251,7 @@ export class TrackerShadowSyncRuntime {
   private async verifiedAccessToken(): Promise<string | null> {
     if (this.inspectBinding(this.accountUserId).status !== 'bound') return null
     const identity = await this.rpc.getVerifiedIdentity()
+    if (this.disposed) return null
     if (!identity || identity.accountUserId !== this.accountUserId) return null
     return identity.accessToken
   }
@@ -293,6 +320,7 @@ export class TrackerShadowSyncRuntime {
     // subscription may schedule another flush synchronously.
     await this.persistence.save(state)
     if (!installVisibleValue || !this.installRemoteExamDate) return false
+    if (this.disposed) return false
 
     const actualLocalExamDate = this.installRemoteExamDate(remoteExamDate, expectedLocalExamDate)
     if (actualLocalExamDate === remoteExamDate) return true
@@ -426,8 +454,9 @@ export class TrackerShadowSyncRuntime {
     state: TrackerShadowSyncAccountState,
     accessToken: string,
     accountEpoch: number,
-  ): Promise<void> {
+  ): Promise<{ changed: boolean; examDate: string | null }> {
     let cursor = state.cursor
+    let latestPreference: TrackerSyncPullResult['changes'][number] | null = null
     for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
       const pull = parseTrackerSyncPullResult(await this.rpc.pull(accessToken, {
         deviceId: state.deviceId,
@@ -438,16 +467,47 @@ export class TrackerShadowSyncRuntime {
         throw new Error('Tracker shadow pull did not match the sealed account epoch.')
       }
       pull.changes.forEach((change) => {
+        // The backend cursor is shared by every Tracker entity kind. This
+        // runtime owns only the preferences row; Phase 4B records are parsed
+        // and installed by their independent runtime.
+        if (
+          change.entityKind !== TRACKER_SHADOW_SYNC_ENTITY_KIND
+          || change.entityId !== TRACKER_SHADOW_SYNC_ENTITY_ID
+        ) return
         assertShadowRemoteEntity(change)
         state.remoteVersion = Math.max(state.remoteVersion, change.version)
+        if (
+          !latestPreference
+          || change.cursor > latestPreference.cursor
+          || (
+            change.cursor === latestPreference.cursor
+            && change.version > latestPreference.version
+          )
+        ) latestPreference = change
       })
       cursor = pull.nextCursor
       if (!pull.hasMore) {
         state.cursor = Math.max(state.cursor, cursor)
-        return
+        return latestPreference
+          ? { changed: true, examDate: remoteEntityExamDate(latestPreference) }
+          : { changed: false, examDate: null }
       }
     }
     throw new Error('Tracker shadow pull exceeded its bounded page limit.')
+  }
+
+  private async pullExamDateOrSnapshot(
+    state: TrackerShadowSyncAccountState,
+    accessToken: string,
+    accountEpoch: number,
+  ): Promise<{ changed: boolean; examDate: string | null }> {
+    try {
+      return await this.validatePull(state, accessToken, accountEpoch)
+    } catch (error) {
+      if (!requiresFullSnapshot(error)) throw error
+      const snapshot = await this.validateSnapshot(state, accessToken, accountEpoch)
+      return { changed: true, examDate: snapshotExamDate(snapshot).examDate }
+    }
   }
 
   private async validateSnapshot(
@@ -462,6 +522,10 @@ export class TrackerShadowSyncRuntime {
       throw new Error('Tracker shadow snapshot did not match the sealed account epoch.')
     }
     snapshot.entities.forEach((entity) => {
+      if (
+        entity.entityKind !== TRACKER_SHADOW_SYNC_ENTITY_KIND
+        || entity.entityId !== TRACKER_SHADOW_SYNC_ENTITY_ID
+      ) return
       assertShadowRemoteEntity(entity)
       state.remoteVersion = Math.max(state.remoteVersion, entity.version)
     })
@@ -470,6 +534,7 @@ export class TrackerShadowSyncRuntime {
   }
 
   private async flushOnce(localExamDate: string | undefined): Promise<void> {
+    if (this.disposed) return
     const accessToken = await this.verifiedAccessToken()
     if (!accessToken) {
       this.reportStatus({ phase: 'paused', detail: '确认当前账号的数据归属后可同步' })
@@ -478,6 +543,7 @@ export class TrackerShadowSyncRuntime {
     const capabilities = parseTrackerSyncCapabilities(
       await this.rpc.getCapabilities(accessToken),
     )
+    if (this.disposed) return
     if (!this.validateCapabilities(capabilities)) {
       this.reportStatus({ phase: 'paused', detail: '云同步暂未开放，本机数据不受影响' })
       return
@@ -526,12 +592,24 @@ export class TrackerShadowSyncRuntime {
         // lost. Replay it byte-for-byte before observing newer remote state.
       } else if (capabilities.currentCursor > state.cursor) {
         this.reportStatus({ phase: 'syncing', detail: '正在合并另一台设备的考试日期' })
-        const snapshot = await this.validateSnapshot(state, accessToken, capabilities.accountEpoch)
-        await this.mergeEstablishedBaseline(
+        const remote = await this.pullExamDateOrSnapshot(
           state,
-          normalizedExamDate(localExamDate),
-          snapshotExamDate(snapshot).examDate,
+          accessToken,
+          capabilities.accountEpoch,
         )
+        if (remote.changed) {
+          await this.mergeEstablishedBaseline(
+            state,
+            normalizedExamDate(localExamDate),
+            remote.examDate,
+          )
+        } else {
+          // The account cursor is shared with Phase 4B learning records. When
+          // only those rows changed, advance this stream without re-reading or
+          // rewriting the independent exam-date value.
+          this.captureExamDate(state, localExamDate)
+          await this.persistence.save(state)
+        }
       } else {
         this.captureExamDate(state, localExamDate)
         await this.persistence.save(state)
@@ -550,15 +628,22 @@ export class TrackerShadowSyncRuntime {
       if (!batch) {
         if (capabilities.currentCursor > state.cursor) {
           this.reportStatus({ phase: 'syncing', detail: '正在接收另一台设备的考试日期' })
-          const snapshot = await this.validateSnapshot(state, accessToken, capabilities.accountEpoch)
-          const remote = snapshotExamDate(snapshot)
-          const installed = await this.rememberRemoteExamDate(
+          const remote = await this.pullExamDateOrSnapshot(
             state,
-            remote.examDate,
-            normalizedExamDate(localExamDate),
-            true,
+            accessToken,
+            capabilities.accountEpoch,
           )
-          if (!installed && state.pendingOperations.length > 0) {
+          if (remote.changed) {
+            await this.mergeEstablishedBaseline(
+              state,
+              normalizedExamDate(localExamDate),
+              remote.examDate,
+            )
+          } else {
+            await this.persistence.save(state)
+          }
+          if (state.baselineConflict) return
+          if (state.pendingOperations.length > 0) {
             this.reportStatus({ phase: 'syncing', detail: '本机有更新，等待下一次同步' })
             return
           }

@@ -22,6 +22,7 @@ export type LocalMutationAction =
   | 'plan.execution.delete'
   | 'plan.execution.reconcile'
   | 'plan.delete'
+  | 'sync.merge'
   | 'settings.checkin'
 
 export interface SnapshotValue {

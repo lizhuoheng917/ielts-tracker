@@ -331,28 +331,30 @@ export default function Settings() {
           ? '正在确认 Lexi 账号状态'
           : '当前环境尚未连接 Lexi 内置 AI'
   const accountDescription = user?.email
-    ? `${user.email} · 考试日期可同步，其余学习记录仍保存在本机`
+    ? `${user.email} · 计划、执行、练习、模考与考试日期可在后台同步`
     : authStatus === 'signed-out'
-      ? '登录后仅同步考试日期，其余学习记录不会自动上传'
+      ? '登录并确认数据归属后，可使用核心学习数据云同步'
       : authStatus === 'initializing'
         ? '正在读取当前设备的账号状态'
       : '本地模式 · 学习功能可完整使用'
 
   const trackerSyncPresentation = (() => {
     if (authStatus !== 'signed-in') {
-      return { label: '仅本机', detail: '登录后可使用考试日期云同步', tone: 'muted' as const }
+      return { label: '仅本机', detail: '登录后可使用核心学习数据云同步', tone: 'muted' as const }
     }
     if (managedAiDataBinding.status !== 'bound') {
       return { label: '待确认', detail: '先确认这台设备上的记录归属', tone: 'muted' as const }
     }
     switch (trackerSyncStatus.phase) {
       case 'synced':
-        return { label: '已同步', detail: trackerSyncStatus.detail || '考试日期已与云端保持一致', tone: 'success' as const }
+        return { label: '已同步', detail: trackerSyncStatus.detail || '核心学习数据已与云端保持一致', tone: 'success' as const }
       case 'syncing':
       case 'checking':
-        return { label: '同步中', detail: trackerSyncStatus.detail || '正在检查云端考试日期', tone: 'active' as const }
+        return { label: '同步中', detail: trackerSyncStatus.detail || '正在检查云端学习数据', tone: 'active' as const }
       case 'needs_choice':
         return { label: '需选择', detail: trackerSyncStatus.detail, tone: 'warning' as const }
+      case 'partial':
+        return { label: '部分同步', detail: trackerSyncStatus.detail, tone: 'warning' as const }
       case 'offline':
         return { label: '离线', detail: trackerSyncStatus.detail, tone: 'muted' as const }
       case 'error':
@@ -360,7 +362,7 @@ export default function Settings() {
       case 'paused':
         return { label: '未开放', detail: trackerSyncStatus.detail, tone: 'muted' as const }
       default:
-        return { label: '检查中', detail: '正在确认考试日期同步状态', tone: 'active' as const }
+        return { label: '检查中', detail: '正在确认学习数据同步状态', tone: 'active' as const }
     }
   })()
 
@@ -531,7 +533,7 @@ export default function Settings() {
       })
       announceCanonicalMutation('all', Date.now())
       setClearDialogOpen(false)
-      alert('所有数据已清空')
+      alert('当前设备的数据已清空；已同步到账号的云端记录不会在这里被删除。')
       window.location.reload()
     } catch (err) {
       const detail = err instanceof Error ? err.message : '未知错误'
@@ -550,7 +552,7 @@ export default function Settings() {
         meta={(
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck className="size-3.5 text-success" aria-hidden="true" />
-            仅考试日期可云同步
+            核心学习数据可云同步
           </span>
         )}
       />
@@ -645,7 +647,7 @@ export default function Settings() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">考试日期云同步</p>
+                    <p className="text-sm font-medium text-foreground">学习数据云同步</p>
                     <span className="shrink-0 text-xs font-medium text-muted-foreground">{trackerSyncPresentation.label}</span>
                   </div>
                   <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{trackerSyncPresentation.detail}</p>
@@ -1105,7 +1107,7 @@ export default function Settings() {
               </span>
               <div>
                 <h3 className="font-semibold text-foreground">清空当前设备数据</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">这会删除所有学习记录、计划、日记和成就，建议先导出 JSON 备份。</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">删除这台设备上的记录、计划、日记和成就；已同步到账号的云端记录会保留，建议先导出 JSON 备份。</p>
               </div>
             </div>
             <Button
@@ -1116,7 +1118,7 @@ export default function Settings() {
               className="min-h-10 w-full shrink-0 sm:w-auto"
             >
               <Trash2 aria-hidden="true" />
-              清空所有数据
+              清空本机数据
             </Button>
           </div>
         </CardContent>
@@ -1543,10 +1545,10 @@ export default function Settings() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden="true" />
-              确认清空所有数据
+              确认清空本机数据
             </DialogTitle>
             <DialogDescription>
-              此操作将永久删除所有学习记录、计划、日记和成就数据，且无法撤销。如果还需要这些数据，请先导出 JSON 备份。
+              此操作只删除当前设备上的学习记录、计划、日记和成就，且无法撤销；已经同步到账号的云端记录不会被删除，今后重新确认同一账号时可能再次下载。如果还需要本机完整副本，请先导出 JSON 备份。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col gap-2 sm:flex-row">
@@ -1554,7 +1556,7 @@ export default function Settings() {
               取消
             </Button>
             <Button type="button" variant="destructive" onClick={() => void handleClearAll()} disabled={dataOperation !== 'idle'} className="min-h-10 w-full sm:w-auto">
-              {dataOperation === 'clearing' ? '正在清空…' : '确认清空'}
+              {dataOperation === 'clearing' ? '正在清空…' : '确认清空本机'}
             </Button>
           </DialogFooter>
         </DialogContent>

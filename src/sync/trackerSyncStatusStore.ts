@@ -5,6 +5,7 @@ export type TrackerCloudSyncPhase =
   | 'checking'
   | 'syncing'
   | 'synced'
+  | 'partial'
   | 'needs_choice'
   | 'paused'
   | 'offline'

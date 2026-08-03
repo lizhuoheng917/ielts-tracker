@@ -32,6 +32,7 @@ import {
 import { STORAGE_PREFIX } from '@/lib/constants'
 import {
   canonicalizePlanExecutions,
+  createPlanExecutionId,
   findPlanExecutionForDate,
   samePlanExecutionValue,
 } from '@/lib/planExecution'
@@ -54,7 +55,7 @@ export interface PlanMutationResult {
   }
 }
 
-export type SetPlanExecutionInput = Omit<PlanExecution, 'id'>
+export type SetPlanExecutionInput = Omit<PlanExecution, 'id' | 'updatedAt'>
 
 interface PlanStore {
   plans: StudyPlan[]
@@ -523,7 +524,12 @@ export const usePlanStore = create<PlanStore>()(
               let targetExecution: PlanExecution | undefined
 
               if (existing) {
-                const nextExecution: PlanExecution = { ...existing, ...input, id: existing.id }
+                const nextExecution: PlanExecution = {
+                  ...existing,
+                  ...input,
+                  id: existing.id,
+                  updatedAt: occurredAt,
+                }
                 targetExecution = nextExecution
                 if (!samePlanExecutionValue(existing, nextExecution)) {
                   changes.push({
@@ -547,7 +553,11 @@ export const usePlanStore = create<PlanStore>()(
                   ))
                 }
               } else {
-                const execution: PlanExecution = { ...input, id: generateId() }
+                const execution: PlanExecution = {
+                  ...input,
+                  id: createPlanExecutionId(input.planId, input.date),
+                  updatedAt: occurredAt,
+                }
                 targetExecution = execution
                 changes.push({
                   id: execution.id,

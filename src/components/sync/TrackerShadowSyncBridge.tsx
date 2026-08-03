@@ -3,10 +3,22 @@ import { useEffect } from 'react'
 import { useAuth } from '@/auth/authContext'
 import { STORAGE_PREFIX } from '@/lib/constants'
 import { isLocalDate } from '@/lib/localDate'
+import {
+  TrackerPhase4bSyncRuntime,
+  type TrackerPhase4bSyncStatusEvent,
+} from '@/sync/trackerPhase4bSyncRuntime'
+import { installTrackerPhase4bSyncTriggers } from '@/sync/trackerPhase4bSyncTriggers'
 import { TrackerShadowSyncRuntime } from '@/sync/trackerShadowSyncRuntime'
 import { installTrackerShadowSyncTriggers } from '@/sync/trackerShadowSyncTriggers'
+import {
+  aggregateTrackerSyncStatus,
+  type TrackerSyncStreamStatus,
+} from '@/sync/trackerSyncStatusAggregation'
 import { useTrackerSyncStatusStore } from '@/sync/trackerSyncStatusStore'
+import { usePlanStore } from '@/stores/planStore'
+import { usePracticeStore } from '@/stores/practiceStore'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useTimerStore } from '@/stores/timerStore'
 
 const SETTINGS_STORAGE_KEY = `${STORAGE_PREFIX}:settings`
 
@@ -32,16 +44,50 @@ export function TrackerShadowSyncBridge() {
     statusStore.reset(accountUserId)
     if (!accountUserId) return
 
-    const updateFailureStatus = () => {
-      useTrackerSyncStatusStore.getState().update({
+    let active = true
+    const emptyStream = (): TrackerSyncStreamStatus => ({
+      phase: 'idle',
+      detail: '',
+      lastSyncedAt: null,
+      conflict: null,
+      resolveConflict: null,
+    })
+    let examDateStatus = emptyStream()
+    let learningRecordsStatus = emptyStream()
+
+    const publish = () => {
+      if (!active) return
+      useTrackerSyncStatusStore.getState().update(aggregateTrackerSyncStatus({
         accountUserId,
+        examDate: examDateStatus,
+        learningRecords: learningRecordsStatus,
+      }))
+    }
+    const mergeStream = (
+      current: TrackerSyncStreamStatus,
+      next: Pick<TrackerSyncStreamStatus, 'phase'> & Partial<TrackerSyncStreamStatus>,
+    ): TrackerSyncStreamStatus => ({
+      ...current,
+      ...next,
+      lastSyncedAt: next.lastSyncedAt ?? current.lastSyncedAt,
+    })
+    const updateFailureStatus = (stream: 'exam' | 'learning') => {
+      const failure: TrackerSyncStreamStatus = {
         phase: navigator.onLine ? 'error' : 'offline',
-        detail: navigator.onLine ? '暂时无法同步，稍后会自动重试' : '当前离线，考试日期已保存在本机',
+        detail: navigator.onLine
+          ? '暂时无法同步，稍后会自动重试；本机记录不受影响'
+          : '当前离线，学习数据已保存在本机',
+        lastSyncedAt: stream === 'exam'
+          ? examDateStatus.lastSyncedAt
+          : learningRecordsStatus.lastSyncedAt,
         conflict: null,
         resolveConflict: null,
-      })
+      }
+      if (stream === 'exam') examDateStatus = failure
+      else learningRecordsStatus = failure
+      publish()
     }
-    const runtime = new TrackerShadowSyncRuntime({
+    const examDateRuntime = new TrackerShadowSyncRuntime({
       accountUserId,
       readLocalExamDate: () => readPersistedExamDate() ?? null,
       installRemoteExamDate: (remoteExamDate, expectedLocalExamDate) => {
@@ -53,8 +99,8 @@ export function TrackerShadowSyncBridge() {
         return remoteExamDate
       },
       onStatusChange: (nextStatus) => {
-        useTrackerSyncStatusStore.getState().update({
-          accountUserId,
+        if (!active) return
+        examDateStatus = mergeStream(examDateStatus, {
           phase: nextStatus.phase,
           detail: nextStatus.detail ?? '',
           ...(nextStatus.lastSyncedAt ? { lastSyncedAt: nextStatus.lastSyncedAt } : {}),
@@ -62,19 +108,38 @@ export function TrackerShadowSyncBridge() {
           resolveConflict: nextStatus.conflict
             ? async (choice) => {
                 try {
-                  await runtime.resolveBaselineConflict(choice)
+                  await examDateRuntime.resolveBaselineConflict(choice)
                 } catch {
-                  updateFailureStatus()
+                  updateFailureStatus('exam')
                 }
               }
             : null,
         })
+        publish()
       },
     })
-    const removeTriggers = installTrackerShadowSyncTriggers({
+    const learningRuntime = new TrackerPhase4bSyncRuntime({
+      accountUserId,
+      onStatusChange: (event: TrackerPhase4bSyncStatusEvent) => {
+        if (!active) return
+        // Record restore decisions are intentionally not exposed through the
+        // exam-date conflict buttons. Until the dedicated record-level UI is
+        // added, the affected record remains local and every other record can
+        // continue syncing.
+        learningRecordsStatus = mergeStream(learningRecordsStatus, {
+          phase: event.phase === 'needs_choice' ? 'partial' : event.phase,
+          detail: event.detail ?? '',
+          ...(event.lastSyncedAt ? { lastSyncedAt: event.lastSyncedAt } : {}),
+          conflict: null,
+          resolveConflict: null,
+        })
+        publish()
+      },
+    })
+    const removeExamDateTriggers = installTrackerShadowSyncTriggers({
       flush: (examDate) => {
-        void runtime.flush(examDate).catch(() => {
-          updateFailureStatus()
+        void examDateRuntime.flush(examDate).catch(() => {
+          updateFailureStatus('exam')
         })
       },
       // Read the persisted source so a stale background tab cannot upload an
@@ -90,7 +155,39 @@ export function TrackerShadowSyncBridge() {
       setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimer: (timerId) => window.clearTimeout(timerId),
     })
-    const onOffline = () => updateFailureStatus()
+    const removeLearningTriggers = installTrackerPhase4bSyncTriggers({
+      flush: () => {
+        void learningRuntime.flush().catch(() => {
+          updateFailureStatus('learning')
+        })
+      },
+      subscribeChanges: (listener) => {
+        const unsubscribePlan = usePlanStore.subscribe((state, previous) => {
+          if (state.mutationRevision !== previous.mutationRevision) listener()
+        })
+        const unsubscribePractice = usePracticeStore.subscribe((state, previous) => {
+          if (state.mutationRevision !== previous.mutationRevision) listener()
+        })
+        const unsubscribeTimer = useTimerStore.subscribe((state, previous) => {
+          if (state.mutationRevision !== previous.mutationRevision) listener()
+        })
+        return () => {
+          unsubscribePlan()
+          unsubscribePractice()
+          unsubscribeTimer()
+        }
+      },
+      windowTarget: window,
+      documentTarget: document,
+      isOnline: () => navigator.onLine,
+      isVisible: () => document.visibilityState === 'visible',
+      setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      clearTimer: (timerId) => window.clearTimeout(timerId),
+    })
+    const onOffline = () => {
+      updateFailureStatus('exam')
+      updateFailureStatus('learning')
+    }
     const onStorage = (event: StorageEvent) => {
       if (event.key === SETTINGS_STORAGE_KEY) void useSettingsStore.persist.rehydrate()
     }
@@ -99,7 +196,11 @@ export function TrackerShadowSyncBridge() {
     if (!navigator.onLine) onOffline()
 
     return () => {
-      removeTriggers()
+      active = false
+      removeExamDateTriggers()
+      removeLearningTriggers()
+      examDateRuntime.dispose()
+      learningRuntime.dispose()
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('storage', onStorage)
     }

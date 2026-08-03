@@ -6,6 +6,26 @@ export interface TrackerShadowSyncIdentity {
   accessToken: string
 }
 
+export class TrackerShadowSyncRpcError extends Error {
+  readonly httpStatus: number
+  readonly rpcCode: string | null
+  readonly serverMessage: string | null
+
+  constructor(input: {
+    httpStatus: number
+    rpcCode?: string | null
+    serverMessage?: string | null
+  }) {
+    const code = input.rpcCode ?? null
+    const serverMessage = input.serverMessage ?? null
+    super(`Tracker shadow sync RPC failed with HTTP ${input.httpStatus}${code ? ` (${code})` : ''}.`)
+    this.name = 'TrackerShadowSyncRpcError'
+    this.httpStatus = input.httpStatus
+    this.rpcCode = code
+    this.serverMessage = serverMessage
+  }
+}
+
 export interface TrackerShadowSyncRpc {
   getVerifiedIdentity(): Promise<TrackerShadowSyncIdentity | null>
   getCapabilities(accessToken: string): Promise<unknown>
@@ -46,7 +66,23 @@ async function invokePinnedRpc(
       signal: controller.signal,
     })
     if (!response.ok) {
-      throw new Error(`Tracker shadow sync RPC failed with HTTP ${response.status}.`)
+      let rpcCode: string | null = null
+      let serverMessage: string | null = null
+      try {
+        const payload = await response.json() as unknown
+        if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+          const value = payload as Record<string, unknown>
+          rpcCode = typeof value.code === 'string' ? value.code : null
+          serverMessage = typeof value.message === 'string' ? value.message : null
+        }
+      } catch {
+        // Keep the typed HTTP status even when a proxy returns a non-JSON body.
+      }
+      throw new TrackerShadowSyncRpcError({
+        httpStatus: response.status,
+        rpcCode,
+        serverMessage,
+      })
     }
     return response.json() as Promise<unknown>
   } finally {

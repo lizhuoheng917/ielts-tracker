@@ -2,6 +2,15 @@ import type { PlanExecution } from '@/lib/types'
 
 const KEY_SEPARATOR = '\u0000'
 
+/**
+ * New executions use their business key as a stable transport identity so
+ * two devices completing the same plan and date converge before upload.
+ * Legacy random ids remain readable and are still canonicalized below.
+ */
+export function createPlanExecutionId(planId: string, date: string): string {
+  return `execution:${planId}:${date}`
+}
+
 export function planExecutionKey(
   execution: Pick<PlanExecution, 'planId' | 'date'>,
 ): string {
