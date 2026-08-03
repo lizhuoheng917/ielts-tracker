@@ -47,7 +47,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { AiGatewayError, type AiGatewayErrorCode } from '@/ai/gateway'
-import { executeReadOnlyAi } from '@/ai/readOnlyExecution'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import { createCurrentLearningContext } from '@/ai/runtimeContext'
 import {
   formatLearningAnalysisAsMarkdown,
@@ -61,7 +66,6 @@ import { useTimerStore } from '@/stores/timerStore'
 import { usePlanStore } from '@/stores/planStore'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { useAIPrivacyStore } from '@/stores/aiPrivacyStore'
-import { useAIStore } from '@/stores/aiStore'
 import { WEEKDAY_LABELS } from '@/lib/constants'
 import { addLocalDays, parseLocalDate } from '@/lib/localDate'
 import type { PracticeType } from '@/lib/types'
@@ -107,11 +111,19 @@ interface ReportContextMeta {
   dataAsOf: string
   rangeDays: StatsRangeDays
   quality: 'empty' | 'limited' | 'sufficient'
-  source: 'managed' | 'custom'
+  source: 'managed'
   runId?: string
   providerArtifactId?: string
   artifactCreatedAt?: string
   warnings: string[]
+}
+
+interface LearningAnalysisTaskContext {
+  snapshotId: string
+  contextHash: string
+  dataAsOf: string
+  rangeDays: StatsRangeDays
+  quality: 'empty' | 'limited' | 'sufficient'
 }
 
 // ===== 工具函数 =====
@@ -285,7 +297,6 @@ export default function Stats() {
   const planExecutions = usePlanStore((s) => s.executions)
   const includeDiaryExcerpts = useAIPrivacyStore((s) => s.includeDiaryExcerpts)
   const includePriorAIArtifacts = useAIPrivacyStore((s) => s.includePriorAIArtifacts)
-  const aiRouteMode = useAIStore((s) => s.routeMode)
   const [rangeDays, setRangeDays] = useState<StatsRangeDays>(30)
 
   const analytics = useMemo(
@@ -328,10 +339,13 @@ export default function Stats() {
   const [reportContextMeta, setReportContextMeta] = useState<ReportContextMeta | null>(null)
   const [reportAccessKey, setReportAccessKey] = useState<string | null>(null)
   const saveLearningAnalysis = useAiArtifactStore((state) => state.saveLearningAnalysis)
-  const reportRequestSequenceRef = useRef(0)
-  const currentExecutionKey = `${JSON.stringify(artifactAccess)}|${aiRouteMode}`
-  const currentExecutionKeyRef = useRef(currentExecutionKey)
-  currentExecutionKeyRef.current = currentExecutionKey
+  const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const currentExecutionKey = scopeKey ?? `locked:${artifactAccess.status === 'locked' ? artifactAccess.reason : 'unavailable'}`
+  const reportTaskKey = scopeKey
+    ? learnerAiTaskKey('learning_analysis', scopeKey, 'stats')
+    : null
+  const { tasks, openRequestedTaskKey } = useLearnerAiTaskState()
+  const reportTask = reportTaskKey ? tasks[reportTaskKey] : undefined
 
   const [aiOpen, setAiOpen] = useState(false)
 
@@ -348,23 +362,59 @@ export default function Stats() {
     setReportCreatedAt(new Date().toISOString())
   }, [])
 
-  const closeReportDialog = useCallback(() => {
-    reportRequestSequenceRef.current += 1
-    resetReportUi()
-    setAiOpen(false)
-  }, [resetReportUi])
+  const closeReportDialog = useCallback(() => setAiOpen(false), [])
 
   useEffect(() => {
-    // Invalidate pending work and remove previews whenever the account scope or
-    // route changes. Render-time access keys also prevent a one-frame leak.
-    reportRequestSequenceRef.current += 1
     resetReportUi()
   }, [currentExecutionKey, resetReportUi])
 
-  // --- 生成报告（只读托管网关或用户明确选择的自定义连接）---
-  const generateReport = async () => {
-    const requestSequence = ++reportRequestSequenceRef.current
-    const requestExecutionKey = currentExecutionKey
+  useEffect(() => {
+    if (!reportTaskKey || openRequestedTaskKey !== reportTaskKey) return
+    setAiOpen(true)
+    learnerAiTaskCoordinator.consumeOpenRequest(reportTaskKey)
+  }, [openRequestedTaskKey, reportTaskKey])
+
+  useEffect(() => {
+    if (!reportTask) return
+    if (reportTask.status === 'running' || reportTask.status === 'stopping') {
+      setReportState('loading')
+      setReportError('')
+      setReportErrorCode(null)
+      return
+    }
+    if (reportTask.status === 'succeeded') {
+      const result = reportTask.result
+      const taskContext = reportTask.context as LearningAnalysisTaskContext | undefined
+      if (!result || !isLearningAnalysisV2(result.content) || !taskContext) {
+        setReportState('idle')
+        setReportErrorCode('INVALID_RESPONSE')
+        setReportError('AI 返回的分析格式不完整，请重新生成。')
+        return
+      }
+      setReportStructuredContent(result.content)
+      setReportContent(formatLearningAnalysisAsMarkdown(result.content))
+      setReportCreatedAt(result.artifact?.createdAt ?? result.run?.completedAt ?? reportTask.completedAt ?? new Date().toISOString())
+      setReportContextMeta({
+        ...taskContext,
+        source: result.source,
+        runId: result.artifact?.runId ?? result.run?.runId,
+        providerArtifactId: result.artifact?.artifactId,
+        artifactCreatedAt: result.artifact?.createdAt,
+        warnings: result.warnings,
+      })
+      setReportAccessKey(currentExecutionKey)
+      setReportError('')
+      setReportErrorCode(null)
+      setReportState('report')
+      return
+    }
+    setReportState('idle')
+    setReportErrorCode((reportTask.failure?.code as AiGatewayErrorCode | undefined) ?? null)
+    setReportError(reportTask.failure?.message ?? 'AI 分析暂时不可用，请稍后重试。')
+  }, [currentExecutionKey, reportTask])
+
+  // --- 生成报告（只读托管网关）---
+  const generateReport = () => {
     setReportState('loading')
     setReportContent('')
     setReportStructuredContent(null)
@@ -376,8 +426,8 @@ export default function Stats() {
     setReportContextMeta(null)
     setReportAccessKey(null)
 
-    if (artifactAccess.status === 'locked' && aiRouteMode === 'managed') {
-      const code: AiGatewayErrorCode = artifactAccess.reason === 'account-mismatch'
+    if (artifactAccess.status === 'locked' || !scopeKey || !reportTaskKey) {
+      const code: AiGatewayErrorCode = artifactAccess.status === 'locked' && artifactAccess.reason === 'account-mismatch'
         ? 'LOCAL_DATA_ACCOUNT_MISMATCH'
         : 'LOCAL_DATA_BINDING_UNAVAILABLE'
       setReportErrorCode(code)
@@ -392,45 +442,30 @@ export default function Stats() {
       purpose: 'learning_analysis',
       rangeDays,
     })
-    try {
-      const result = await executeReadOnlyAi({
-        purpose: 'learning_analysis',
-        snapshot,
-        userInput: '请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。',
-      })
-      if (!isLearningAnalysisV2(result.content)) {
-        throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的分析格式不完整，请重新生成。', true)
-      }
-      if (
-        requestSequence !== reportRequestSequenceRef.current
-        || requestExecutionKey !== currentExecutionKeyRef.current
-      ) return
-      setReportStructuredContent(result.content)
-      setReportContent(formatLearningAnalysisAsMarkdown(result.content))
-      setReportCreatedAt(result.artifact?.createdAt ?? result.run?.completedAt ?? new Date().toISOString())
-      setReportContextMeta({
+    void learnerAiTaskCoordinator.start({
+      key: reportTaskKey,
+      purpose: 'learning_analysis',
+      scopeKey,
+      label: '学习分析',
+      returnPath: '/stats',
+      context: {
         snapshotId: snapshot.snapshotId,
         contextHash: snapshot.contextHash,
         dataAsOf: snapshot.dataAsOf,
         rangeDays,
         quality: snapshot.quality.status,
-        source: result.source,
-        runId: result.artifact?.runId ?? result.run?.runId,
-        providerArtifactId: result.artifact?.artifactId,
-        artifactCreatedAt: result.artifact?.createdAt,
-        warnings: result.warnings,
-      })
-      setReportAccessKey(requestExecutionKey)
-      setReportState('report')
-    } catch (caughtError) {
-      if (
-        requestSequence !== reportRequestSequenceRef.current
-        || requestExecutionKey !== currentExecutionKeyRef.current
-      ) return
-      setReportErrorCode(caughtError instanceof AiGatewayError ? caughtError.code : null)
-      setReportError(caughtError instanceof AiGatewayError ? caughtError.message : 'AI 分析暂时不可用，请稍后重试。')
-      setReportState('idle')
-    }
+      } satisfies LearningAnalysisTaskContext,
+      request: {
+        purpose: 'learning_analysis',
+        snapshot,
+        userInput: '请分析我的当前学习数据，包括各科目练习情况、计划完成进度、连续打卡情况，并给出具体的学习建议。',
+      },
+      onSuccess: (result) => {
+        if (!isLearningAnalysisV2(result.content)) {
+          throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的分析格式不完整，请重新生成。', true)
+        }
+      },
+    })
   }
 
   const reportNeedsAccountAction = reportErrorCode === 'UNAUTHORIZED'
@@ -451,7 +486,7 @@ export default function Stats() {
       return
     }
     if (artifactAccess.status === 'locked') {
-      setReportSaveError('当前账号归属未确认；自定义 AI 结果只供预览，不会保存到内容库。')
+      setReportSaveError('当前账号归属未确认，这份报告不会保存到内容库。')
       return
     }
     setReportSaveError('')
@@ -467,12 +502,12 @@ export default function Stats() {
         quality: reportContextMeta?.quality,
         createdAt: reportContextMeta?.artifactCreatedAt ?? reportCreatedAt,
         dataAsOf: reportContextMeta?.dataAsOf ?? reportCreatedAt,
-        source: reportContextMeta?.source ?? 'custom',
+        source: reportContextMeta?.source ?? 'managed',
         warnings: reportContextMeta?.warnings,
       }, artifactAccess)
       setSavedReportId(artifact.recordId)
     } catch {
-      setReportSaveError('报告已生成，但无法保存到当前设备。请先导出或删除部分本机数据后重试。')
+      setReportSaveError('报告已生成，但暂时无法保存到当前设备，请稍后重试。')
     }
   }
 
@@ -1001,19 +1036,11 @@ export default function Stats() {
 
       {/* AI 智能分析浮动按钮（可拖动） */}
       <DraggableFloatButton onClick={() => {
-        reportRequestSequenceRef.current += 1
-        resetReportUi()
         setAiOpen(true)
       }} />
 
       {/* AI 智能分析弹窗 */}
-      <Dialog open={aiOpen} onOpenChange={(open) => {
-        if (!open) {
-          reportRequestSequenceRef.current += 1
-          resetReportUi()
-        }
-        setAiOpen(open)
-      }}>
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
           {reportState === 'idle' && !reportError && (
             <>
@@ -1034,16 +1061,14 @@ export default function Stats() {
                         {includeDiaryExcerpts ? '，并包含你已允许的日记摘要' : ''}
                         {includePriorAIArtifacts ? '，并将近期 AI 报告标记为参考材料' : ''}。
                       </p>
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        本次会发送到{aiRouteMode === 'managed' ? ' Lexi 内置 AI' : '你在高级设置中选择的自定义服务商'}。
-                      </p>
+                      <p className="text-xs leading-5 text-muted-foreground">本次分析由 Lexi AI 服务处理。</p>
                     </div>
                   </div>
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {artifactAccess.status === 'locked' && aiRouteMode === 'custom'
-                    ? '账号归属未确认：本次自定义 AI 结果只供预览，不会保存到内容库。'
-                    : '结果会先供你预览；只有点击“保存报告”后，报告与本次快照来源才会写入当前设备。'}
+                  {artifactAccess.status === 'locked'
+                    ? '账号归属未确认，请先处理账号安全状态后再生成报告。'
+                    : '结果会先供你预览；点击“保存报告”后才会写入当前设备。'}
                 </p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button variant="outline" onClick={closeReportDialog}>取消</Button>
@@ -1093,11 +1118,10 @@ export default function Stats() {
                   <p className="text-sm text-muted-foreground">正在根据近 {rangeDays} 天的最新学习快照生成报告</p>
                 </div>
 
-                {/* 生成警告 */}
-                <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/30 px-3 py-2">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <span className="text-[12px] text-amber-700 dark:text-amber-400">
-                    请勿关闭弹窗或切换页面，以免生成中断
+                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/15 px-3 py-2">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="text-[12px] text-muted-foreground">
+                    可以关闭弹窗或切换页面，生成会继续进行。
                   </span>
                 </div>
               </div>
@@ -1109,7 +1133,7 @@ export default function Stats() {
               <DialogHeader className="px-5 pt-5 pb-2">
                 <DialogTitle className="flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-destructive" />
-                  生成失败
+                  {reportTask?.status === 'outcome_unknown' ? '结果未确认' : '生成失败'}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex flex-col items-center justify-center px-5 py-12 gap-4">
@@ -1151,12 +1175,9 @@ export default function Stats() {
                       生成于 {new Date(reportCreatedAt).toLocaleString('zh-CN')}
                       {reportContextMeta ? ` · 依据近 ${reportContextMeta.rangeDays} 天数据` : ''}
                     </span>
-                    {reportStructuredContent && (
-                      <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">结构化 V2</Badge>
-                    )}
                     {reportContextMeta && (
                       <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
-                        {reportContextMeta.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'}
+                        Lexi AI
                       </Badge>
                     )}
                     {reportContextMeta && reportContextMeta.quality !== 'sufficient' && (

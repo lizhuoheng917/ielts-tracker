@@ -10,11 +10,13 @@ import { ensureActivityLedgerInitialized } from '@/data/activityLedgerBootstrap'
 import { ensureDailyCheckinAwardsInitialized } from '@/data/dailyCheckinBootstrap'
 import type { LocalRecoveryReport } from '@/data/localMutationJournal'
 import { installTrackerCanonicalCrossTabSync } from '@/data/trackerCanonicalCrossTabSync'
+import { retireLegacyCustomAiConfig } from '@/ai/retireLegacyCustomAiConfig'
 import { ensureAiArtifactRepositoryInitialized } from '@/stores/aiArtifactStore'
 import { usePlanStore } from '@/stores/planStore'
 
 export async function renderApp(recoveryReport: LocalRecoveryReport) {
   const root = createRoot(document.getElementById('root')!)
+  retireLegacyCustomAiConfig()
   if (recoveryReport.status === 'conflict' || recoveryReport.status === 'failed') {
     root.render(<DataRecoveryGuard report={recoveryReport} />)
     return

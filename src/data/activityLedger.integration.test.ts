@@ -72,7 +72,6 @@ const memoryStorage = new MemoryStorage()
 let useAchievementStore: typeof import('@/stores/achievementStore').useAchievementStore
 let useActivityLedgerStore: typeof import('@/stores/activityLedgerStore').useActivityLedgerStore
 let useAiArtifactStore: typeof import('@/stores/aiArtifactStore').useAiArtifactStore
-let useAIStore: typeof import('@/stores/aiStore').useAIStore
 let activityLedgerMaxEvents: number
 let useDailyCheckinStore: typeof import('@/stores/dailyCheckinStore').useDailyCheckinStore
 let useDiaryStore: typeof import('@/stores/diaryStore').useDiaryStore
@@ -99,7 +98,6 @@ beforeAll(async () => {
 
   ;({ useAchievementStore } = await import('@/stores/achievementStore'))
   ;({ useAiArtifactStore } = await import('@/stores/aiArtifactStore'))
-  ;({ useAIStore } = await import('@/stores/aiStore'))
   ;({
     useActivityLedgerStore,
     ACTIVITY_LEDGER_MAX_EVENTS: activityLedgerMaxEvents,
@@ -145,12 +143,6 @@ beforeEach(() => {
   useAiArtifactStore.setState({
     artifacts: [],
     migration: { version: 1, status: 'complete', importedCount: 0 },
-  })
-  useAIStore.setState({
-    providerPreset: 'agnes',
-    apiKey: '',
-    baseURL: 'https://apihub.agnes-ai.com/v1',
-    model: 'agnes-2.0-flash',
   })
   ensureActivityLedgerInitialized('2026-08-01T00:00:00.000Z')
 })
@@ -910,36 +902,6 @@ describe('activity ledger store integration', () => {
     expect(useActivityLedgerStore.getState().events).toEqual([])
     expect(useActivityLedgerStore.getState().baseline?.source).toBe('import')
     expect(useActivityLedgerStore.getState().baseline?.achievements.totalXP).toBe(10)
-  })
-
-  it('preserves current AI credentials and routing when importing a V3 backup', () => {
-    const currentAiConfig = {
-      providerPreset: 'openai-compatible' as const,
-      apiKey: 'current-local-secret',
-      baseURL: 'https://trusted-current.test/v1',
-      model: 'trusted-current-model',
-    }
-    useAIStore.setState(currentAiConfig)
-
-    const portableBackup = createBackupV3({
-      read: () => browserBackupAdapter.read(),
-      write: () => undefined,
-    }) as ReturnType<typeof createBackupV3> & {
-      data: ReturnType<typeof createBackupV3>['data'] & {
-        aiPreferences?: unknown
-      }
-    }
-    portableBackup.data.aiPreferences = {
-      providerPreset: 'deepseek',
-      apiKey: 'imported-secret-must-not-win',
-      baseURL: 'https://attacker.invalid/v1',
-      model: 'attacker-model',
-    }
-
-    importBackupJson(JSON.stringify(portableBackup), browserBackupAdapter)
-
-    expect(useAIStore.getState()).toMatchObject(currentAiConfig)
-    expect(browserBackupAdapter.read()).not.toHaveProperty('aiPreferences')
   })
 
   it('migrates missing daily-checkin awards before rebasing the shadow ledger', () => {

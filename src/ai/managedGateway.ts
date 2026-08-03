@@ -56,27 +56,35 @@ function gatewayCodeFromPayload(payload: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+function outcomeUnknownFromPayload(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return false
+  return (payload as Record<string, unknown>).outcomeUnknown === true
+}
+
 export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGatewayError {
   const retryAfterSeconds = retryAfterFromPayload(payload)
+  const outcomeUnknown = outcomeUnknownFromPayload(payload)
   if (status === 503 && gatewayCodeFromPayload(payload) === 'feature_unavailable') {
     return new AiGatewayError(
       'SERVICE_UNAVAILABLE',
       '此 AI 功能当前未开放。',
       false,
       status,
+      undefined,
+      outcomeUnknown,
     )
   }
   if (status === 400 || status === 422) {
-    return new AiGatewayError('INVALID_REQUEST', '本次 AI 请求无效，请刷新学习数据后重试。', false, status)
+    return new AiGatewayError('INVALID_REQUEST', '本次 AI 请求无效，请刷新学习数据后重试。', false, status, undefined, outcomeUnknown)
   }
   if (status === 401) {
-    return new AiGatewayError('UNAUTHORIZED', '请先登录 Lexi 账号，再使用内置 AI。', false, status)
+    return new AiGatewayError('UNAUTHORIZED', '请先登录 Lexi 账号，再使用内置 AI。', false, status, undefined, outcomeUnknown)
   }
   if (status === 403) {
-    return new AiGatewayError('FORBIDDEN', '当前账号暂时无法使用 Lexi 内置 AI。', false, status)
+    return new AiGatewayError('FORBIDDEN', '当前账号暂时无法使用 Lexi 内置 AI。', false, status, undefined, outcomeUnknown)
   }
   if (status === 413) {
-    return new AiGatewayError('PAYLOAD_TOO_LARGE', '本次分析数据过大，请缩短分析范围后重试。', false, status)
+    return new AiGatewayError('PAYLOAD_TOO_LARGE', '本次分析数据过大，请缩短分析范围后重试。', false, status, undefined, outcomeUnknown)
   }
   if (status === 429) {
     return new AiGatewayError(
@@ -87,21 +95,22 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
       true,
       status,
       retryAfterSeconds,
+      outcomeUnknown,
     )
   }
   if (status === 502) {
-    return new AiGatewayError('PROVIDER_ERROR', 'AI 服务商暂时没有响应，请稍后再试。', true, status)
+    return new AiGatewayError('PROVIDER_ERROR', 'AI 服务商暂时没有响应，请稍后再试。', true, status, undefined, outcomeUnknown)
   }
   if (status === 504) {
-    return new AiGatewayError('TIMEOUT', 'AI 分析等待超时，请稍后重试。', true, status)
+    return new AiGatewayError('TIMEOUT', 'AI 分析等待超时，请稍后重试。', true, status, undefined, outcomeUnknown)
   }
   if (status === 404) {
-    return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 尚未在当前环境启用。', true, status)
+    return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 尚未在当前环境启用。', true, status, undefined, outcomeUnknown)
   }
   if (status >= 500) {
-    return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 暂时不可用，请稍后再试。', true, status)
+    return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 暂时不可用，请稍后再试。', true, status, undefined, outcomeUnknown)
   }
-  return new AiGatewayError('INVALID_REQUEST', 'Lexi 内置 AI 无法处理本次请求。', false, status)
+  return new AiGatewayError('INVALID_REQUEST', 'Lexi 内置 AI 无法处理本次请求。', false, status, undefined, outcomeUnknown)
 }
 
 async function safeResponsePayload(response: Response | undefined): Promise<unknown> {
@@ -124,7 +133,7 @@ async function mapInvokeError(
     FunctionsRelayError,
   } = await import('@supabase/supabase-js')
   if (callerSignal?.aborted) {
-    return new AiGatewayError('CANCELLED', 'AI 分析已取消。')
+    return new AiGatewayError('CANCELLED', '已停止等待 AI 结果。', false, undefined, undefined, true)
   }
   if (error instanceof FunctionsHttpError) {
     const context = error.context instanceof Response ? error.context : response
@@ -140,11 +149,11 @@ async function mapInvokeError(
       (typeof DOMException !== 'undefined' && cause instanceof DOMException && cause.name === 'AbortError') ||
       (typeof cause === 'object' && cause !== null && (cause as { name?: unknown }).name === 'AbortError')
     ) {
-      return new AiGatewayError('TIMEOUT', 'AI 分析等待超时，请稍后重试。', true, 504)
+      return new AiGatewayError('TIMEOUT', 'AI 分析等待超时，请稍后重试。', true, 504, undefined, true)
     }
-    return new AiGatewayError('NETWORK_ERROR', '无法连接 Lexi 内置 AI，请检查网络后重试。', true)
+    return new AiGatewayError('NETWORK_ERROR', '无法连接 Lexi 内置 AI，请检查网络后重试。', true, undefined, undefined, true)
   }
-  return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 暂时不可用，请稍后再试。', true)
+  return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 暂时不可用，请稍后再试。', true, undefined, undefined, true)
 }
 
 const supabaseTransport: ManagedAiGatewayTransport = {
@@ -217,15 +226,15 @@ export class ManagedAiGateway implements AiGateway {
     if (binding.status === 'mismatch') {
       throw new AiGatewayError(
         'LOCAL_DATA_ACCOUNT_MISMATCH',
-        '为避免把其他账号的本机学习记录误发给 AI，内置 AI 已停止。请切回原账号，或先导出并清空本机数据。',
+        '为避免把其他账号的本机学习记录误发给 AI，内置 AI 已暂停。请切回原账号，或确认无需保留这些记录后清空本机数据。',
       )
     }
     if (binding.status === 'invalid' || binding.status === 'unavailable') {
       throw new AiGatewayError(
         'LOCAL_DATA_BINDING_UNAVAILABLE',
         binding.status === 'invalid'
-          ? '本机账号归属信息异常，内置 AI 已停止发送。请先在设置导出 JSON 备份，再重新导入该备份以重新确认归属；或清空本机数据。'
-          : '暂时无法确认本机学习记录的账号归属，内置 AI 已停止发送。请稍后重试；学习与自定义 AI 不受影响。',
+          ? '本机账号归属信息异常，内置 AI 已暂停。请重新登录后重试；若仍无法恢复，请确认无需保留后清空本机数据。'
+          : '暂时无法确认本机学习记录的账号归属，内置 AI 已暂停。请稍后重试；本机学习不受影响。',
       )
     }
 

@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { MobileNav } from './MobileNav'
+import { AiGenerationStatusNotice } from '@/components/ai/AiGenerationStatusNotice'
 import { RouteFallback } from '@/components/navigation/RouteFallback'
 import { findRoute } from '@/app/navigation'
 
@@ -58,6 +59,8 @@ export function Layout() {
       <div className="md:hidden">
         <MobileNav />
       </div>
+
+      <AiGenerationStatusNotice />
     </div>
   )
 }

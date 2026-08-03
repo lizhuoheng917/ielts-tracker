@@ -49,6 +49,12 @@ import {
   type WritingFeedbackArtifactV2,
 } from '@/ai/artifactRepository'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { useWritingReportStore, type WritingReport } from '@/stores/writingReportStore'
 import { SUBJECT_VISUALS } from '@/lib/subjectVisuals'
@@ -727,6 +733,11 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
   const writingReports = useWritingReportStore((s) => s.reports)
   const deleteWritingReport = useWritingReportStore((s) => s.deleteReport)
   const artifactAccess = useAiArtifactAccess()
+  const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const writingTaskKey = scopeKey
+    ? learnerAiTaskKey('writing_feedback', scopeKey, 'practice-writing')
+    : null
+  const { openRequestedTaskKey } = useLearnerAiTaskState()
   const aiArtifacts = useAiArtifactStore((state) => state.artifacts)
   const deleteAiArtifact = useAiArtifactStore((state) => state.deleteArtifact)
   const writingArtifacts = useMemo(
@@ -783,6 +794,12 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
       setWritingDeleteError('')
     }
   }, [pendingWritingDelete, pendingWritingDeleteId, selectedWritingReport, selectedWritingReportId])
+
+  useEffect(() => {
+    if (type !== 'writing' || !writingTaskKey || openRequestedTaskKey !== writingTaskKey) return
+    setAiOpen(true)
+    learnerAiTaskCoordinator.consumeOpenRequest(writingTaskKey)
+  }, [openRequestedTaskKey, type, writingTaskKey])
 
   const clearFilters = () => {
     setSearchQuery('')
@@ -982,7 +999,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               setAiOpen(true)
               return
             }
-            if (writingWorkspaceState.generating || writingWorkspaceState.hasUnsavedResult) {
+            if (writingWorkspaceState.hasUnsavedResult) {
               setWritingCloseConfirmOpen(true)
               return
             }
@@ -1007,11 +1024,9 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
       <Dialog open={writingCloseConfirmOpen} onOpenChange={setWritingCloseConfirmOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{writingWorkspaceState.generating ? '停止本次写作反馈？' : '放弃未保存的写作报告？'}</DialogTitle>
+            <DialogTitle>放弃未保存的写作报告？</DialogTitle>
             <DialogDescription>
-              {writingWorkspaceState.generating
-                ? '关闭会停止当前请求；题目和作文草稿仍会保留。'
-                : '这份 AI 反馈还没有保存。关闭后反馈会丢失，但题目和作文草稿仍会保留。'}
+              这份 AI 反馈还没有保存。关闭后反馈会丢失，但题目和作文草稿仍会保留。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1021,11 +1036,12 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               variant="destructive"
               onClick={() => {
                 setWritingCloseConfirmOpen(false)
+                if (writingTaskKey) learnerAiTaskCoordinator.clearTerminalTask(writingTaskKey)
                 setAiOpen(false)
                 setWritingWorkspaceState({ generating: false, hasUnsavedResult: false })
               }}
             >
-              {writingWorkspaceState.generating ? '停止并关闭' : '放弃并关闭'}
+              放弃并关闭
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1063,7 +1079,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{report.title}</span>
                         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                          {report.content.submission.wordCount} 词 · {report.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'} · {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
+                          {report.content.submission.wordCount} 词 · {report.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
                         </span>
                       </span>
                     </button>
@@ -1115,7 +1131,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               <DialogHeader className="border-b px-4 pb-3 pt-4 sm:px-5">
                 <DialogTitle className="pr-8">{selectedWritingReport.title}</DialogTitle>
                 <DialogDescription>
-                  {selectedWritingReport.content.submission.wordCount} 词 · {selectedWritingReport.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'} · {format(new Date(selectedWritingReport.createdAt), 'yyyy-MM-dd HH:mm')}
+                  {selectedWritingReport.content.submission.wordCount} 词 · {selectedWritingReport.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(selectedWritingReport.createdAt), 'yyyy-MM-dd HH:mm')}
                 </DialogDescription>
               </DialogHeader>
               <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-5">
@@ -1149,7 +1165,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>删除这份写作报告？</DialogTitle>
-            <DialogDescription>删除不会影响作文练习记录；之后只能通过此前导出的备份恢复。</DialogDescription>
+            <DialogDescription>删除不会影响作文练习记录，且无法撤销。</DialogDescription>
           </DialogHeader>
           {writingDeleteError && <p className="text-sm text-destructive" role="alert">{writingDeleteError}</p>}
           <DialogFooter>
@@ -1186,6 +1202,16 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
 export default function Practice() {
   const [activeTab, setActiveTab] = useState<PracticeType>('reading')
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const artifactAccess = useAiArtifactAccess()
+  const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const writingTaskKey = scopeKey
+    ? learnerAiTaskKey('writing_feedback', scopeKey, 'practice-writing')
+    : null
+  const { openRequestedTaskKey } = useLearnerAiTaskState()
+
+  useEffect(() => {
+    if (writingTaskKey && openRequestedTaskKey === writingTaskKey) setActiveTab('writing')
+  }, [openRequestedTaskKey, writingTaskKey])
 
   const openAddDialog = (type: PracticeType) => {
     setActiveTab(type)

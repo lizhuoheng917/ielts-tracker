@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   differenceInCalendarDays,
@@ -28,6 +28,13 @@ import {
 } from 'lucide-react'
 
 import { AiSuggestionDialog } from '@/components/ai/AiSuggestionDialog'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
+import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { AchievementMark } from '@/components/achievements/achievement-mark'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -88,6 +95,12 @@ function ReportMetric({ value, label, tone }: { value: string | number; label: s
 }
 
 export default function Dashboard() {
+  const artifactAccess = useAiArtifactAccess()
+  const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const dailySuggestionTaskKey = scopeKey
+    ? learnerAiTaskKey('daily_suggestion', scopeKey, 'dashboard')
+    : null
+  const { openRequestedTaskKey } = useLearnerAiTaskState()
   const examDate = useSettingsStore((state) => state.examDate)
   const showExamCountdown = useSettingsStore((state) => state.showExamCountdown)
   const showAiSuggestions = useSettingsStore((state) => state.showAiSuggestions)
@@ -120,6 +133,12 @@ export default function Dashboard() {
     frequency?: string
     targetTime?: string
   } | null>(null)
+
+  useEffect(() => {
+    if (!dailySuggestionTaskKey || openRequestedTaskKey !== dailySuggestionTaskKey) return
+    setAiSuggestionOpen(true)
+    learnerAiTaskCoordinator.consumeOpenRequest(dailySuggestionTaskKey)
+  }, [dailySuggestionTaskKey, openRequestedTaskKey])
 
   const today = toLocalDate()
   const checkedIn = lastCheckinDate === today

@@ -4,7 +4,6 @@ import { shouldAcceptPlanAssistantResult } from './planAssistantSession'
 
 const REQUEST = {
   epoch: 2,
-  routeMode: 'managed' as const,
   accountScopeId: 'managed:user-a',
   snapshotId: 'snapshot-a',
   contextHash: 'context-a',
@@ -14,7 +13,6 @@ describe('plan assistant late-result guard', () => {
   it('accepts only the still-current request scope', () => {
     expect(shouldAcceptPlanAssistantResult(REQUEST, {
       epoch: 2,
-      routeMode: 'managed',
       accountScopeId: 'managed:user-a',
       aborted: false,
     })).toBe(true)
@@ -23,12 +21,10 @@ describe('plan assistant late-result guard', () => {
   it.each([
     [{ epoch: 3 }, 'newer request'],
     [{ aborted: true }, 'abort'],
-    [{ routeMode: 'custom' }, 'route switch'],
     [{ accountScopeId: 'managed:user-b' }, 'account switch'],
   ] as const)('rejects a late result after %s (%s)', (override, _label) => {
     expect(shouldAcceptPlanAssistantResult(REQUEST, {
       epoch: 2,
-      routeMode: 'managed',
       accountScopeId: 'managed:user-a',
       aborted: false,
       ...override,

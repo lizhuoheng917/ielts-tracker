@@ -4,6 +4,12 @@ import { usePlanStore } from '@/stores/planStore'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { listAiArtifactsForAccess } from '@/ai/artifactRepository'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -132,6 +138,11 @@ export default function Plans() {
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
   const artifactAccess = useAiArtifactAccess()
+  const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const planDraftTaskKey = scopeKey
+    ? learnerAiTaskKey('plan_draft', scopeKey, 'plans')
+    : null
+  const { openRequestedTaskKey } = useLearnerAiTaskState()
   const artifactRecords = useAiArtifactStore((state) => state.artifacts)
   const learningAnalysisCount = useMemo(
     () => listAiArtifactsForAccess(artifactRecords, artifactAccess, 'learning_analysis').length,
@@ -169,6 +180,12 @@ export default function Plans() {
   const [formSaving, setFormSaving] = useState(false)
   const [deleteSaving, setDeleteSaving] = useState(false)
   const formWeekDaysMissing = formFreq === 'weekly' && formWeekDays.length === 0
+
+  useEffect(() => {
+    if (!planDraftTaskKey || openRequestedTaskKey !== planDraftTaskKey) return
+    setAiOpen(true)
+    learnerAiTaskCoordinator.consumeOpenRequest(planDraftTaskKey)
+  }, [openRequestedTaskKey, planDraftTaskKey])
 
   const createPlanSnapshot = useCallback(
     () => createCurrentLearningContext({ purpose: 'plan_draft' }),

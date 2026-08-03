@@ -8,6 +8,8 @@ describe('safeAuthErrorMessage', () => {
     expect(safeAuthErrorMessage(new Error('Email not confirmed'))).toContain('验证邮件')
     expect(safeAuthErrorMessage(new Error('Too many requests'))).toContain('稍后')
     expect(safeAuthErrorMessage(new TypeError('Failed to fetch'))).toContain('网络')
+    expect(safeAuthErrorMessage(new Error('LEXI_REGISTRATION_CLOSED'))).toContain('暂未开放')
+    expect(safeAuthErrorMessage(new Error('邀请码格式无效'))).toContain('邀请码')
   })
 
   it('does not expose unknown provider details', () => {

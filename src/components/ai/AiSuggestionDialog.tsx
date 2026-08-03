@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Sparkles, RefreshCw, AlertCircle, Loader2, Calendar, Lightbulb, ShieldCheck, Library } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { executeReadOnlyAi } from '@/ai/readOnlyExecution'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import { createCurrentLearningContext } from '@/ai/runtimeContext'
 import { AiGatewayError, type AiGatewayErrorCode } from '@/ai/gateway'
-import { isDailySuggestionV2, type DailySuggestionV2 } from '@/ai/structuredOutputs'
+import { isDailySuggestionV2 } from '@/ai/structuredOutputs'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { DailySuggestionContent } from '@/components/ai/StructuredAIContent'
 import { SafeAIContent } from '@/components/ai/SafeAIContent'
@@ -14,26 +19,15 @@ import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { latestAiArtifactForAccess } from '@/ai/artifactRepository'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { useAIPrivacyStore } from '@/stores/aiPrivacyStore'
-import { useAIStore } from '@/stores/aiStore'
 
 interface AiSuggestionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-interface UnsavedDailySuggestionPreview {
-  outputSchemaVersion: 2
-  kind: 'daily_suggestion'
-  content: DailySuggestionV2
-  createdAt: string
-  source: 'custom'
-}
-
 export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }: AiSuggestionDialogProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [errorCode, setErrorCode] = useState<AiGatewayErrorCode | null>(null)
-  const [previewSuggestion, setPreviewSuggestion] = useState<UnsavedDailySuggestionPreview | null>(null)
+  const [localError, setLocalError] = useState('')
+  const [localErrorCode, setLocalErrorCode] = useState<AiGatewayErrorCode | null>(null)
   const { openAccountDialog } = useAccountDialog()
   const navigate = useNavigate()
   const artifactAccess = useAiArtifactAccess()
@@ -42,70 +36,49 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
   const suggestion = latestAiArtifactForAccess(artifacts, artifactAccess, 'daily_suggestion')
   const defaultRangeDays = useAIPrivacyStore((state) => state.defaultRangeDays)
   const includeDiaryExcerpts = useAIPrivacyStore((state) => state.includeDiaryExcerpts)
-  const aiRouteMode = useAIStore((state) => state.routeMode)
-  const requestSequenceRef = useRef(0)
-  const currentExecutionKey = `${JSON.stringify(artifactAccess)}|${aiRouteMode}`
-  const currentExecutionKeyRef = useRef(currentExecutionKey)
-  currentExecutionKeyRef.current = currentExecutionKey
-  const displaySuggestion = previewSuggestion ?? suggestion
+  const { tasks } = useLearnerAiTaskState()
+  const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const taskKey = scopeKey ? learnerAiTaskKey('daily_suggestion', scopeKey, 'dashboard') : null
+  const activeTask = taskKey ? tasks[taskKey] : undefined
+  const isLoading = activeTask?.status === 'running' || activeTask?.status === 'stopping'
+  const taskError = activeTask?.status === 'failed' || activeTask?.status === 'outcome_unknown'
+    ? activeTask.failure
+    : undefined
+  const error = localError || taskError?.message || ''
+  const errorCode = localErrorCode ?? (taskError?.code as AiGatewayErrorCode | undefined) ?? null
+  const displaySuggestion = suggestion
 
-  useEffect(() => {
-    requestSequenceRef.current += 1
-    setPreviewSuggestion(null)
-    setIsLoading(false)
-  }, [currentExecutionKey])
+  const generateSuggestion = () => {
+    setLocalError('')
+    setLocalErrorCode(null)
 
-  useEffect(() => {
-    if (_open) return
-    requestSequenceRef.current += 1
-    setPreviewSuggestion(null)
-    setIsLoading(false)
-  }, [_open])
-
-  const generateSuggestion = async () => {
-    const requestSequence = ++requestSequenceRef.current
-    const requestExecutionKey = currentExecutionKey
-    setIsLoading(true)
-    setError('')
-    setErrorCode(null)
-
-    if (artifactAccess.status === 'locked' && aiRouteMode === 'managed') {
-      const code: AiGatewayErrorCode = artifactAccess.reason === 'account-mismatch'
+    if (artifactAccess.status === 'locked' || !scopeKey || !taskKey) {
+      const code: AiGatewayErrorCode = artifactAccess.status === 'locked' && artifactAccess.reason === 'account-mismatch'
         ? 'LOCAL_DATA_ACCOUNT_MISMATCH'
         : 'LOCAL_DATA_BINDING_UNAVAILABLE'
-      setErrorCode(code)
-      setError(code === 'LOCAL_DATA_ACCOUNT_MISMATCH'
+      setLocalErrorCode(code)
+      setLocalError(code === 'LOCAL_DATA_ACCOUNT_MISMATCH'
         ? '本机 AI 内容属于另一个 Lexi 账号，当前账号不能读取或写入。'
         : '无法安全确认本机 AI 内容归属，请先处理账号安全状态。')
-      setIsLoading(false)
       return
     }
 
     const snapshot = createCurrentLearningContext({ purpose: 'daily_suggestion' })
-    let responseReceived = false
-    try {
-      const result = await executeReadOnlyAi({
+    void learnerAiTaskCoordinator.start({
+      key: taskKey,
+      purpose: 'daily_suggestion',
+      scopeKey,
+      label: '今日学习建议',
+      returnPath: '/',
+      request: {
         purpose: 'daily_suggestion',
         snapshot,
         userInput: '生成建议',
-      })
-      if (!isDailySuggestionV2(result.content)) {
-        throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的建议格式不完整，请重新生成。', true)
-      }
-      if (
-        requestSequence !== requestSequenceRef.current
-        || requestExecutionKey !== currentExecutionKeyRef.current
-      ) return
-      responseReceived = true
-      if (artifactAccess.status === 'locked') {
-        setPreviewSuggestion({
-          outputSchemaVersion: 2,
-          kind: 'daily_suggestion',
-          content: result.content,
-          createdAt: result.artifact?.createdAt ?? result.run?.completedAt ?? new Date().toISOString(),
-          source: 'custom',
-        })
-      } else {
+      },
+      onSuccess: (result) => {
+        if (!isDailySuggestionV2(result.content)) {
+          throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的建议格式不完整，请重新生成。', true)
+        }
         saveDailySuggestion({
           content: result.content,
           recordId: result.artifact?.artifactId,
@@ -120,24 +93,8 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
           runId: result.artifact?.runId ?? result.run?.runId,
           warnings: result.warnings,
         }, artifactAccess)
-      }
-    } catch (caughtError) {
-      if (
-        requestSequence !== requestSequenceRef.current
-        || requestExecutionKey !== currentExecutionKeyRef.current
-      ) return
-      setErrorCode(caughtError instanceof AiGatewayError ? caughtError.code : null)
-      setError(caughtError instanceof AiGatewayError
-        ? caughtError.message
-        : responseReceived
-          ? '建议已生成，但无法保存到当前设备。请先导出或删除部分本机数据后重试。'
-          : '未收到 AI 响应，请稍后重试。')
-    } finally {
-      if (
-        requestSequence === requestSequenceRef.current
-        && requestExecutionKey === currentExecutionKeyRef.current
-      ) setIsLoading(false)
-    }
+      },
+    })
   }
 
   const needsAccountAction = errorCode === 'UNAUTHORIZED'
@@ -158,14 +115,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
           <CardContent className="py-6">
             <div className="flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-              <p className="text-sm font-medium text-muted-foreground">正在生成学习建议...</p>
-            </div>
-            {/* 警告提示 */}
-            <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/30 px-3 py-2 mt-4">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="text-[12px] text-amber-700 dark:text-amber-400">
-                请勿关闭弹窗或切换页面，以免生成中断
-              </span>
+              <p className="text-sm font-medium text-muted-foreground">正在生成学习建议</p>
             </div>
           </CardContent>
         </Card>
@@ -208,8 +158,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <Calendar className="h-3 w-3" />
                 {new Date(displaySuggestion.createdAt).toLocaleDateString('zh-CN')} 生成
-                {` · ${displaySuggestion.source === 'managed' ? 'Lexi 内置 AI' : displaySuggestion.source === 'custom' ? '自定义 AI' : '旧版内容'}`}
-                {previewSuggestion ? ' · 仅预览' : ''}
+                {` · ${displaySuggestion.source === 'managed' ? 'Lexi AI' : displaySuggestion.source === 'custom' ? '历史外部来源' : '旧版内容'}`}
               </div>
               <div className="flex items-center gap-1">
                 <Button
@@ -240,12 +189,6 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
         </Card>
       )}
 
-      {previewSuggestion && (
-        <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-          当前账号归属未确认，这次自定义 AI 建议不会保存到内容库。
-        </p>
-      )}
-
       {/* 空状态 */}
       {!isLoading && !displaySuggestion && !error && (
         <Card size="sm" className="border-dashed border-indigo-200 dark:border-indigo-800">
@@ -259,7 +202,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground">获取个性化学习建议</p>
-                <p className="text-xs text-muted-foreground mt-1">AI 将根据你的学习数据生成建议</p>
+                <p className="text-xs text-muted-foreground mt-1">根据近期学习记录生成建议</p>
               </div>
             </div>
           </CardContent>
@@ -289,9 +232,9 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
 
       <p className="flex items-start gap-1.5 text-[11px] leading-5 text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-        生成时会重新读取近 {defaultRangeDays} 天结构化记录
+        Lexi AI 会读取近 {defaultRangeDays} 天学习记录
         {includeDiaryExcerpts ? '、日记摘要' : ''}
-        ，并发送到{aiRouteMode === 'managed' ? ' Lexi 内置 AI' : '你选择的自定义服务商'}；建议生成后自动更新在当前设备。
+        ，生成后保存到内容库。
       </p>
     </div>
   )

@@ -39,6 +39,12 @@ export class AiGatewayError extends Error {
   readonly retryable: boolean
   readonly status?: number
   readonly retryAfterSeconds?: number
+  /**
+   * The browser did not receive a definitive terminal result. This is kept
+   * separate from `retryable`: retrying can be technically possible while a
+   * previous provider call may still have completed.
+   */
+  readonly outcomeUnknown: boolean
 
   constructor(
     code: AiGatewayErrorCode,
@@ -46,6 +52,7 @@ export class AiGatewayError extends Error {
     retryable = false,
     status?: number,
     retryAfterSeconds?: number,
+    outcomeUnknown = false,
   ) {
     super(message)
     this.name = 'AiGatewayError'
@@ -53,6 +60,7 @@ export class AiGatewayError extends Error {
     this.retryable = retryable
     this.status = status
     this.retryAfterSeconds = retryAfterSeconds
+    this.outcomeUnknown = outcomeUnknown
   }
 }
 

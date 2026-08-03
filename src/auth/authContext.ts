@@ -13,14 +13,35 @@ export type AuthStatus =
 
 export type AuthActionResult = { ok: true } | { ok: false; message: string }
 
+export type AuthSignUpOptions = {
+  emailRedirectTo: string
+  data?: Record<string, string>
+}
+
+export type AuthSignUpResult =
+  | { ok: true; needsEmailConfirmation: boolean }
+  | { ok: false; message: string }
+
 export type AuthContextValue = {
   status: AuthStatus
   session: Session | null
   user: User | null
+  guestMode: boolean
+  recoveryMode: boolean
   managedAiDataBinding: ManagedAiDataBindingState
   confirmManagedAiDataBinding: () => Promise<AuthActionResult>
   signIn: (email: string, password: string) => Promise<AuthActionResult>
+  signUp: (
+    email: string,
+    password: string,
+    options: AuthSignUpOptions,
+  ) => Promise<AuthSignUpResult>
+  sendPasswordReset: (email: string, redirectTo: string) => Promise<AuthActionResult>
+  updatePassword: (password: string) => Promise<AuthActionResult>
   signOut: () => Promise<AuthActionResult>
+  enterGuest: () => void
+  exitGuest: () => void
+  finishPasswordRecovery: () => void
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

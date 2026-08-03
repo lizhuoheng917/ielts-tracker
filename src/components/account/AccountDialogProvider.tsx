@@ -2,14 +2,12 @@ import {
   useEffect,
   useRef,
   useState,
-  type FormEvent,
   type ReactNode,
 } from 'react'
 import {
+  ArrowRight,
   CheckCircle2,
   AlertTriangle,
-  Eye,
-  EyeOff,
   LoaderCircle,
   LogOut,
   ShieldCheck,
@@ -27,8 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 function LexiAccountDialog({
   open,
@@ -42,53 +38,17 @@ function LexiAccountDialog({
     user,
     managedAiDataBinding,
     confirmManagedAiDataBinding,
-    signIn,
     signOut,
   } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const emailRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
-    setPassword('')
-    setShowPassword(false)
     setError('')
     setMessage('')
   }, [open])
-
-  const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (busy) return
-
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!normalizedEmail) {
-      setError('请输入 Lexi 账号邮箱。')
-      emailRef.current?.focus()
-      return
-    }
-    if (password.length < 8) {
-      setError('密码长度至少为 8 位。')
-      return
-    }
-
-    setBusy(true)
-    setError('')
-    setMessage('')
-    const result = await signIn(normalizedEmail, password)
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.message)
-      return
-    }
-
-    setPassword('')
-    setMessage('登录成功。本机学习记录没有发生变化；使用内置 AI 前请确认记录归属。')
-  }
 
   const handleConfirmManagedAiDataBinding = async () => {
     if (busy) return
@@ -120,6 +80,11 @@ function LexiAccountDialog({
 
   const identityAvailable = status === 'signed-out' || status === 'signed-in'
 
+  const openAuthPage = () => {
+    onOpenChange(false)
+    window.location.assign('/login')
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bottom-0 left-0 top-auto max-h-[92dvh] max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] rounded-b-none rounded-t-2xl p-0 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
@@ -139,7 +104,7 @@ function LexiAccountDialog({
           <div className="flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary/5 p-3.5 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
             <p>
-              登录并确认这台设备的数据归属后，学习计划、计划执行、练习、模考与考试日期可在你的设备间同步。日记、AI 对话、报告和自定义 AI 配置仍只保存在本机；退出账号不会清空本机记录。
+              登录并确认这台设备的数据归属后，学习计划、计划执行、练习、模考与考试日期可在你的设备间同步。日记、AI 对话和报告仍只保存在本机；退出账号不会清空本机记录。
             </p>
           </div>
 
@@ -205,7 +170,7 @@ function LexiAccountDialog({
                 <div className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/5 p-3.5 text-xs leading-5 text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
                   <p>
-                    这些本机记录已确认归属于另一个账号，云同步与内置 AI 均已暂停。请切回原账号；若要开始一套新记录，请先导出备份并清空本机数据。
+                    这些本机记录已确认归属于另一个账号，云同步与内置 AI 均已暂停。请切回原账号；若确认无需保留这些记录，可清空本机数据后开始新记录。
                   </p>
                 </div>
               )}
@@ -213,14 +178,14 @@ function LexiAccountDialog({
                 <div className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning-surface/50 p-3.5 text-xs leading-5 text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
                   <p>
-                    本机账号归属信息异常，云同步与内置 AI 不会发送数据。请先到设置导出 JSON 备份，再重新导入该备份使旧绑定失效并重新确认；或确认无需保留后清空本机数据。
+                    本机账号归属信息异常，云同步与内置 AI 不会发送数据。请重新登录后重试；若仍无法恢复，请确认无需保留后清空本机数据。
                   </p>
                 </div>
               )}
               {managedAiDataBinding.status === 'unavailable' && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning-surface/50 p-3.5 text-xs leading-5 text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-                  <p>当前浏览器无法确认本机记录归属，云同步与内置 AI 不会发送数据。本机学习与自定义 AI 不受影响。</p>
+                  <p>当前浏览器无法确认本机记录归属，云同步与内置 AI 不会发送数据。本机学习不受影响。</p>
                 </div>
               )}
               <Button
@@ -239,64 +204,18 @@ function LexiAccountDialog({
           )}
 
           {identityAvailable && !user && (
-            <form className="space-y-4" onSubmit={handleSignIn} aria-busy={busy}>
-              <div className="space-y-2">
-                <Label htmlFor="lexi-account-email">邮箱</Label>
-                <Input
-                  ref={emailRef}
-                  id="lexi-account-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  autoComplete="email"
-                  inputMode="email"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  required
-                  aria-invalid={Boolean(error)}
-                  aria-describedby={error ? 'lexi-account-error' : undefined}
-                  placeholder="你的 Lexi 账号邮箱"
-                  className="h-11 text-base"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="lexi-account-password">密码</Label>
-                <div className="relative">
-                  <Input
-                    id="lexi-account-password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="current-password"
-                    required
-                    minLength={8}
-                    aria-invalid={Boolean(error)}
-                    aria-describedby={error ? 'lexi-account-error' : undefined}
-                    placeholder="至少 8 位"
-                    className="h-11 pr-11 text-base"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((visible) => !visible)}
-                    className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                    aria-label={showPassword ? '隐藏账号密码' : '显示账号密码'}
-                    aria-pressed={showPassword}
-                  >
-                    {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
-                  </button>
+            <div className="space-y-4 rounded-xl border border-border/80 bg-background p-4">
+              <div className="flex items-start gap-2.5">
+                <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><UserRound className="size-4.5" /></span>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">登录或创建 Lexi 账号</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Tracker 与 Lexi Words 使用同一个账户。登录、注册、邮箱验证和找回密码都在统一页面完成。</p>
                 </div>
               </div>
-
-              <Button type="submit" disabled={busy} className="min-h-11 w-full">
-                {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
-                {busy ? '正在登录…' : '登录已有 Lexi 账号'}
+              <Button type="button" onClick={openAuthPage} className="min-h-11 w-full">
+                打开登录与注册页面 <ArrowRight aria-hidden="true" />
               </Button>
-
-              <p className="text-center text-xs leading-5 text-muted-foreground">
-                新账号注册、邀请码和邮箱验证暂由 Lexi Words 统一管理。
-              </p>
-            </form>
+            </div>
           )}
 
           <div className="min-h-5" aria-live="polite">

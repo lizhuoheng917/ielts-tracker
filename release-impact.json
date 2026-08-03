@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-03-tracker-phase4b-core-learning-sync",
+  "release": "2026-08-03-tracker-shared-auth-pages",
   "Frontend": {
     "status": "changed",
-    "reason": "在已上线的考试日期同步之外，新增学习计划、计划执行、普通练习计时与模考记录的本地优先双向同步。用户操作先在本机事务中完成，后台以 5 秒合并窗口上传严格白名单小载荷；跨设备拉取采用基线、乐观版本、删除墓碑和原子本机安装。生产验收补充了服务端确认后的本机断点落盘，后续校验偶发失败也不会反复回放旧批次或阻塞新修改；再次增量同步时会把既有无正文墓碑视为已删除，不再错误生成缺少删除时间的重复操作。考试日期与学习记录复用同一次账号/能力检查，单次超时会自动重试一次，减少重复请求并提高弱网恢复率。同步失败只在浏览器诊断日志中记录不含账号、密钥和记录正文的错误类别与消息，正常用户界面继续使用简明的自动重试提示。"
+    "reason": "新增与 Lexi Words 共享身份的 Tracker 登录、注册、找回密码、邮箱确认与游客本机模式页面，并将原账号弹窗收敛为账号管理入口。注册会读取既有准入策略，仅在邀请制下安全哈希邀请码；未登录用户可显式选择本机模式，首次登录仍须确认本机学习记录归属才会启动同步与内置 AI。客户端自定义模型、地址和 API Key 入口已移除，所有 AI 请求统一走既有 Lexi 内置 Gateway；此前的应用级 AI 任务协调与真实状态提示继续保留。"
   },
   "Backend": {
-    "status": "changed",
-    "reason": "共享 Lexi Supabase 新增向前兼容的 Phase 4B 迁移：四类实体各 8 KiB 上限、严格字段白名单、upsert/delete、无正文墓碑、计划与执行父子约束、同一计划同一天执行唯一性及设备游标确认后的有界清理；现有 RLS 和账号隔离边界保持。"
+    "status": "reviewed-not-needed",
+    "reason": "已复核共享 Lexi Supabase Auth 与既有 lexi-ai-gateway：auth.users、profiles 触发器、get_registration_access_mode RPC、Before User Created Hook、邀请码哈希校验及 Tracker user_id RLS 已覆盖本次流程；内置 AI 的模型、路由和可用策略仍只由服务端控制。远端已核实 registration_access_before_user_created Hook 处于启用状态，Tracker 正式域名已加入 Auth Redirect URLs，且 lexi-ai-gateway v3 为 ACTIVE。本次不新增表、RPC、RLS、Edge Function 或迁移。"
   },
   "Admin": {
-    "status": "changed",
-    "reason": "共享 Lexi /admin 增加四类同步开关、类型说明、正文总字节、平均/P95/单条上限和安全清除墓碑数；管理员只能查看聚合容量与健康指标，不能读取计划、备注、练习或模考正文。"
+    "status": "reviewed-not-needed",
+    "reason": "已审查共享 Lexi /admin 的注册模式、邀请码、认证邮件配置及 AI 模型/策略控制；Tracker 直接复用这些既有管理员控制面，不新增管理员字段、权限、接口或独立账户体系。"
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "共享 Lexi 后端与管理端提交 05cf67d 已通过 Cloudflare 部署 c133bd36-6c48-4795-90e7-a87f8ee9f990 上线，Supabase 迁移版本 20260803041218 已应用；Tracker 兼容客户端与生产验收修复提交 5e9aef0 已通过 Cloudflare 部署 72087ccb-e84a-4ae8-a995-578c2943ebf4 上线。五类 allowlist 已对全部账号开启。"
+    "status": "not-deployed",
+    "reason": "本次客户端收敛尚未提交、推送或部署；等待本地完整发布门禁和用户确认后再按共享后端与管理端的一体化发布流程上线。"
   },
   "Verification": {
     "status": "passed",
-    "reason": "最终完整发布门禁已通过：54 个测试文件共 371 项测试、TypeScript、Lint、生产构建、生产连接与无密钥形态检查全部成功。真实生产账号完成四类新增、学习计划修改、四类删除及重载自动恢复；最终计划执行与计划删除在同一批 2 项内按依赖顺序 applied 且 replay=0。四类删除均为 payload=null 的零正文墓碑，跨账号回滚测试可见实体为 0，Admin 显示五类聚合指标且不展示正文。"
+    "reason": "本地完整发布门禁通过：release-impact、TypeScript、Lint、57 个测试文件共 363 项测试、生产构建与生产 bundle 校验均成功。新增测试覆盖安全回跳、共享注册模式、邀请码规范化与哈希、注册确认回调、找回密码回调及认证错误文案；连接正式共享 Auth 的隔离本地预览已读取到当前 invite_only 策略，正确显示邀请码字段并在无效邀请码时于浏览器本地拦截，控制台无错误。未创建账户、发送邮件或调用真实 AI。远端发布前仍需在已配置共享 Supabase Auth 的环境中验收有效邀请注册、邮件确认、密码找回、首次数据归属确认、账户隔离和 Redirect URL 回跳。"
   }
 }

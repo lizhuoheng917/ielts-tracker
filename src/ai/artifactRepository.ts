@@ -537,7 +537,7 @@ export function serializePortableAiArtifacts(
 
 export function aiArtifactToMarkdown(artifact: AiArtifactRecordV2): string {
   const parsed = parseAiArtifactRecordV2(artifact)
-  const sourceLabel = parsed.source === 'managed' ? 'Lexi 内置 AI' : parsed.source === 'custom' ? '自定义 AI' : '旧版导入'
+  const sourceLabel = parsed.source === 'managed' ? 'Lexi AI' : parsed.source === 'custom' ? '历史外部来源' : '旧版导入'
   const lines = [
     `# ${parsed.title}`,
     '',

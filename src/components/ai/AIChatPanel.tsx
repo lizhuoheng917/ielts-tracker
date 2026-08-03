@@ -16,18 +16,22 @@ import {
 
 import type { AiCommandReceipt, AiContextSnapshotV1 } from '@/ai/contracts'
 import { AiGatewayError } from '@/ai/gateway'
-import { shouldAcceptPlanAssistantResult } from '@/ai/planAssistantSession'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import {
   createPlanCommandDrafts,
   parsePlanCreateCommandDraft,
 } from '@/ai/planCommands'
-import { executeReadOnlyAi } from '@/ai/readOnlyExecution'
 import { parsePlanDraftV2, type PlanDraftV2 } from '@/ai/structuredOutputs'
 import { useAuth } from '@/auth/authContext'
+import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { useAIStore } from '@/stores/aiStore'
 import { useChatStore, type ChatMessageRecord } from '@/stores/chatStore'
 import { usePlanStore } from '@/stores/planStore'
 
@@ -48,8 +52,8 @@ interface AIChatPanelProps {
 const MAX_USER_MESSAGE_LENGTH = 1_200
 const MAX_GATEWAY_USER_INPUT_LENGTH = 2_000
 
-function accountScopeId(routeMode: 'managed' | 'custom', userId?: string): string {
-  return routeMode === 'managed' ? `managed:${userId || 'signed-out'}` : 'custom:device'
+function managedAccountScopeId(userId?: string): string {
+  return `managed:${userId || 'signed-out'}`
 }
 
 function stripLegacyActionTags(content: string): string {
@@ -94,7 +98,10 @@ function buildBoundedUserInput(messages: readonly ChatMessageRecord[], current: 
   return `${historyHeader}${history}\n\n${currentSection}`
 }
 
-function safeRestoredMessages(messages: readonly ChatMessageRecord[]): ChatMessageRecord[] {
+function safeRestoredMessages(
+  messages: readonly ChatMessageRecord[],
+  hasLiveTask: boolean,
+): ChatMessageRecord[] {
   return messages.map((message) => {
     let planDraft: PlanDraftV2 | undefined
     try {
@@ -111,12 +118,15 @@ function safeRestoredMessages(messages: readonly ChatMessageRecord[]): ChatMessa
           }
         }).slice(0, 4)
       : []
+    const staleStreaming = message.status === 'streaming' && !hasLiveTask
     return {
       id: message.id,
       role: message.role,
-      content: stripLegacyActionTags(message.content),
+      content: staleStreaming
+        ? '浏览器已重新加载，上一条 AI 请求的结果未确认。请重新发送。'
+        : stripLegacyActionTags(message.content),
       createdAt: message.createdAt,
-      status: message.status === 'streaming' ? 'error' : message.status,
+      status: staleStreaming ? 'error' : message.status,
       ...(planDraft ? { planDraft } : {}),
       ...(commandDrafts.length > 0 ? { commandDrafts } : {}),
     }
@@ -133,7 +143,7 @@ export function AIChatPanel({
   chatContext = 'plans',
 }: AIChatPanelProps) {
   const { user } = useAuth()
-  const routeMode = useAIStore((state) => state.routeMode)
+  const artifactAccess = useAiArtifactAccess()
   const getStoreMessages = useChatStore((state) => state.getMessages)
   const chatSetMessages = useChatStore((state) => state.setMessages)
   const chatClearMessages = useChatStore((state) => state.clearMessages)
@@ -143,23 +153,28 @@ export function AIChatPanel({
 
   const [messages, setMessages] = useState<ChatMessageRecord[]>([])
   const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set())
   const [transientReceipts, setTransientReceipts] = useState<Record<string, AiCommandReceipt>>({})
   const [hydratedKey, setHydratedKey] = useState('')
 
-  const abortRef = useRef<AbortController | null>(null)
-  const requestEpochRef = useRef(0)
   const messagesRef = useRef<ChatMessageRecord[]>([])
   const applyingRef = useRef<Set<string>>(new Set())
-  const currentScopeIdRef = useRef('')
+  const currentChatKeyRef = useRef('')
+  const mountedRef = useRef(true)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isUserScrolledUp = useRef(false)
-  const currentScopeId = accountScopeId(routeMode, user?.id)
-  currentScopeIdRef.current = currentScopeId
+  const currentScopeId = managedAccountScopeId(user?.id)
   const chatKey = `${chatContext}:${currentScopeId}`
+  currentChatKeyRef.current = chatKey
+  const taskScopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const taskKey = taskScopeKey
+    ? learnerAiTaskKey('plan_draft', taskScopeKey, chatContext)
+    : null
+  const { tasks } = useLearnerAiTaskState()
+  const activeTask = taskKey ? tasks[taskKey] : undefined
+  const isLoading = activeTask?.status === 'running' || activeTask?.status === 'stopping'
 
   const receiptByKey = useMemo(() => {
     const index = new Map<string, AiCommandReceipt>()
@@ -170,42 +185,26 @@ export function AIChatPanel({
   }, [receipts])
 
   useEffect(() => {
-    const restored = safeRestoredMessages(getStoreMessages(chatKey))
+    const restored = safeRestoredMessages(getStoreMessages(chatKey), isLoading)
     setMessages(restored)
     messagesRef.current = restored
     setHydratedKey(chatKey)
+  // `chatKey` is the persisted conversation boundary. Task completions write
+  // through the same store directly, so a route remount hydrates the current
+  // result without relying on a component that may already be gone.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatKey, getStoreMessages])
 
   useEffect(() => {
     messagesRef.current = messages
-    if (hydratedKey !== chatKey) return
-    try {
-      chatSetMessages(chatKey, messages)
-    } catch {
-      setError('对话暂时无法保存到本机；已生成的计划仍需逐条确认。')
-    }
-  }, [chatKey, chatSetMessages, hydratedKey, messages])
+  }, [messages])
 
   useEffect(() => {
-    requestEpochRef.current += 1
-    abortRef.current?.abort()
-    abortRef.current = null
-    setIsLoading(false)
-  }, [routeMode, currentScopeId])
-
-  useEffect(() => () => {
-    requestEpochRef.current += 1
-    abortRef.current?.abort()
-    abortRef.current = null
-    const stabilized = messagesRef.current.map((message) => (
-      message.status === 'streaming' ? { ...message, status: 'error' as const } : message
-    ))
-    try {
-      chatSetMessages(chatKey, stabilized)
-    } catch {
-      // The current screen is already unmounting; the next open will fail closed.
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
     }
-  }, [chatKey, chatSetMessages])
+  }, [])
 
   const scrollToBottom = useCallback((force = false) => {
     const container = messagesContainerRef.current
@@ -227,17 +226,19 @@ export function AIChatPanel({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
   }, [input])
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback((content: string) => {
     const trimmed = content.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
     if (!trimmed || isLoading) return
+    if (!taskScopeKey || !taskKey || artifactAccess.status === 'locked') {
+      setError(
+        artifactAccess.status === 'locked' && artifactAccess.reason === 'account-mismatch'
+          ? '本机学习记录属于另一个 Lexi 账号，暂时不能使用 AI 计划助手。'
+          : '暂时无法安全确认本机学习记录归属，请先处理账号状态后再试。',
+      )
+      return
+    }
 
-    const requestEpoch = requestEpochRef.current + 1
-    requestEpochRef.current = requestEpoch
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
     const snapshot = createSnapshot()
-    const requestRouteMode = routeMode
     const requestAccountScopeId = currentScopeId
     const history = messagesRef.current
     const userMessage: ChatMessageRecord = {
@@ -255,70 +256,97 @@ export function AIChatPanel({
       createdAt: new Date().toISOString(),
       status: 'streaming',
     }
-    setMessages((previous) => [...previous, userMessage, assistantMessage])
+    const nextMessages = [...history, userMessage, assistantMessage].slice(-10)
+    messagesRef.current = nextMessages
+    setMessages(nextMessages)
+    try {
+      chatSetMessages(chatKey, nextMessages)
+    } catch {
+      const message = '对话暂时无法保存到本机，本次没有发送 AI 请求。'
+      const failedMessages = nextMessages.map((item) => (
+        item.id === assistantMessageId ? { ...item, content: message, status: 'error' as const } : item
+      ))
+      messagesRef.current = failedMessages
+      setMessages(failedMessages)
+      setError(message)
+      return
+    }
     setInput('')
     setError('')
-    setIsLoading(true)
     scrollToBottom(true)
 
-    try {
-      const result = await executeReadOnlyAi({
+    const updateConversation = (updater: (previous: ChatMessageRecord[]) => ChatMessageRecord[]) => {
+      const previous = useChatStore.getState().getMessages(chatKey)
+      const next = updater(previous).slice(-10)
+      try {
+        useChatStore.getState().setMessages(chatKey, next)
+      } catch {
+        if (mountedRef.current && currentChatKeyRef.current === chatKey) {
+          setError('对话暂时无法保存到本机；已生成的计划仍需逐条确认。')
+        }
+        return false
+      }
+      if (mountedRef.current && currentChatKeyRef.current === chatKey) {
+        messagesRef.current = next
+        setMessages(next)
+      }
+      return true
+    }
+
+    void learnerAiTaskCoordinator.start({
+      key: taskKey,
+      purpose: 'plan_draft',
+      scopeKey: taskScopeKey,
+      label: '学习计划草稿',
+      returnPath: '/plans',
+      context: { chatKey, assistantMessageId },
+      request: {
         purpose: 'plan_draft',
         snapshot,
         userInput: buildBoundedUserInput(history, trimmed),
-        signal: controller.signal,
-      }, { routeMode: requestRouteMode })
-      if (!shouldAcceptPlanAssistantResult({
-        epoch: requestEpoch,
-        routeMode: requestRouteMode,
-        accountScopeId: requestAccountScopeId,
-        snapshotId: snapshot.snapshotId,
-        contextHash: snapshot.contextHash,
-      }, {
-        epoch: requestEpochRef.current,
-        routeMode: useAIStore.getState().routeMode,
-        accountScopeId: currentScopeIdRef.current,
-        aborted: controller.signal.aborted,
-      })) return
-
-      const draft = parsePlanDraftV2(result.content)
-      const runId = result.run?.runId ?? crypto.randomUUID()
-      const commandDrafts = createPlanCommandDrafts(draft, runId, {
-        context: {
-          snapshotId: snapshot.snapshotId,
-          contextHash: snapshot.contextHash,
-          sourceRevision: snapshot.sourceRevision,
-          routeMode: requestRouteMode,
-          accountScopeId: requestAccountScopeId,
-        },
-      })
-      setMessages((previous) => previous.map((message) => (
-        message.id === assistantMessageId
-          ? {
-              ...message,
-              content: formatPlanDraftContent(draft),
-              status: 'done',
-              planDraft: draft,
-              commandDrafts,
+      },
+      onSuccess: (result) => {
+        let draft: PlanDraftV2
+        try {
+          draft = parsePlanDraftV2(result.content)
+        } catch {
+          throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的计划格式不完整，请重新生成。', true)
+        }
+        const runId = result.run?.runId ?? crypto.randomUUID()
+        const commandDrafts = createPlanCommandDrafts(draft, runId, {
+          context: {
+            snapshotId: snapshot.snapshotId,
+            contextHash: snapshot.contextHash,
+            sourceRevision: snapshot.sourceRevision,
+            routeMode: 'managed',
+            accountScopeId: requestAccountScopeId,
+          },
+        })
+        if (!updateConversation((previous) => previous.map((message) => (
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                content: formatPlanDraftContent(draft),
+                status: 'done',
+                planDraft: draft,
+                commandDrafts,
             }
           : message
+        )))) {
+          throw new Error('chat persistence failed')
+        }
+      },
+    }).then((completedTask) => {
+      if (completedTask.status === 'succeeded') return
+      const message = completedTask.failure?.message ?? 'AI 计划暂时无法生成，请稍后重试。'
+      updateConversation((previous) => previous.map((item) => (
+        item.id === assistantMessageId
+          ? { ...item, content: message, status: 'error' }
+          : item
       )))
-    } catch (caught) {
-      if (requestEpochRef.current !== requestEpoch || controller.signal.aborted) return
-      const message = caught instanceof AiGatewayError
-        ? caught.message
-        : 'AI 计划暂时无法生成，请稍后重试。'
-      setError(message)
-      setMessages((previous) => previous.map((item) => (
-        item.id === assistantMessageId ? { ...item, status: 'error' } : item
-      )))
-    } finally {
-      if (requestEpochRef.current === requestEpoch) {
-        setIsLoading(false)
-        abortRef.current = null
-      }
-    }
-  }, [createSnapshot, currentScopeId, isLoading, routeMode, scrollToBottom])
+      if (mountedRef.current && currentChatKeyRef.current === chatKey) setError(message)
+    })
+  }, [artifactAccess, chatKey, chatSetMessages, createSnapshot, currentScopeId, isLoading, scrollToBottom, taskKey, taskScopeKey])
 
   useEffect(() => {
     if (
@@ -337,7 +365,7 @@ export function AIChatPanel({
     setApplyingIds(new Set(applyingRef.current))
     try {
       const receipt = await applyConfirmedAiPlanDraft(draft, {
-        routeMode,
+        routeMode: 'managed',
         accountScopeId: currentScopeId,
       })
       setTransientReceipts((current) => ({ ...current, [draft.draftId]: receipt }))
@@ -345,7 +373,7 @@ export function AIChatPanel({
       applyingRef.current.delete(draft.draftId)
       setApplyingIds(new Set(applyingRef.current))
     }
-  }, [applyConfirmedAiPlanDraft, currentScopeId, routeMode])
+  }, [applyConfirmedAiPlanDraft, currentScopeId])
 
   const rejectDraft = useCallback(async (draft: NonNullable<ChatMessageRecord['commandDrafts']>[number]) => {
     if (applyingRef.current.has(draft.draftId)) return
@@ -385,6 +413,7 @@ export function AIChatPanel({
               onClick={() => {
                 chatClearMessages(chatKey)
                 setMessages([])
+                messagesRef.current = []
               }}
               className="flex min-h-8 items-center gap-1 rounded-md px-2 text-[10px] text-muted-foreground hover:bg-muted hover:text-destructive"
             >
@@ -442,7 +471,7 @@ export function AIChatPanel({
               ) : message.status === 'error' ? (
                 <div className="flex items-start gap-2 text-xs text-destructive">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span>这次没有生成可用草稿，请重新发送。</span>
+                  <span>{message.content || '这次没有生成可用草稿，请重新发送。'}</span>
                 </div>
               ) : (
                 <SafeAIContent content={message.content} />

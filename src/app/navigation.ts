@@ -176,7 +176,7 @@ export const appRoutes: AppRoute[] = [
       path: '/settings',
       label: '设置',
       shortLabel: '设置',
-      description: '偏好、数据与 AI 配置',
+      description: '账号、目标与 AI 权限',
       icon: Settings,
       group: 'system',
       mobilePlacement: 'more',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,7 +13,12 @@ import {
 } from 'lucide-react'
 
 import { AiGatewayError } from '@/ai/gateway'
-import { executeReadOnlyAi } from '@/ai/readOnlyExecution'
+import {
+  learnerAiTaskCoordinator,
+  learnerAiTaskKey,
+  learnerAiTaskScopeKey,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { aiArtifactToMarkdown, createWritingFeedbackArtifactV2 } from '@/ai/artifactRepository'
 import {
@@ -21,6 +26,7 @@ import {
   calculateWritingOverallBand,
   countWritingWords,
   createWritingSubmissionV2,
+  parseWritingFeedbackV2,
   type WritingBand,
   type WritingFeedbackV2,
   type WritingModule,
@@ -35,12 +41,10 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { useAIStore } from '@/stores/aiStore'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 
 const WRITING_DRAFT_VERSION = 2 as const
 const WRITING_DRAFT_PREFIX = 'ielts-tracker:writingDraftV2'
-const GENERATION_TIMEOUT_MS = 45_000
 
 interface WritingDraftV2 {
   version: typeof WRITING_DRAFT_VERSION
@@ -57,13 +61,18 @@ interface FeedbackPreview {
   feedback: WritingFeedbackV2
   overallBand: WritingBand | null
   snapshot: ReturnType<typeof buildWritingContextSnapshot>
-  source: 'managed' | 'custom'
+  source: 'managed'
   runId?: string
   providerArtifactId?: string
   generatedAt: string
   dataAsOf: string
   contextHash: string
   warnings: string[]
+}
+
+interface WritingTaskContext {
+  submission: WritingSubmissionV2
+  snapshot: ReturnType<typeof buildWritingContextSnapshot>
 }
 
 type WorkspaceStatus = 'editing' | 'generating' | 'preview' | 'saving' | 'saved' | 'error'
@@ -122,7 +131,12 @@ function safeFilePart(value: string): string {
 
 export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionProps = {}) {
   const access = useAiArtifactAccess()
-  const routeMode = useAIStore((state) => state.routeMode)
+  const scopeKey = learnerAiTaskScopeKey(access)
+  const taskKey = scopeKey
+    ? learnerAiTaskKey('writing_feedback', scopeKey, 'practice-writing')
+    : null
+  const { tasks } = useLearnerAiTaskState()
+  const writingTask = taskKey ? tasks[taskKey] : undefined
   const saveWritingFeedback = useAiArtifactStore((state) => state.saveWritingFeedback)
   const { openAccountDialog } = useAccountDialog()
 
@@ -136,9 +150,6 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
   const [error, setError] = useState<{ message: string; code?: string } | null>(null)
   const [savedRecordId, setSavedRecordId] = useState<string | null>(null)
   const [loadedDraftStorageKey, setLoadedDraftStorageKey] = useState<string | null>(null)
-  const controllerRef = useRef<AbortController | null>(null)
-  const abortReasonRef = useRef<'user' | 'timeout' | null>(null)
-  const requestSequenceRef = useRef(0)
 
   const draftStorageKey = useMemo(() => {
     if (access.status !== 'ready') return null
@@ -155,10 +166,6 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
 
   useEffect(() => {
     setLoadedDraftStorageKey(null)
-    requestSequenceRef.current += 1
-    abortReasonRef.current = 'user'
-    controllerRef.current?.abort()
-    controllerRef.current = null
     setModule('academic')
     setTask('task2')
     setPromptText('')
@@ -199,18 +206,59 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
     }
   }, [draftStorageKey, essayText, loadedDraftStorageKey, module, promptText, savedRecordId, sourceMaterialDescription, task])
 
-  useEffect(() => () => {
-    requestSequenceRef.current += 1
-    abortReasonRef.current = 'user'
-    controllerRef.current?.abort()
-  }, [])
-
   useEffect(() => {
     onWorkspaceStateChange?.({
       generating: status === 'generating',
       hasUnsavedResult: preview !== null && status !== 'saved',
     })
   }, [onWorkspaceStateChange, preview, status])
+
+  useEffect(() => {
+    if (!writingTask) return
+    if (writingTask.status === 'running' || writingTask.status === 'stopping') {
+      setStatus('generating')
+      setError(null)
+      return
+    }
+    if (writingTask.status === 'succeeded') {
+      const taskContext = writingTask.context as WritingTaskContext | undefined
+      const result = writingTask.result
+      if (!taskContext || !result) {
+        setError({ message: 'AI 返回的写作反馈不完整，请重新生成。', code: 'INVALID_RESPONSE' })
+        setStatus('error')
+        return
+      }
+      try {
+        const feedback = parseWritingFeedbackV2(result.content, taskContext.submission)
+        const generatedAt = result.artifact?.createdAt ?? writingTask.completedAt ?? new Date().toISOString()
+        setPreview({
+          submission: taskContext.submission,
+          feedback,
+          overallBand: calculateWritingOverallBand(feedback),
+          snapshot: taskContext.snapshot,
+          source: result.source,
+          runId: result.run?.runId,
+          providerArtifactId: result.artifact?.artifactId,
+          generatedAt,
+          dataAsOf: result.artifact?.dataAsOf ?? taskContext.snapshot.dataAsOf,
+          contextHash: result.artifact?.contextHash ?? taskContext.snapshot.contextHash,
+          warnings: result.warnings,
+        })
+        setError(null)
+        setStatus('preview')
+      } catch {
+        setError({ message: 'AI 返回的写作反馈不完整，请重新生成。', code: 'INVALID_RESPONSE' })
+        setStatus('error')
+      }
+      return
+    }
+    const suffix = writingTask.status === 'outcome_unknown' ? '作文草稿已保留。' : ''
+    setError({
+      message: [writingTask.failure?.message ?? '暂时无法生成写作反馈。', suffix].filter(Boolean).join(' '),
+      code: writingTask.failure?.code ?? 'UNKNOWN',
+    })
+    setStatus('error')
+  }, [writingTask])
 
   const clearDraft = () => {
     if (!draftStorageKey) return
@@ -230,7 +278,12 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
     return null
   }
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
+    if (access.status === 'locked' || !scopeKey || !taskKey) {
+      setError({ message: '请先确认这台设备的账号归属。', code: 'ARTIFACT_ACCESS_LOCKED' })
+      setStatus('error')
+      return
+    }
     const inputError = validateBeforeGenerate()
     if (inputError) {
       setError({ message: inputError, code: 'INPUT_INVALID' })
@@ -256,79 +309,39 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
     }
 
     const snapshot = buildWritingContextSnapshot(submission)
-    const controller = new AbortController()
-    const requestSequence = requestSequenceRef.current + 1
-    requestSequenceRef.current = requestSequence
-    controllerRef.current = controller
-    abortReasonRef.current = null
-    const timeout = window.setTimeout(() => {
-      if (requestSequenceRef.current !== requestSequence) return
-      abortReasonRef.current = 'timeout'
-      controller.abort()
-    }, GENERATION_TIMEOUT_MS)
-
     setStatus('generating')
     setPreview(null)
     setSavedRecordId(null)
     setError(null)
 
-    try {
-      const result = await executeReadOnlyAi({
+    void learnerAiTaskCoordinator.start({
+      key: taskKey,
+      purpose: 'writing_feedback',
+      scopeKey,
+      label: '写作反馈',
+      returnPath: '/exam',
+      context: { submission, snapshot } satisfies WritingTaskContext,
+      request: {
         purpose: 'writing_feedback',
         snapshot,
         // The complete writing request lives in the purpose-scoped snapshot.
         // Managed wire keeps userInput empty so no second instruction channel
         // can contradict the submission contract.
         userInput: '',
-        signal: controller.signal,
-      })
-      if (requestSequenceRef.current !== requestSequence) return
-      const feedback = result.content
-      const generatedAt = result.artifact?.createdAt ?? new Date().toISOString()
-      setPreview({
-        submission,
-        feedback,
-        overallBand: calculateWritingOverallBand(feedback),
-        snapshot,
-        source: result.source,
-        runId: result.run?.runId,
-        providerArtifactId: result.artifact?.artifactId,
-        generatedAt,
-        dataAsOf: result.artifact?.dataAsOf ?? snapshot.dataAsOf,
-        contextHash: result.artifact?.contextHash ?? snapshot.contextHash,
-        warnings: result.warnings,
-      })
-      setStatus('preview')
-    } catch (caught) {
-      if (requestSequenceRef.current !== requestSequence) return
-      if (controller.signal.aborted && abortReasonRef.current === 'user') {
-        setStatus('editing')
-        setError(null)
-        return
-      }
-      const gatewayError = caught instanceof AiGatewayError ? caught : null
-      setError({
-        message: abortReasonRef.current === 'timeout'
-          ? '写作批改等待超时，作文草稿已经保留，请稍后重试。'
-          : gatewayError?.message ?? '暂时无法生成写作反馈，作文草稿已经保留。',
-        code: abortReasonRef.current === 'timeout' ? 'TIMEOUT' : gatewayError?.code ?? 'UNKNOWN',
-      })
-      setStatus('error')
-    } finally {
-      window.clearTimeout(timeout)
-      if (controllerRef.current === controller) {
-        controllerRef.current = null
-        abortReasonRef.current = null
-      }
-    }
+      },
+      onSuccess: (result) => {
+        try {
+          parseWritingFeedbackV2(result.content, submission)
+        } catch {
+          throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的写作反馈不完整，请重新生成。', true)
+        }
+      },
+    })
   }
 
   const handleCancel = () => {
-    requestSequenceRef.current += 1
-    abortReasonRef.current = 'user'
-    controllerRef.current?.abort()
-    setStatus('editing')
-    setError(null)
+    if (!taskKey) return
+    learnerAiTaskCoordinator.stopWaiting(taskKey)
   }
 
   const handleSave = () => {
@@ -357,6 +370,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
       setSavedRecordId(artifact.recordId)
       clearDraft()
       setStatus('saved')
+      if (taskKey) learnerAiTaskCoordinator.clearTerminalTask(taskKey)
     } catch {
       setError({
         message: '报告已经生成，但没有成功写入当前设备。你可以重试保存或先导出 Markdown。',
@@ -391,6 +405,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
   }
 
   const returnToEditor = () => {
+    if (taskKey) learnerAiTaskCoordinator.clearTerminalTask(taskKey)
     setPreview(null)
     setSavedRecordId(null)
     setError(null)
@@ -406,7 +421,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
             返回修改
           </Button>
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline">{preview.source === 'managed' ? 'Lexi 内置 AI' : '自定义 AI'}</Badge>
+            <Badge variant="outline">Lexi AI</Badge>
             <Badge variant="secondary">{preview.submission.wordCount} 词</Badge>
             {status === 'saved' && <Badge className="gap-1"><CheckCircle2 className="size-3" />已保存</Badge>}
           </div>
@@ -454,7 +469,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
         <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium">请先确认这台设备的账号归属</p>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">作文草稿不会发送；处理后才能使用内置 AI 并安全保存报告。</p>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">处理后才能使用 Lexi AI 并安全保存报告。</p>
           </div>
           <Button type="button" size="sm" onClick={(event) => openAccountDialog(event.currentTarget)}>
             <ShieldCheck className="size-4" aria-hidden="true" />
@@ -586,10 +601,10 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
       {status === 'generating' && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-subject-writing-border bg-subject-writing-soft px-3 py-2.5" role="status" aria-live="polite">
           <div className="flex min-w-0 items-center gap-2">
-            <AILoadingState text="正在对照题目和评分标准" />
+            <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : '正在对照题目和评分标准'} />
             <span className="truncate text-xs text-muted-foreground">作文草稿已保留</span>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={handleCancel}>
+          <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={writingTask?.status === 'stopping'}>
             <Square className="size-3" fill="currentColor" aria-hidden="true" />停止
           </Button>
         </div>
@@ -597,7 +612,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
 
       <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-popover/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[11px] leading-4 text-muted-foreground">
-          {routeMode === 'managed' ? '作文仅用于本次 Lexi 内置 AI 请求，服务端默认不保存正文。' : '作文会发送到你在高级设置中配置的自定义 AI 服务商。'}
+          作文仅用于本次 Lexi AI 请求，服务端默认不保存正文。
         </p>
         <Button
           type="button"

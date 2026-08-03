@@ -60,8 +60,8 @@ function artifactTypeLabel(kind: AiArtifactKindV2) {
 }
 
 function sourceLabel(artifact: AiArtifactRecordV2) {
-  if (artifact.source === 'managed') return 'Lexi 内置 AI'
-  if (artifact.source === 'custom') return '自定义 AI'
+  if (artifact.source === 'managed') return 'Lexi AI'
+  if (artifact.source === 'custom') return '历史外部来源'
   return '旧版导入'
 }
 
@@ -141,12 +141,12 @@ export function AiArtifactLibrary() {
                 : access.status === 'ready' && <Badge variant="secondary">{visible.length}</Badge>}
             </CardTitle>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              保存在当前设备，默认不自动过期；删除和导出都由你决定。
+              保存重要报告，按需下载归档。
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={exportAll} disabled={visible.length === 0 || integrity.status !== 'ready'}>
             <Download className="size-3.5" aria-hidden="true" />
-            导出当前列表
+            下载当前报告
           </Button>
         </div>
       </CardHeader>
@@ -155,7 +155,7 @@ export function AiArtifactLibrary() {
           <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-4">
             <p className="text-sm font-medium">本机 AI 内容需要恢复</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              系统已停止读取和写入，避免覆盖原始内容；完整 JSON 备份也会暂停。请保留当前浏览器数据，等待恢复工具处理。
+              系统已暂停读取、写入和报告下载，避免覆盖原始内容。请保留当前浏览器数据，等待恢复工具处理。
             </p>
           </div>
         ) : access.status === 'locked' ? (
@@ -317,7 +317,7 @@ export function AiArtifactLibrary() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>删除这条 AI 内容？</DialogTitle>
-            <DialogDescription>删除后只能通过此前导出的备份恢复，不会影响学习记录。</DialogDescription>
+            <DialogDescription>删除不会影响学习记录，且无法撤销。</DialogDescription>
           </DialogHeader>
           {deleteError && <p className="text-sm leading-5 text-destructive" role="alert">{deleteError}</p>}
           <DialogFooter>
