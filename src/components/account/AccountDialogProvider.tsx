@@ -139,7 +139,7 @@ function LexiAccountDialog({
           <div className="flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary/5 p-3.5 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
             <p>
-              当前 Tracker 学习记录仍只保存在这个浏览器。登录或退出不会上传、下载、合并、清空或覆盖这些记录；未来云同步会单独说明并由你主动开启。
+              登录后仅考试日期会在你的设备间同步；其余 Tracker 学习记录仍只保存在这个浏览器，登录或退出不会上传、合并、清空或覆盖它们。
             </p>
           </div>
 

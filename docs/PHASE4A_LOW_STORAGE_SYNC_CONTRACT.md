@@ -1,7 +1,7 @@
 # Phase 4A: low-storage Tracker sync contract
 
-Date: 2026-08-02  
-Status: production shadow acceptance complete; broad rollout remains disabled
+Date: 2026-08-03
+Status: visible `examDate` release candidate verified; production sync paused for deployment
 
 ## Outcome
 
@@ -12,11 +12,14 @@ Lexi Supabase project.
 
 This phase deliberately does not upload every `localStorage` key. It separates
 irreplaceable learner input from projections that the app can recompute. The
-domain contract is implemented in `src/sync/trackerSyncContract.ts`. The first
-runtime slice is also implemented: it shadow-uploads only `examDate`, validates
-remote pull/snapshot data, and never installs that remote value into visible
-settings. The companion Lexi checkout contains the disabled-by-default backend
-and AAL2 Admin controls.
+domain contract is implemented in `src/sync/trackerSyncContract.ts`. The
+production runtime has completed a controlled shadow acceptance for `examDate`:
+it validates remote pull/snapshot data without installing the value into visible
+settings, and the backend switch was closed again after acceptance. The current
+local release candidate expands **only `examDate`** to guarded visible
+bidirectional sync and adds a concise Settings status. It has not been committed,
+pushed or deployed. The companion Lexi checkout already contains the
+disabled-by-default backend and AAL2 Admin controls used by this slice.
 
 ## Data boundary
 
@@ -209,6 +212,40 @@ It must not show diary, note, plan, report or AI artifact bodies.
 5. Verify offline restart, lost response, duplicate retry, account switch,
    cross-account isolation, cursor floor and cleanup preview.
 
+### 4A.1.1 — visible exam-date release candidate
+
+The local candidate promotes the already-allowlisted `examDate` preference from
+shadow validation to visible two-way sync. No word, practice, timer, plan,
+diary, achievement, AI artifact, report, chat or provider configuration enters
+the cloud in this phase.
+
+The first-device baseline is deliberately conservative:
+
+| Local date | Cloud date | First baseline action |
+| --- | --- | --- |
+| empty | has a date | Install the cloud date locally; send zero apply operations |
+| empty | empty / no entity | Establish an empty baseline; do not create a null row |
+| has a date | no entity | Preserve the local date and upload it |
+| has a date | explicit cloud clear | Preserve both states and require an explicit choice |
+| same date | same date | Establish the baseline without a redundant write |
+| different dates | different dates | Stop writes, preserve both values and require an explicit choice |
+
+For a first-baseline conflict, Settings shows the two concrete values and lets
+the learner either keep the local date or use the cloud date. Nothing is
+silently overwritten before that choice. Keeping local queues the local value
+for upload; choosing cloud installs the cloud value locally.
+
+After a baseline exists, a newer cloud date may update the visible setting. The
+runtime persists the accepted remote value before touching the visible store,
+then installs it only if the local value still matches the value that was read.
+This ordering both suppresses upload echo after focus/reload and prevents a
+concurrent local edit from being overwritten. A genuine later local edit is
+still queued normally.
+
+Settings keeps this state compact: signed-out or unavailable states remain
+local-only, ordinary success shows the last sync state, and only a real
+first-baseline conflict expands into the two choice buttons.
+
 ### 4A.2 — source learning records
 
 After the pilot is stable, enable word/practice/timer records and daily check-in
@@ -236,7 +273,25 @@ sync remains a separate opt-in phase with its own retention choice.
 - account checkpoint generation needs a byte-for-byte replay test proving that
   existing XP, streak history and unlocked badges remain unchanged.
 
-## Current verification
+## Visible phase release review
+
+- **Frontend — changed:** visible guarded install, first-baseline conflict
+  choice, echo suppression and compact Settings status are part of the local
+  release candidate.
+- **Backend — reviewed-not-needed:** the existing Tracker preferences entity,
+  capability/apply/pull/snapshot RPCs, RLS and payload allowlist already carry
+  `examDate`; this phase does not change schema, RPC, grants, RLS or retention.
+- **Admin — reviewed-not-needed:** the existing Tracker controls and aggregate
+  sync health already cover the same preference entity and operations; no new
+  administrator-visible field, body, policy or metric is introduced.
+- **Deployment — not-deployed:** these visible-sync changes remain local. The
+  production client is still the accepted hidden-shadow build. The global
+  switch is temporarily off for the deployment window while the existing
+  `tracker_preferences` allowlist remains selected.
+
+## Verification
+
+The underlying compact contract and hidden pilot already have this evidence:
 
 - payload allowlists exclude ids, derived fields, UI preferences and secret-like
   unknown fields;
@@ -245,10 +300,18 @@ sync remains a separate opt-in phase with its own retention choice.
 - oversized content fails instead of being silently cut;
 - TypeScript and the focused contract test pass locally.
 
-The coordinated backend migration, Admin mutation and Tracker runtime are now
-deployed. A controlled production smoke created one 21-byte preferences entity
-whose only payload key is `examDate`; the matching receipt was applied without
-diagnostics and a rolled-back second-account check saw zero foreign entities.
-The global switch and allowlist were closed again after acceptance. IndexedDB
-promotion remains intentionally deferred until more than one canonical entity
-type enters the runtime queue.
+The coordinated backend migration, Admin mutation and hidden Tracker runtime
+were previously deployed. A controlled production smoke created one 21-byte
+preferences entity whose only payload key is `examDate`; the matching receipt
+was applied without diagnostics and a rolled-back second-account check saw zero
+foreign entities. The global switch and allowlist were closed again after that
+acceptance.
+
+The visible candidate passed the complete `npm run verify:release` gate: 47 test
+files and 311 tests passed together with typecheck, lint, production build and
+the bundle guard. Focused coverage includes fresh empty-device install with zero
+apply, no null-row creation, first and optimistic conflicts without silent
+overwrite, explicit clear, remote install without echo, stable replay and real
+calendar-date validation. Production round-trip acceptance remains pending.
+IndexedDB promotion remains intentionally deferred until more than one canonical
+entity type enters the runtime queue.

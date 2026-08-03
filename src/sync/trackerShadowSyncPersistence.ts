@@ -1,4 +1,5 @@
 import { STORAGE_PREFIX } from '@/lib/constants'
+import { isLocalDate } from '@/lib/localDate'
 import type {
   TrackerShadowSyncBatch,
   TrackerShadowSyncOperation,
@@ -17,13 +18,20 @@ export interface TrackerShadowSyncValidation {
 }
 
 export interface TrackerShadowSyncAccountState {
-  schemaVersion: 1
+  schemaVersion: 2
   accountUserId: string
   deviceId: string
   localDataEpoch: string
   accountEpoch: number | null
   cursor: number
   remoteVersion: number
+  baselineEstablished: boolean
+  baselineConflict?: {
+    localExamDate: string | null
+    remoteExamDate: string | null
+  }
+  lastSyncedExamDate: string | null
+  lastSyncedAt?: string
   nextLocalSequence: number
   hasObservedExamDate: boolean
   observedExamDate: string | null
@@ -50,6 +58,10 @@ function isSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
+function isExamDate(value: unknown): value is string | null {
+  return value === null || isLocalDate(value)
+}
+
 function parseState(raw: string, accountUserId: string): TrackerShadowSyncAccountState {
   let value: unknown
   try {
@@ -61,8 +73,10 @@ function parseState(raw: string, accountUserId: string): TrackerShadowSyncAccoun
     throw new Error('Tracker shadow sync persistence is malformed.')
   }
   const state = value as Partial<TrackerShadowSyncAccountState>
+  const stateVersion = (value as { schemaVersion?: number }).schemaVersion
+  const isLegacyState = stateVersion === 1
   if (
-    state.schemaVersion !== 1
+    (!isLegacyState && stateVersion !== 2)
     || state.accountUserId !== accountUserId
     || typeof state.deviceId !== 'string'
     || !state.deviceId
@@ -70,6 +84,18 @@ function parseState(raw: string, accountUserId: string): TrackerShadowSyncAccoun
     || (state.accountEpoch !== null && !isSafeInteger(state.accountEpoch))
     || !isSafeInteger(state.cursor)
     || !isSafeInteger(state.remoteVersion)
+    || (!isLegacyState && typeof state.baselineEstablished !== 'boolean')
+    || (!isLegacyState && state.baselineConflict !== undefined && (
+      typeof state.baselineConflict !== 'object'
+      || state.baselineConflict === null
+      || !isExamDate(state.baselineConflict.localExamDate)
+      || !isExamDate(state.baselineConflict.remoteExamDate)
+    ))
+    || (!isLegacyState && !isExamDate(state.lastSyncedExamDate))
+    || (!isLegacyState && state.lastSyncedAt !== undefined && (
+      typeof state.lastSyncedAt !== 'string'
+      || !Number.isFinite(Date.parse(state.lastSyncedAt))
+    ))
     || !isSafeInteger(state.nextLocalSequence)
     || state.nextLocalSequence < 1
     || typeof state.hasObservedExamDate !== 'boolean'
@@ -106,6 +132,15 @@ function parseState(raw: string, accountUserId: string): TrackerShadowSyncAccoun
   }
   return cloneState({
     ...(state as TrackerShadowSyncAccountState),
+    schemaVersion: 2,
+    // The hidden v1 pilot never installed a remote value. Re-running the
+    // baseline handshake is therefore the only safe upgrade: an empty device
+    // may adopt cloud state, while two different explicit values require a
+    // learner choice.
+    baselineEstablished: isLegacyState ? false : state.baselineEstablished as boolean,
+    ...(isLegacyState ? { baselineConflict: undefined } : {}),
+    lastSyncedExamDate: isLegacyState ? null : state.lastSyncedExamDate as string | null,
+    ...(isLegacyState ? { lastSyncedAt: undefined } : {}),
     pendingOperations,
     sealedBatch,
   })
@@ -165,13 +200,15 @@ export function createTrackerShadowSyncAccountState(input: {
   now: string
 }): TrackerShadowSyncAccountState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     accountUserId: input.accountUserId,
     deviceId: input.deviceId,
     localDataEpoch: input.localDataEpoch,
     accountEpoch: null,
     cursor: 0,
     remoteVersion: 0,
+    baselineEstablished: false,
+    lastSyncedExamDate: null,
     nextLocalSequence: 1,
     hasObservedExamDate: false,
     observedExamDate: null,

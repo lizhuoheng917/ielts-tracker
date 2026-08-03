@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-02-tracker-phase4a-shadow-sync",
+  "release": "2026-08-03-tracker-visible-exam-date-sync",
   "Frontend": {
     "status": "changed",
-    "reason": "新增 examDate 隐藏影子同步运行时、账号隔离持久化、稳定批次与请求哈希、5 秒合并、网络恢复触发、12 秒请求超时和独立跨标签同步锁。只有本机归属已确认且 getUser 实时匹配时才工作；远端 pull/snapshot 只验证合同，不会改写用户可见设置。整库导入会新建设备流，退休设备必须先完成影子快照。"
+    "reason": "将已通过影子验收的 examDate 扩展为本地候选版可见双向同步：首次本机为空时可安装云端值且不回传，本机与云端均有不同值时停止写入并要求用户明确选择；建立基线后用预期本机值保护远端安装，并先持久化回声抑制状态。设置页仅增加紧凑同步状态和冲突选择，其余学习记录仍只保存在本机。"
   },
   "Backend": {
-    "status": "changed",
-    "reason": "协调发布的 Lexi 正式仓库新增 Tracker 独立 Supabase 表、RLS、capability/apply/pull/snapshot RPC、短期回执、设备生命周期和安全清理任务。后端默认关闭且允许列表为空，只接受 tracker_preferences/preferences 的 {examDate}，拒绝空版本、空序列和未知字段，不删除用户可见实体。"
+    "status": "reviewed-not-needed",
+    "reason": "已检查现有 Tracker preferences 实体、capability/apply/pull/snapshot RPC、RLS、授权、字段白名单与保留规则；它们已经支持唯一同步字段 examDate。本地可见安装和基线选择不改变 Supabase schema、RPC、RLS、grant、清理策略或服务端数据合同。"
   },
   "Admin": {
-    "status": "changed",
-    "reason": "协调发布的 Lexi Control 新增 AAL2 Tracker 云同步面板与二次确认开关，展示真实聚合容量、请求、重复回放、冲突、设备和清理状态；为节省空间不保存逐次 pull 明细，也不返回日记、备注、AI 报告、邮箱或设备名称。"
+    "status": "reviewed-not-needed",
+    "reason": "已检查现有 Lexi Control Tracker 开关、字段白名单和聚合健康指标；本阶段仍使用同一个 preferences/examDate 实体，没有新增管理员可见字段、内容正文、策略、容量口径或可管理对象。"
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "Supabase 正式 migration 已验证；Lexi Control 的 43c6cd2 部署与 Tracker 的 39ea581 部署均上线。受控灰度成功生成 1 条仅含 examDate 的 21 字节实体和 1 条无诊断回执，Admin 指标同步更新；验收后全局开关与白名单均已重新关闭。"
+    "status": "not-deployed",
+    "reason": "候选版已通过完整门禁，发布窗口中已暂时关闭全局同步并保留 tracker_preferences 白名单；尚未提交、推送或部署 Cloudflare Pages。Supabase schema、RPC、RLS 与清理任务无需重新部署。"
   },
   "Verification": {
     "status": "passed",
-    "reason": "npm run verify:release 已通过：47 个测试文件、304 项测试、typecheck、lint、生产构建和 bundle guard 全部通过；配套 Lexi 完整门禁、staging 与 production 的 RLS/重复重试/跨账号事务验收，以及登录状态下的正式浏览器冒烟也全部通过。"
+    "reason": "npm run verify:release 已通过：47 个测试文件、311 项测试、typecheck、oxlint、生产构建与 bundle guard 全部成功。同步定向测试覆盖首次空设备零 apply、空云端不建 null 行、首次与并发冲突不静默覆盖、选择分支、显式清除、远端写回零回声、稳定重试和非法日历日期拒绝；线上往返仍待部署后完成。"
   }
 }

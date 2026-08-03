@@ -40,6 +40,18 @@ describe('Tracker shadow sync wire protocol', () => {
     })).toThrow('unsupported fields')
   })
 
+  it('rejects calendar-shaped values that are not real dates', () => {
+    expect(() => assertShadowRemoteEntity({
+      cursor: 1,
+      entityKind: 'tracker_preferences',
+      entityId: 'preferences',
+      version: 1,
+      payload: { examDate: '2026-99-99' },
+      deletedAt: null,
+      updatedAt: '2026-08-03T00:00:00.000Z',
+    })).toThrow('local date or null')
+  })
+
   it('rejects a tampered durable operation before it can reach an RPC', () => {
     expect(() => parseTrackerShadowSyncOperation({
       operationId: 'op-1',

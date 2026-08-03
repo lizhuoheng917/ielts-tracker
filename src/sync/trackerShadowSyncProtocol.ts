@@ -1,3 +1,5 @@
+import { isLocalDate } from '@/lib/localDate'
+
 export const TRACKER_SHADOW_SYNC_ENTITY_KIND = 'tracker_preferences' as const
 export const TRACKER_SHADOW_SYNC_ENTITY_ID = 'preferences' as const
 
@@ -143,10 +145,7 @@ export function parseTrackerShadowSyncOperation(value: unknown): TrackerShadowSy
   if (Object.keys(payload).some((key) => key !== 'examDate')) {
     throw new Error('shadow operation.payload contains unsupported fields.')
   }
-  if (payload.examDate !== null && (
-    typeof payload.examDate !== 'string'
-    || !/^\d{4}-\d{2}-\d{2}$/.test(payload.examDate)
-  )) {
+  if (payload.examDate !== null && !isLocalDate(payload.examDate)) {
     throw new Error('shadow operation.payload.examDate is invalid.')
   }
   const localSequence = integer(operation.localSequence, 'shadow operation.localSequence')
@@ -286,10 +285,7 @@ export function assertShadowRemoteEntity(value: TrackerSyncPullResult['changes']
   if (Object.keys(payload).some((key) => key !== 'examDate')) {
     throw new Error('Remote tracker_preferences payload contains unsupported fields.')
   }
-  if (payload.examDate !== null && typeof payload.examDate !== 'string') {
-    throw new Error('Remote examDate must be a local date or null.')
-  }
-  if (typeof payload.examDate === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(payload.examDate)) {
+  if (payload.examDate !== null && !isLocalDate(payload.examDate)) {
     throw new Error('Remote examDate must be a local date or null.')
   }
 }

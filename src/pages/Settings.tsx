@@ -78,6 +78,9 @@ import {
   Target,
   UserRound,
   Wifi,
+  Cloud,
+  CloudOff,
+  LoaderCircle,
 } from 'lucide-react'
 import { useAIStore } from '@/stores/aiStore'
 import { useAIPrivacyStore, type AIContextRangeDays } from '@/stores/aiPrivacyStore'
@@ -92,6 +95,7 @@ import {
   getCustomAiProviderPreset,
   type CustomAiProviderPresetId,
 } from '@/ai/customProviderPresets'
+import { useTrackerSyncStatusStore } from '@/sync/trackerSyncStatusStore'
 
 const THEME_OPTIONS = [
   { value: 'light', label: '浅色', description: '白天阅读更清爽', icon: Sun },
@@ -186,6 +190,7 @@ function SettingRow({ icon, title, description, control }: SettingRowProps) {
 
 export default function Settings() {
   const { status: authStatus, user, managedAiDataBinding } = useAuth()
+  const trackerSyncStatus = useTrackerSyncStatusStore()
   const { openAccountDialog } = useAccountDialog()
   const navigate = useNavigate()
   const artifactAccess = useAiArtifactAccess()
@@ -326,12 +331,38 @@ export default function Settings() {
           ? '正在确认 Lexi 账号状态'
           : '当前环境尚未连接 Lexi 内置 AI'
   const accountDescription = user?.email
-    ? `${user.email} · 当前只建立身份，本机记录尚未同步`
+    ? `${user.email} · 考试日期可同步，其余学习记录仍保存在本机`
     : authStatus === 'signed-out'
-      ? '登录只启用共享身份，本机记录不会自动上传'
+      ? '登录后仅同步考试日期，其余学习记录不会自动上传'
       : authStatus === 'initializing'
         ? '正在读取当前设备的账号状态'
-        : '本地模式 · 学习功能可完整使用'
+      : '本地模式 · 学习功能可完整使用'
+
+  const trackerSyncPresentation = (() => {
+    if (authStatus !== 'signed-in') {
+      return { label: '仅本机', detail: '登录后可使用考试日期云同步', tone: 'muted' as const }
+    }
+    if (managedAiDataBinding.status !== 'bound') {
+      return { label: '待确认', detail: '先确认这台设备上的记录归属', tone: 'muted' as const }
+    }
+    switch (trackerSyncStatus.phase) {
+      case 'synced':
+        return { label: '已同步', detail: trackerSyncStatus.detail || '考试日期已与云端保持一致', tone: 'success' as const }
+      case 'syncing':
+      case 'checking':
+        return { label: '同步中', detail: trackerSyncStatus.detail || '正在检查云端考试日期', tone: 'active' as const }
+      case 'needs_choice':
+        return { label: '需选择', detail: trackerSyncStatus.detail, tone: 'warning' as const }
+      case 'offline':
+        return { label: '离线', detail: trackerSyncStatus.detail, tone: 'muted' as const }
+      case 'error':
+        return { label: '待重试', detail: trackerSyncStatus.detail, tone: 'warning' as const }
+      case 'paused':
+        return { label: '未开放', detail: trackerSyncStatus.detail, tone: 'muted' as const }
+      default:
+        return { label: '检查中', detail: '正在确认考试日期同步状态', tone: 'active' as const }
+    }
+  })()
 
   const handleConsistencyCheck = () => {
     if (!ensureStableData('运行一致性检查')) return
@@ -519,7 +550,7 @@ export default function Settings() {
         meta={(
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck className="size-3.5 text-success" aria-hidden="true" />
-            设置与学习数据仅保存在当前浏览器
+            仅考试日期可云同步
           </span>
         )}
       />
@@ -588,6 +619,49 @@ export default function Settings() {
                   {daysUntilExam === null ? '选择日期后显示备考倒计时' : `距离考试还有 ${daysUntilExam} 天`}
                 </div>
               </div>
+            </div>
+
+            <div
+              role="status"
+              aria-live="polite"
+              className={cn(
+                'rounded-lg border px-3 py-2.5',
+                trackerSyncPresentation.tone === 'success' && 'border-success/25 bg-success-surface/40',
+                trackerSyncPresentation.tone === 'active' && 'border-primary/20 bg-primary/5',
+                trackerSyncPresentation.tone === 'warning' && 'border-warning/30 bg-warning-surface/40',
+                trackerSyncPresentation.tone === 'muted' && 'border-border/80 bg-muted/30',
+              )}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className={cn(
+                  'grid size-7 shrink-0 place-items-center rounded-lg',
+                  trackerSyncPresentation.tone === 'success' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground',
+                )}>
+                  {trackerSyncStatus.phase === 'checking' || trackerSyncStatus.phase === 'syncing'
+                    ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                    : trackerSyncStatus.phase === 'offline' || trackerSyncStatus.phase === 'paused'
+                      ? <CloudOff className="size-4" aria-hidden="true" />
+                      : <Cloud className="size-4" aria-hidden="true" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">考试日期云同步</p>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{trackerSyncPresentation.label}</span>
+                  </div>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{trackerSyncPresentation.detail}</p>
+                </div>
+              </div>
+
+              {trackerSyncStatus.phase === 'needs_choice' && trackerSyncStatus.conflict && trackerSyncStatus.resolveConflict && (
+                <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/70 pt-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => void trackerSyncStatus.resolveConflict?.('remote')}>
+                    用云端 {trackerSyncStatus.conflict.remoteExamDate ?? '未设置'}
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => void trackerSyncStatus.resolveConflict?.('local')}>
+                    保留本机 {trackerSyncStatus.conflict.localExamDate ?? '未设置'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <SettingRow

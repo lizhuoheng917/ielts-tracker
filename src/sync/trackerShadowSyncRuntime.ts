@@ -1,4 +1,5 @@
 import { inspectManagedAiDataBinding } from '@/auth/managedAiDataBinding'
+import { isLocalDate } from '@/lib/localDate'
 import {
   readCanonicalMutationEpoch,
 } from '@/data/canonicalMutationCoordinator'
@@ -20,6 +21,7 @@ import {
   type TrackerShadowSyncBatch,
   type TrackerShadowSyncOperation,
   type TrackerSyncCapabilities,
+  type TrackerSyncSnapshotResult,
 } from '@/sync/trackerShadowSyncProtocol'
 import {
   browserTrackerShadowSyncRpc,
@@ -29,13 +31,23 @@ import {
 const PULL_LIMIT = 100
 const MAX_PULL_PAGES = 10
 
+export interface TrackerShadowSyncStatusEvent {
+  phase: 'checking' | 'syncing' | 'synced' | 'paused' | 'needs_choice'
+  lastSyncedAt?: string
+  detail?: string
+  conflict?: { localExamDate: string | null; remoteExamDate: string | null }
+}
+
 interface TrackerShadowSyncRuntimeOptions {
   accountUserId: string
   persistence?: TrackerShadowSyncPersistence
   rpc?: TrackerShadowSyncRpc
   inspectBinding?: (accountUserId: string) => { status: string }
   readLocalDataEpoch?: () => string
+  readLocalExamDate?: () => string | null
   withMutationLock?: <T>(task: () => Promise<T>) => Promise<T>
+  installRemoteExamDate?: (remoteExamDate: string | null, expectedLocalExamDate: string | null) => string | null
+  onStatusChange?: (status: TrackerShadowSyncStatusEvent) => void
   now?: () => Date
   createId?: () => string
 }
@@ -87,7 +99,7 @@ function createRuntimeId(): string {
 
 function normalizedExamDate(value: string | undefined): string | null {
   if (!value) return null
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  if (!isLocalDate(value)) {
     throw new Error('Local examDate is invalid.')
   }
   return value
@@ -97,13 +109,32 @@ function operationBytes(operations: readonly TrackerShadowSyncOperation[]): numb
   return new TextEncoder().encode(JSON.stringify(operations)).byteLength
 }
 
+function snapshotExamDate(snapshot: TrackerSyncSnapshotResult): {
+  exists: boolean
+  examDate: string | null
+} {
+  const entity = snapshot.entities
+    .filter((candidate) => (
+      candidate.entityKind === TRACKER_SHADOW_SYNC_ENTITY_KIND
+      && candidate.entityId === TRACKER_SHADOW_SYNC_ENTITY_ID
+    ))
+    .sort((left, right) => right.version - left.version)[0]
+  if (!entity || entity.deletedAt !== null) return { exists: false, examDate: null }
+  assertShadowRemoteEntity(entity)
+  const payload = entity.payload as { examDate?: string | null }
+  return { exists: true, examDate: payload.examDate ?? null }
+}
+
 export class TrackerShadowSyncRuntime {
   private readonly accountUserId: string
   private readonly persistence: TrackerShadowSyncPersistence
   private readonly rpc: TrackerShadowSyncRpc
   private readonly inspectBinding: (accountUserId: string) => { status: string }
   private readonly readLocalDataEpoch: () => string
+  private readonly readLocalExamDate?: TrackerShadowSyncRuntimeOptions['readLocalExamDate']
   private readonly withMutationLock: <T>(task: () => Promise<T>) => Promise<T>
+  private readonly installRemoteExamDate?: TrackerShadowSyncRuntimeOptions['installRemoteExamDate']
+  private readonly onStatusChange?: TrackerShadowSyncRuntimeOptions['onStatusChange']
   private readonly now: () => Date
   private readonly createId: () => string
   private activeFlush: Promise<void> | null = null
@@ -115,9 +146,12 @@ export class TrackerShadowSyncRuntime {
     this.rpc = options.rpc ?? browserTrackerShadowSyncRpc
     this.inspectBinding = options.inspectBinding ?? inspectManagedAiDataBinding
     this.readLocalDataEpoch = options.readLocalDataEpoch ?? (() => readCanonicalMutationEpoch())
+    this.readLocalExamDate = options.readLocalExamDate
     // Shadow sync owns a separate lock so a slow network can never block the
     // learner's import, clear-data or ordinary local save path.
     this.withMutationLock = options.withMutationLock ?? ((task) => withTrackerShadowSyncLock(this.accountUserId, task))
+    this.installRemoteExamDate = options.installRemoteExamDate
+    this.onStatusChange = options.onStatusChange
     this.now = options.now ?? (() => new Date())
     this.createId = options.createId ?? createRuntimeId
   }
@@ -125,10 +159,59 @@ export class TrackerShadowSyncRuntime {
   flush(localExamDate: string | undefined): Promise<void> {
     this.queuedFlush = { examDate: localExamDate }
     if (this.activeFlush) return this.activeFlush
-    this.activeFlush = this.drainQueuedFlushes().finally(() => {
-      this.activeFlush = null
-    })
+    this.reportStatus({ phase: 'checking', detail: '正在检查考试日期云同步' })
+    this.activeFlush = this.drainQueuedFlushes()
+      .catch((error) => {
+        throw error
+      })
+      .finally(() => {
+        this.activeFlush = null
+      })
     return this.activeFlush
+  }
+
+  private reportStatus(status: TrackerShadowSyncStatusEvent): void {
+    this.onStatusChange?.(status)
+  }
+
+  async resolveBaselineConflict(choice: 'local' | 'remote'): Promise<void> {
+    this.reportStatus({ phase: 'syncing', detail: '正在应用你选择的考试日期' })
+    let nextFlushValue: string | null | undefined
+    await this.withMutationLock(async () => {
+      const state = await this.loadState()
+      const conflict = state.baselineConflict
+      if (!conflict) return
+
+      if (choice === 'local') {
+        state.baselineEstablished = true
+        state.baselineConflict = undefined
+        state.hasObservedExamDate = true
+        state.observedExamDate = conflict.localExamDate
+        this.queueExamDate(state, conflict.localExamDate)
+        await this.persistence.save(state)
+        nextFlushValue = conflict.localExamDate
+        return
+      }
+
+      await this.rememberRemoteExamDate(
+        state,
+        conflict.remoteExamDate,
+        this.readLocalExamDate?.() ?? conflict.localExamDate,
+        true,
+      )
+      const pending = state.pendingOperations.at(-1)
+      nextFlushValue = pending?.payload.examDate
+    })
+
+    if (nextFlushValue !== undefined) {
+      await this.flush(nextFlushValue ?? undefined)
+      return
+    }
+    this.reportStatus({
+      phase: 'synced',
+      lastSyncedAt: this.now().toISOString(),
+      detail: '已采用云端考试日期',
+    })
   }
 
   private async drainQueuedFlushes(): Promise<void> {
@@ -165,6 +248,13 @@ export class TrackerShadowSyncRuntime {
     const examDate = normalizedExamDate(localExamDate)
     if (state.hasObservedExamDate && state.observedExamDate === examDate) return
 
+    this.queueExamDate(state, examDate)
+  }
+
+  private queueExamDate(
+    state: TrackerShadowSyncAccountState,
+    examDate: string | null,
+  ): void {
     const operation: TrackerShadowSyncOperation = {
       operationId: this.createId(),
       entityKind: TRACKER_SHADOW_SYNC_ENTITY_KIND,
@@ -182,6 +272,123 @@ export class TrackerShadowSyncRuntime {
     // request is sealed waits as the single next operation.
     state.pendingOperations = [operation]
     state.updatedAt = this.now().toISOString()
+  }
+
+  private async rememberRemoteExamDate(
+    state: TrackerShadowSyncAccountState,
+    remoteExamDate: string | null,
+    expectedLocalExamDate: string | null,
+    installVisibleValue: boolean,
+  ): Promise<boolean> {
+    const syncedAt = this.now().toISOString()
+    state.baselineEstablished = true
+    state.baselineConflict = undefined
+    state.lastSyncedExamDate = remoteExamDate
+    state.lastSyncedAt = syncedAt
+    state.hasObservedExamDate = true
+    state.observedExamDate = installVisibleValue ? remoteExamDate : expectedLocalExamDate
+    state.updatedAt = syncedAt
+
+    // Persist the echo-suppression baseline before mutating Zustand. Its
+    // subscription may schedule another flush synchronously.
+    await this.persistence.save(state)
+    if (!installVisibleValue || !this.installRemoteExamDate) return false
+
+    const actualLocalExamDate = this.installRemoteExamDate(remoteExamDate, expectedLocalExamDate)
+    if (actualLocalExamDate === remoteExamDate) return true
+
+    // A learner changed the date while the request was in flight. Preserve that
+    // newer local edit and queue it against the just-observed cloud version.
+    state.observedExamDate = remoteExamDate
+    this.queueExamDate(state, actualLocalExamDate)
+    await this.persistence.save(state)
+    return false
+  }
+
+  private async rememberConflict(
+    state: TrackerShadowSyncAccountState,
+    localExamDate: string | null,
+    remoteExamDate: string | null,
+  ): Promise<void> {
+    const syncedAt = this.now().toISOString()
+    state.baselineEstablished = true
+    state.baselineConflict = { localExamDate, remoteExamDate }
+    state.lastSyncedExamDate = remoteExamDate
+    state.lastSyncedAt = syncedAt
+    state.hasObservedExamDate = true
+    state.observedExamDate = localExamDate
+    state.pendingOperations = []
+    state.sealedBatch = null
+    state.updatedAt = syncedAt
+    await this.persistence.save(state)
+    this.reportStatus({
+      phase: 'needs_choice',
+      detail: '本机与云端的考试日期不同，请选择保留哪一个',
+      conflict: state.baselineConflict,
+    })
+  }
+
+  private async mergeEstablishedBaseline(
+    state: TrackerShadowSyncAccountState,
+    localExamDate: string | null,
+    remoteExamDate: string | null,
+  ): Promise<'conflict' | 'pending' | 'installed' | 'unchanged'> {
+    const baselineExamDate = state.lastSyncedExamDate
+    if (localExamDate === remoteExamDate) {
+      await this.rememberRemoteExamDate(state, remoteExamDate, localExamDate, false)
+      return 'unchanged'
+    }
+
+    const localChanged = localExamDate !== baselineExamDate
+    const remoteChanged = remoteExamDate !== baselineExamDate
+    if (localChanged && remoteChanged) {
+      await this.rememberConflict(state, localExamDate, remoteExamDate)
+      return 'conflict'
+    }
+    if (remoteChanged) {
+      await this.rememberRemoteExamDate(state, remoteExamDate, localExamDate, true)
+      return 'installed'
+    }
+    if (localChanged) {
+      this.queueExamDate(state, localExamDate)
+      await this.persistence.save(state)
+      return 'pending'
+    }
+
+    throw new Error('Tracker exam-date merge reached an inconsistent state.')
+  }
+
+  private async establishBaseline(
+    state: TrackerShadowSyncAccountState,
+    accessToken: string,
+    accountEpoch: number,
+    localExamDate: string | undefined,
+  ): Promise<void> {
+    this.reportStatus({ phase: 'syncing', detail: '正在建立考试日期同步基线' })
+    const localValue = normalizedExamDate(localExamDate)
+    const snapshot = await this.validateSnapshot(state, accessToken, accountEpoch)
+    const remote = snapshotExamDate(snapshot)
+
+    if (localValue === null) {
+      await this.rememberRemoteExamDate(
+        state,
+        remote.examDate,
+        localValue,
+        remote.exists && remote.examDate !== null,
+      )
+      return
+    }
+
+    if (remote.exists && remote.examDate !== localValue) {
+      await this.rememberConflict(state, localValue, remote.examDate)
+      return
+    }
+
+    await this.rememberRemoteExamDate(state, remote.examDate, localValue, false)
+    if (!remote.exists || remote.examDate !== localValue) {
+      this.queueExamDate(state, localValue)
+      await this.persistence.save(state)
+    }
   }
 
   private async sealBatch(
@@ -264,38 +471,106 @@ export class TrackerShadowSyncRuntime {
 
   private async flushOnce(localExamDate: string | undefined): Promise<void> {
     const accessToken = await this.verifiedAccessToken()
-    if (!accessToken) return
+    if (!accessToken) {
+      this.reportStatus({ phase: 'paused', detail: '确认当前账号的数据归属后可同步' })
+      return
+    }
     const capabilities = parseTrackerSyncCapabilities(
       await this.rpc.getCapabilities(accessToken),
     )
-    if (!this.validateCapabilities(capabilities)) return
+    if (!this.validateCapabilities(capabilities)) {
+      this.reportStatus({ phase: 'paused', detail: '云同步暂未开放，本机数据不受影响' })
+      return
+    }
 
     await this.withMutationLock(async () => {
       const state = await this.loadState()
       if (state.accountEpoch !== null && state.accountEpoch !== capabilities.accountEpoch) {
-        if (state.sealedBatch) {
-          state.pendingOperations = [
-            ...state.sealedBatch.operations,
-            ...state.pendingOperations,
-          ].slice(-1)
-          state.sealedBatch = null
-        }
+        state.pendingOperations = []
+        state.sealedBatch = null
         state.cursor = 0
         state.remoteVersion = 0
+        state.baselineEstablished = false
+        state.baselineConflict = undefined
+        state.lastSyncedExamDate = null
+        state.lastSyncedAt = undefined
+        state.hasObservedExamDate = false
+        state.observedExamDate = null
       }
       state.accountEpoch = capabilities.accountEpoch
-      this.captureExamDate(state, localExamDate)
-      await this.persistence.save(state)
+      if (state.baselineConflict) {
+        const latestLocalExamDate = normalizedExamDate(localExamDate)
+        if (state.baselineConflict.localExamDate !== latestLocalExamDate) {
+          state.baselineConflict.localExamDate = latestLocalExamDate
+          state.observedExamDate = latestLocalExamDate
+          state.updatedAt = this.now().toISOString()
+          await this.persistence.save(state)
+        }
+        this.reportStatus({
+          phase: 'needs_choice',
+          detail: '本机与云端的考试日期不同，请选择保留哪一个',
+          conflict: state.baselineConflict,
+        })
+        return
+      }
+
+      if (!state.baselineEstablished) {
+        await this.establishBaseline(
+          state,
+          accessToken,
+          capabilities.accountEpoch,
+          localExamDate,
+        )
+      } else if (state.sealedBatch) {
+        // A sealed request may already have committed even if its response was
+        // lost. Replay it byte-for-byte before observing newer remote state.
+      } else if (capabilities.currentCursor > state.cursor) {
+        this.reportStatus({ phase: 'syncing', detail: '正在合并另一台设备的考试日期' })
+        const snapshot = await this.validateSnapshot(state, accessToken, capabilities.accountEpoch)
+        await this.mergeEstablishedBaseline(
+          state,
+          normalizedExamDate(localExamDate),
+          snapshotExamDate(snapshot).examDate,
+        )
+      } else {
+        this.captureExamDate(state, localExamDate)
+        await this.persistence.save(state)
+      }
+
+      if (state.baselineConflict) {
+        this.reportStatus({
+          phase: 'needs_choice',
+          detail: '本机与云端的考试日期不同，请选择保留哪一个',
+          conflict: state.baselineConflict,
+        })
+        return
+      }
 
       const batch = await this.sealBatch(state, capabilities)
       if (!batch) {
         if (capabilities.currentCursor > state.cursor) {
-          await this.validateSnapshot(state, accessToken, capabilities.accountEpoch)
-          state.updatedAt = this.now().toISOString()
-          await this.persistence.save(state)
+          this.reportStatus({ phase: 'syncing', detail: '正在接收另一台设备的考试日期' })
+          const snapshot = await this.validateSnapshot(state, accessToken, capabilities.accountEpoch)
+          const remote = snapshotExamDate(snapshot)
+          const installed = await this.rememberRemoteExamDate(
+            state,
+            remote.examDate,
+            normalizedExamDate(localExamDate),
+            true,
+          )
+          if (!installed && state.pendingOperations.length > 0) {
+            this.reportStatus({ phase: 'syncing', detail: '本机有更新，等待下一次同步' })
+            return
+          }
         }
+        this.reportStatus({
+          phase: 'synced',
+          lastSyncedAt: state.lastSyncedAt ?? this.now().toISOString(),
+          detail: '考试日期已与云端保持一致',
+        })
         return
       }
+      this.reportStatus({ phase: 'syncing', detail: '正在保存考试日期' })
       const apply = parseTrackerSyncApplyResult(await this.rpc.applyBatch(accessToken, {
         deviceId: state.deviceId,
         requestId: batch.requestId,
@@ -306,32 +581,44 @@ export class TrackerShadowSyncRuntime {
       if (apply.requestId !== batch.requestId || apply.requestHash !== batch.requestHash) {
         throw new Error('Tracker shadow sync receipt does not match the sealed request.')
       }
-      if (apply.status === 'disabled') return
+      if (apply.status === 'disabled') {
+        this.reportStatus({ phase: 'paused', detail: '云同步已暂停，本机修改仍已保存' })
+        return
+      }
       if (apply.status === 'epoch_mismatch') {
-        state.pendingOperations = [...batch.operations, ...state.pendingOperations].slice(-1)
+        // The visible local setting remains canonical. Drop transport objects
+        // tied to the old epoch and rebuild them after a fresh snapshot.
+        state.pendingOperations = []
         state.sealedBatch = null
         state.accountEpoch = apply.accountEpoch
         state.cursor = 0
         state.remoteVersion = 0
+        state.baselineEstablished = false
+        state.baselineConflict = undefined
+        state.lastSyncedExamDate = null
+        state.lastSyncedAt = undefined
+        state.hasObservedExamDate = false
+        state.observedExamDate = null
         state.updatedAt = this.now().toISOString()
         await this.persistence.save(state)
+        this.reportStatus({ phase: 'syncing', detail: '云端版本已变化，等待重新同步' })
         return
       }
       if (apply.status === 'snapshot_required') {
-        await this.validateSnapshot(state, accessToken, apply.accountEpoch)
+        const snapshot = await this.validateSnapshot(state, accessToken, apply.accountEpoch)
+        const remote = snapshotExamDate(snapshot)
         const latest = batch.operations.at(-1)
         state.sealedBatch = null
         state.accountEpoch = apply.accountEpoch
-        state.pendingOperations = latest ? [{
-          ...latest,
-          operationId: this.createId(),
-          localSequence: state.nextLocalSequence,
-          baseVersion: state.remoteVersion,
-          occurredAt: this.now().toISOString(),
-        }] : []
-        if (latest) state.nextLocalSequence += 1
-        state.updatedAt = this.now().toISOString()
-        await this.persistence.save(state)
+        state.pendingOperations = []
+        const merge = await this.mergeEstablishedBaseline(
+          state,
+          latest?.payload.examDate ?? normalizedExamDate(localExamDate),
+          remote.examDate,
+        )
+        if (merge !== 'conflict') {
+          this.reportStatus({ phase: 'syncing', detail: '已恢复云端基线，等待重试本机修改' })
+        }
         return
       }
       const matchingResults = new Map(apply.results.map((result) => [result.operationId, result]))
@@ -340,6 +627,25 @@ export class TrackerShadowSyncRuntime {
         return !result || result.status === 'rejected'
       })
       if (rejected) throw new Error('Tracker shadow sync operation was rejected.')
+      const conflicted = batch.operations.some((operation) => (
+        matchingResults.get(operation.operationId)?.status === 'conflict'
+      ))
+      if (conflicted) {
+        const snapshot = await this.validateSnapshot(state, accessToken, batch.accountEpoch)
+        const remote = snapshotExamDate(snapshot)
+        const latest = batch.operations.at(-1)
+        state.sealedBatch = null
+        state.pendingOperations = []
+        const merge = await this.mergeEstablishedBaseline(
+          state,
+          latest?.payload.examDate ?? normalizedExamDate(localExamDate),
+          remote.examDate,
+        )
+        if (merge !== 'conflict') {
+          this.reportStatus({ phase: 'syncing', detail: '已合并另一台设备的更新' })
+        }
+        return
+      }
       apply.results.forEach((result) => {
         state.remoteVersion = Math.max(state.remoteVersion, result.version)
       })
@@ -357,8 +663,22 @@ export class TrackerShadowSyncRuntime {
         remoteEntityCount: snapshot.entities.length,
         validatedAt: this.now().toISOString(),
       }
-      state.updatedAt = this.now().toISOString()
-      await this.persistence.save(state)
+      const remote = snapshotExamDate(snapshot)
+      const installed = await this.rememberRemoteExamDate(
+        state,
+        remote.examDate,
+        normalizedExamDate(localExamDate),
+        true,
+      )
+      if (!installed && state.pendingOperations.length > 0) {
+        this.reportStatus({ phase: 'syncing', detail: '本机有更新，等待下一次同步' })
+        return
+      }
+      this.reportStatus({
+        phase: 'synced',
+        lastSyncedAt: state.lastSyncedAt ?? this.now().toISOString(),
+        detail: '考试日期已同步',
+      })
     })
   }
 }

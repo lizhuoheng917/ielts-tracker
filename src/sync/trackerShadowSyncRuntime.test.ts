@@ -7,7 +7,10 @@ import {
 } from '@/sync/trackerShadowSyncPersistence'
 import { TrackerShadowSyncRuntime } from '@/sync/trackerShadowSyncRuntime'
 import type { TrackerShadowSyncRpc } from '@/sync/trackerShadowSyncRpc'
-import type { TrackerShadowSyncOperation } from '@/sync/trackerShadowSyncProtocol'
+import type {
+  TrackerShadowSyncOperation,
+  TrackerSyncApplyResult,
+} from '@/sync/trackerShadowSyncProtocol'
 
 const accountA = '00000000-0000-4000-8000-000000000001'
 const now = '2026-08-03T00:00:00.000Z'
@@ -48,60 +51,75 @@ function successfulRpc(options: {
   apply?: TrackerShadowSyncRpc['applyBatch']
   enabled?: boolean
   remoteExamDate?: string | null
+  remoteExists?: boolean
 } = {}): TrackerShadowSyncRpc {
+  let remoteExists = options.remoteExists ?? true
+  let remoteExamDate = options.remoteExamDate === undefined ? '2026-12-01' : options.remoteExamDate
+  let remoteVersion = remoteExists ? 1 : 0
+  let remoteCursor = remoteExists ? 1 : 0
+  const apply = options.apply ?? (async (_token, input) => ({
+    status: 'applied' as const,
+    requestId: input.requestId,
+    requestHash: input.requestHash,
+    accountEpoch: 1,
+    cursor: remoteCursor + 1,
+    results: input.operations.map((operation: TrackerShadowSyncOperation) => ({
+      operationId: operation.operationId,
+      entityKind: operation.entityKind,
+      entityId: operation.entityId,
+      status: 'applied' as const,
+      version: remoteVersion + 1,
+      cursor: remoteCursor + 1,
+      reason: null,
+    })),
+  }))
+
+  const remoteEntities = () => remoteExists ? [{
+    cursor: remoteCursor,
+    entityKind: 'tracker_preferences',
+    entityId: 'preferences',
+    version: remoteVersion,
+    payload: { examDate: remoteExamDate },
+    deletedAt: null,
+    updatedAt: now,
+  }] : []
+
   return {
     getVerifiedIdentity: vi.fn(async () => ({
       accountUserId: options.accountUserId ?? accountA,
       accessToken: 'verified-account-token',
     })),
-    getCapabilities: vi.fn(async () => capabilities(options.enabled ?? true)),
-    applyBatch: options.apply ?? vi.fn(async (_token, input) => ({
-      status: 'applied',
-      requestId: input.requestId,
-      requestHash: input.requestHash,
-      accountEpoch: 1,
-      cursor: 1,
-      results: input.operations.map((operation: TrackerShadowSyncOperation) => ({
-        operationId: operation.operationId,
-        entityKind: operation.entityKind,
-        entityId: operation.entityId,
-        status: 'applied',
-        version: 1,
-        cursor: 1,
-        reason: null,
-      })),
+    getCapabilities: vi.fn(async () => ({
+      ...capabilities(options.enabled ?? true),
+      currentCursor: remoteCursor,
     })),
+    applyBatch: vi.fn(async (token, input) => {
+      const result = await apply(token, input) as TrackerSyncApplyResult
+      const accepted = result.results.filter((item) => item.status === 'applied' || item.status === 'duplicate')
+      const latest = input.operations.at(-1)
+      if ((result.status === 'applied' || result.status === 'replayed') && latest && accepted.length > 0) {
+        remoteExists = true
+        remoteExamDate = latest.payload.examDate
+        remoteVersion = Math.max(remoteVersion, ...accepted.map((item) => item.version))
+        remoteCursor = Math.max(remoteCursor, result.cursor, ...accepted.map((item) => item.cursor))
+      }
+      return result
+    }),
     pull: vi.fn(async () => ({
       enabled: true,
       accountEpoch: 1,
       cursor: 0,
-      nextCursor: 1,
+      nextCursor: remoteCursor,
       hasMore: false,
-      changes: [{
-        cursor: 1,
-        entityKind: 'tracker_preferences',
-        entityId: 'preferences',
-        version: 1,
-        payload: { examDate: options.remoteExamDate ?? '2026-12-01' },
-        deletedAt: null,
-        updatedAt: now,
-      }],
+      changes: remoteEntities(),
     })),
     getSnapshot: vi.fn(async () => ({
       enabled: true,
       accountEpoch: 1,
-      cursor: 1,
+      cursor: remoteCursor,
       generatedAt: now,
       snapshotHash: 'server-snapshot-hash',
-      entities: [{
-        cursor: 1,
-        entityKind: 'tracker_preferences',
-        entityId: 'preferences',
-        version: 1,
-        payload: { examDate: options.remoteExamDate ?? '2026-12-01' },
-        deletedAt: null,
-        updatedAt: now,
-      }],
+      entities: remoteEntities(),
     })),
   }
 }
@@ -111,6 +129,9 @@ function runtime(input: {
   rpc: TrackerShadowSyncRpc
   lock?: <T>(task: () => Promise<T>) => Promise<T>
   ids?: string[]
+  installRemoteExamDate?: (remoteExamDate: string | null, expectedLocalExamDate: string | null) => string | null
+  readLocalExamDate?: () => string | null
+  onStatusChange?: ConstructorParameters<typeof TrackerShadowSyncRuntime>[0]['onStatusChange']
 }) {
   const ids = input.ids ?? ['device-1', 'operation-1', 'request-1']
   return new TrackerShadowSyncRuntime({
@@ -120,6 +141,9 @@ function runtime(input: {
     inspectBinding: () => ({ status: 'bound' }),
     readLocalDataEpoch: () => 'local-epoch-1',
     withMutationLock: input.lock ?? (async <T>(task: () => Promise<T>) => task()),
+    installRemoteExamDate: input.installRemoteExamDate,
+    readLocalExamDate: input.readLocalExamDate,
+    onStatusChange: input.onStatusChange,
     now: () => new Date(now),
     createId: () => ids.shift() ?? 'extra-id',
   })
@@ -149,9 +173,141 @@ describe('Tracker examDate shadow sync runtime', () => {
     expect(rpc.applyBatch).not.toHaveBeenCalled()
   })
 
-  it('uploads only examDate and validates pull/snapshot without installing remote state', async () => {
+  it('installs a cloud date on a fresh empty device without echo-uploading it', async () => {
     const persistence = new MemoryPersistence()
     const rpc = successfulRpc({ remoteExamDate: '2027-01-15' })
+    let localExamDate: string | undefined
+    const sync = runtime({
+      persistence,
+      rpc,
+      installRemoteExamDate: (remoteExamDate, expectedLocalExamDate) => {
+        expect(localExamDate ?? null).toBe(expectedLocalExamDate)
+        localExamDate = remoteExamDate ?? undefined
+        return localExamDate ?? null
+      },
+    })
+
+    await sync.flush(localExamDate)
+    await sync.flush(localExamDate)
+
+    expect(localExamDate).toBe('2027-01-15')
+    expect(rpc.applyBatch).not.toHaveBeenCalled()
+    expect(persistence.states.get(accountA)).toMatchObject({
+      baselineEstablished: true,
+      lastSyncedExamDate: '2027-01-15',
+      observedExamDate: '2027-01-15',
+    })
+  })
+
+  it('does not create a null cloud entity for a fresh empty device', async () => {
+    const persistence = new MemoryPersistence()
+    const rpc = successfulRpc({ remoteExists: false })
+
+    await runtime({ persistence, rpc }).flush(undefined)
+
+    expect(rpc.applyBatch).not.toHaveBeenCalled()
+    expect(persistence.states.get(accountA)).toMatchObject({
+      baselineEstablished: true,
+      pendingOperations: [],
+      sealedBatch: null,
+    })
+  })
+
+  it('asks before choosing between different non-empty first-device dates', async () => {
+    const persistence = new MemoryPersistence()
+    const rpc = successfulRpc({ remoteExamDate: '2027-01-15' })
+    const statuses: string[] = []
+    let localExamDate: string | undefined = '2026-12-01'
+    const sync = runtime({
+      persistence,
+      rpc,
+      installRemoteExamDate: (remoteExamDate, expectedLocalExamDate) => {
+        expect(localExamDate ?? null).toBe(expectedLocalExamDate)
+        localExamDate = remoteExamDate ?? undefined
+        return localExamDate ?? null
+      },
+      readLocalExamDate: () => localExamDate ?? null,
+      onStatusChange: (status) => statuses.push(status.phase),
+    })
+
+    await sync.flush(localExamDate)
+    expect(statuses).toContain('needs_choice')
+    expect(localExamDate).toBe('2026-12-01')
+    expect(rpc.applyBatch).not.toHaveBeenCalled()
+
+    // An explicit cloud choice must still win if the learner edited the input
+    // after the conflict card appeared but before clicking the button.
+    localExamDate = '2028-02-02'
+    await sync.resolveBaselineConflict('remote')
+    expect(localExamDate).toBe('2027-01-15')
+    expect(rpc.applyBatch).not.toHaveBeenCalled()
+  })
+
+  it('installs a one-sided cloud change after baseline and does not echo it', async () => {
+    const persistence = new MemoryPersistence()
+    persistence.states.set(accountA, {
+      ...createTrackerShadowSyncAccountState({
+        accountUserId: accountA,
+        deviceId: 'device-1',
+        localDataEpoch: 'local-epoch-1',
+        now,
+      }),
+      accountEpoch: 1,
+      baselineEstablished: true,
+      lastSyncedExamDate: '2026-12-01',
+      hasObservedExamDate: true,
+      observedExamDate: '2026-12-01',
+      remoteVersion: 1,
+    })
+    const rpc = successfulRpc({ remoteExamDate: '2027-01-15' })
+    let localExamDate: string | undefined = '2026-12-01'
+    const sync = runtime({
+      persistence,
+      rpc,
+      installRemoteExamDate: (remoteExamDate, expectedLocalExamDate) => {
+        expect(localExamDate ?? null).toBe(expectedLocalExamDate)
+        localExamDate = remoteExamDate ?? undefined
+        return localExamDate ?? null
+      },
+    })
+
+    await sync.flush(localExamDate)
+    await sync.flush(localExamDate)
+
+    expect(localExamDate).toBe('2027-01-15')
+    expect(rpc.applyBatch).not.toHaveBeenCalled()
+    expect(persistence.states.get(accountA)?.lastSyncedExamDate).toBe('2027-01-15')
+  })
+
+  it('uploads an explicit local clear after a baseline exists', async () => {
+    const persistence = new MemoryPersistence()
+    persistence.states.set(accountA, {
+      ...createTrackerShadowSyncAccountState({
+        accountUserId: accountA,
+        deviceId: 'device-1',
+        localDataEpoch: 'local-epoch-1',
+        now,
+      }),
+      accountEpoch: 1,
+      cursor: 1,
+      remoteVersion: 1,
+      baselineEstablished: true,
+      lastSyncedExamDate: '2026-12-01',
+      hasObservedExamDate: true,
+      observedExamDate: '2026-12-01',
+    })
+    const rpc = successfulRpc({ remoteExamDate: '2026-12-01' })
+
+    await runtime({ persistence, rpc }).flush(undefined)
+
+    expect(rpc.applyBatch).toHaveBeenCalledWith('verified-account-token', expect.objectContaining({
+      operations: [expect.objectContaining({ payload: { examDate: null } })],
+    }))
+  })
+
+  it('uploads only examDate after a fresh snapshot confirms the cloud is empty', async () => {
+    const persistence = new MemoryPersistence()
+    const rpc = successfulRpc({ remoteExists: false })
     const localSettings = { examDate: '2026-12-01' }
     let lockEntries = 0
 
@@ -173,7 +329,7 @@ describe('Tracker examDate shadow sync runtime', () => {
       })],
     }))
     expect(rpc.pull).toHaveBeenCalledTimes(1)
-    expect(rpc.getSnapshot).toHaveBeenCalledTimes(1)
+    expect(rpc.getSnapshot).toHaveBeenCalledTimes(2)
     expect(lockEntries).toBe(1)
     expect(localSettings.examDate).toBe('2026-12-01')
     expect(persistence.states.get(accountA)).toMatchObject({
@@ -216,7 +372,7 @@ describe('Tracker examDate shadow sync runtime', () => {
         })),
       }
     })
-    const sync = runtime({ persistence, rpc: successfulRpc({ apply }) })
+    const sync = runtime({ persistence, rpc: successfulRpc({ apply, remoteExists: false }) })
 
     await expect(sync.flush('2026-12-01')).rejects.toThrow('response lost')
     expect(persistence.states.get(accountA)?.sealedBatch).not.toBeNull()
@@ -226,6 +382,72 @@ describe('Tracker examDate shadow sync runtime', () => {
     expect(requests[1]).toEqual(requests[0])
     expect(persistence.states.get(accountA)?.sealedBatch).toBeNull()
     expect(persistence.states.get(accountA)?.lastValidation?.requestStatus).toBe('replayed')
+  })
+
+  it('preserves both values when an optimistic apply finds a concurrent cloud edit', async () => {
+    const persistence = new MemoryPersistence()
+    const rpc = successfulRpc({ remoteExists: false })
+    rpc.applyBatch = vi.fn(async (
+      _token: string,
+      input: Parameters<TrackerShadowSyncRpc['applyBatch']>[1],
+    ) => ({
+      status: 'applied',
+      requestId: input.requestId,
+      requestHash: input.requestHash,
+      accountEpoch: 1,
+      cursor: 1,
+      results: input.operations.map((operation) => ({
+        operationId: operation.operationId,
+        entityKind: operation.entityKind,
+        entityId: operation.entityId,
+        status: 'conflict' as const,
+        version: 1,
+        cursor: 1,
+        reason: 'version_conflict',
+      })),
+    }))
+    vi.mocked(rpc.getSnapshot)
+      .mockResolvedValueOnce({
+        enabled: true,
+        accountEpoch: 1,
+        cursor: 0,
+        generatedAt: now,
+        snapshotHash: 'empty',
+        entities: [],
+      })
+      .mockResolvedValue({
+        enabled: true,
+        accountEpoch: 1,
+        cursor: 1,
+        generatedAt: now,
+        snapshotHash: 'concurrent',
+        entities: [{
+          cursor: 1,
+          entityKind: 'tracker_preferences',
+          entityId: 'preferences',
+          version: 1,
+          payload: { examDate: '2027-01-15' },
+          deletedAt: null,
+          updatedAt: now,
+        }],
+      })
+    const statuses: string[] = []
+    const sync = runtime({
+      persistence,
+      rpc,
+      onStatusChange: (status) => statuses.push(status.phase),
+    })
+
+    await sync.flush('2026-12-01')
+
+    expect(statuses).toContain('needs_choice')
+    expect(persistence.states.get(accountA)?.baselineConflict).toEqual({
+      localExamDate: '2026-12-01',
+      remoteExamDate: '2027-01-15',
+    })
+    expect(persistence.states.get(accountA)?.sealedBatch).toBeNull()
+    expect(persistence.states.get(accountA)?.pendingOperations).toEqual([])
+    expect(rpc.applyBatch).toHaveBeenCalledTimes(1)
   })
 
   it('rebases the queue when a whole-dataset mutation advances the local epoch', async () => {
@@ -241,7 +463,7 @@ describe('Tracker examDate shadow sync runtime', () => {
       observedExamDate: '2026-09-01',
       nextLocalSequence: 8,
     })
-    const rpc = successfulRpc()
+    const rpc = successfulRpc({ remoteExists: false })
 
     await runtime({
       persistence,
@@ -279,7 +501,7 @@ describe('Tracker examDate shadow sync runtime', () => {
         })),
       }
     })
-    const rpc = successfulRpc({ apply })
+    const rpc = successfulRpc({ apply, remoteExists: false })
     const sync = runtime({
       persistence,
       rpc,
@@ -287,9 +509,9 @@ describe('Tracker examDate shadow sync runtime', () => {
     })
 
     await sync.flush('2026-12-01')
-    expect(rpc.getSnapshot).toHaveBeenCalledTimes(1)
+    expect(rpc.getSnapshot).toHaveBeenCalledTimes(2)
     expect(persistence.states.get(accountA)?.pendingOperations[0]).toMatchObject({
-      operationId: 'operation-2', baseVersion: 1, localSequence: 2,
+      operationId: 'operation-2', baseVersion: 0, localSequence: 2,
     })
     await sync.flush('2026-12-01')
     expect(apply).toHaveBeenCalledTimes(2)
@@ -324,7 +546,7 @@ describe('Tracker examDate shadow sync runtime', () => {
     })
     const sync = runtime({
       persistence,
-      rpc: successfulRpc({ apply }),
+      rpc: successfulRpc({ apply, remoteExists: false }),
       ids: ['device', 'op-1', 'request-1', 'op-2', 'request-2'],
     })
 
