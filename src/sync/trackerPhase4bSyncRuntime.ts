@@ -215,8 +215,8 @@ export function reconcileTrackerPhase4bState(input: {
       baseline,
       local: local
         ? { entity: local }
-        : baseline?.deletedAt === null
-          ? { entity: null, deletedAt: input.occurredAt }
+        : baseline
+          ? { entity: null, deletedAt: baseline.deletedAt ?? input.occurredAt }
           : { entity: null },
       remote,
     })

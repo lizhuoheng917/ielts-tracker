@@ -454,6 +454,21 @@ describe('Phase 4B runtime contract', () => {
     })
   })
 
+  it('keeps an unchanged cloud tombstone deleted when the local row is absent', () => {
+    const tombstone = parseTrackerPhase4bRemoteEntity({
+      entityKind: 'practice_record', entityId: 'practice-deleted', version: 2, cursor: 2,
+      payload: null, deletedAt: t1, updatedAt: t1,
+    })
+
+    const result = reconcileTrackerPhase4bState({
+      baseline: [tombstone], current: [], remote: [tombstone], occurredAt: t1,
+    })
+
+    expect(result.snapshot.practiceRecords).toEqual([])
+    expect(result.operations).toEqual([])
+    expect(result.restoreRequired).toEqual([])
+  })
+
   it('treats a row missing from an authoritative snapshot as removed instead of resurrecting it', () => {
     const localPlan = materializeTrackerPhase4bLocalEntities(snapshot(), t1)[0]
     const baseline = parseTrackerPhase4bRemoteEntity({
