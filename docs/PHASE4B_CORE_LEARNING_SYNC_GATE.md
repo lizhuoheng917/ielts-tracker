@@ -1,7 +1,7 @@
 # Phase 4B: core learning data sync gate
 
 Date: 2026-08-03
-Status: production rollout active; validation hotfix pending
+Status: production accepted
 
 ## Outcome
 
@@ -78,6 +78,36 @@ the backend repeats the checks as a data-integrity backstop.
 Production must remain on Phase 4A if either the backend or compatible client
 cannot be verified in the same release window.
 
+## Production acceptance
+
+The coordinated production release was accepted on 2026-08-03:
+
+- Supabase migration `20260803041218` and Lexi backend/Admin commit `05cf67d`
+  are live; the Admin deployment is
+  `c133bd36-6c48-4795-90e7-a87f8ee9f990`;
+- Tracker commit `5e9aef0` is live in production deployment
+  `72087ccb-e84a-4ae8-a995-578c2943ebf4`;
+- all five allowed kinds are enabled for every signed-in Tracker account;
+- one real account created all four learning kinds, updated a plan and deleted
+  every test record. Initial compact payloads were 210 bytes for the plan,
+  93 bytes for its execution, 161 bytes for the timer record and 196 bytes for
+  the mock/practice record; the updated plan was 220 bytes;
+- the final dependent execution/plan delete used one ordered two-operation
+  request, returned `applied`, and had `replay_count = 0`;
+- all four learning rows now retain `payload = null` tombstones and zero body
+  bytes. The learner UI contains no validation records and reports all learning
+  data synced;
+- a second-device preference change advanced the first device from cursor 14
+  to the shared cursor before its pending deletes were applied. The temporary
+  validation device and its receipt were then removed;
+- a second authenticated account saw zero snapshot entities in a rolled-back
+  isolation test, and the transaction left no account or device rows behind;
+- `/admin` reports one active preference row, four zero-body tombstones, five
+  enabled kinds, zero conflicts/rejections and aggregate bytes only.
+
+The release gate passed with 54 test files and 371 tests, plus TypeScript,
+lint, production build and public-bundle secret checks.
+
 ## Deferred follow-ups
 
 - Explicitly split “clear this device” from “delete this account's cloud data”.
@@ -92,3 +122,8 @@ cannot be verified in the same release window.
   unrelated records continue.
 - Keep AI artifact/report synchronization as a separate opt-in retention
   decision.
+- Replace the rare device-forced snapshot sentinel with a structured,
+  non-retryable response before enabling large-account compaction. The current
+  incremental path is accepted; a manually injected `requires_snapshot` flag
+  exposed a long-running `tracker_pull_sync` error path and was reverted after
+  the focused test.
