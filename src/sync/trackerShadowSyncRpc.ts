@@ -130,7 +130,14 @@ async function invokePinnedRpc(
   accessToken: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  return withAbortRetry(() => invokePinnedRpcAttempt(functionName, accessToken, body))
+  try {
+    return await withAbortRetry(() => invokePinnedRpcAttempt(functionName, accessToken, body))
+  } catch (error) {
+    if (!isAbortError(error)) throw error
+    const timeout = new Error(`Tracker RPC ${functionName} timed out after retry.`)
+    timeout.name = 'TrackerShadowSyncTimeoutError'
+    throw timeout
+  }
 }
 
 function getCapabilitiesSingleFlight(accessToken: string): Promise<unknown> {
