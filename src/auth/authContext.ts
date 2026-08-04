@@ -39,6 +39,7 @@ export type AuthContextValue = {
   sendPasswordReset: (email: string, redirectTo: string) => Promise<AuthActionResult>
   updatePassword: (password: string) => Promise<AuthActionResult>
   signOut: () => Promise<AuthActionResult>
+  deleteAccount: () => Promise<AuthActionResult>
   enterGuest: () => void
   exitGuest: () => void
   finishPasswordRecovery: () => void

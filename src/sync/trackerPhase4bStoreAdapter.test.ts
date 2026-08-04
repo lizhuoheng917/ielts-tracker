@@ -13,12 +13,14 @@ import type {
   PracticeRecord,
   StudyPlan,
   TimerRecord,
+  WordRecord,
 } from '@/lib/types'
 import type { TrackerPhase4bLocalSnapshot } from '@/sync/trackerPhase4bRecordSync'
 
 const PLAN_STORAGE_KEY = 'ielts-tracker:studyPlans'
 const PRACTICE_STORAGE_KEY = 'ielts-tracker:practiceRecords'
 const TIMER_STORAGE_KEY = 'ielts-tracker:timerRecords'
+const WORD_STORAGE_KEY = 'ielts-tracker:wordRecords'
 const OCCURRED_AT = '2026-08-03T08:00:00.000Z'
 
 class MemoryStorage implements Storage {
@@ -135,12 +137,26 @@ function timer(id = 'timer-remote'): TimerRecord {
   }
 }
 
+function word(id = 'word-remote'): WordRecord {
+  return {
+    id,
+    date: '2026-08-03',
+    category: '学术词汇',
+    subCategory: '教育',
+    count: 20,
+    note: '搭配复习',
+    createdAt: '2026-08-03T06:45:00.000Z',
+    updatedAt: '2026-08-03T07:59:00.000Z',
+  }
+}
+
 function snapshot(overrides: Partial<TrackerPhase4bLocalSnapshot> = {}): TrackerPhase4bLocalSnapshot {
   return {
     studyPlans: [plan()],
     planExecutions: [execution()],
     practiceRecords: [practice()],
     timerRecords: [timer()],
+    wordRecords: [word()],
     ...overrides,
   }
 }
@@ -151,6 +167,7 @@ function emptySnapshot(): TrackerPhase4bLocalSnapshot {
     planExecutions: [],
     practiceRecords: [],
     timerRecords: [],
+    wordRecords: [],
   }
 }
 
@@ -228,13 +245,13 @@ beforeEach(() => {
   })
   useDailyCheckinStore.setState({ migrationVersion: 1, awards: [] })
   useDiaryStore.setState({ entries: [] })
-  useWordStore.setState({ records: [] })
+  useWordStore.setState({ records: [], mutationRevision: 0 })
   useActivityLedgerStore.setState({ schemaVersion: 1, baseline: null, events: [] })
   ensureActivityLedgerInitialized('2026-08-03T00:00:00.000Z')
 })
 
 describe('Phase 4B canonical store adapter', () => {
-  it('reads one validated snapshot from the four canonical stores', () => {
+  it('reads one validated snapshot from all five canonical stores', () => {
     const desired = snapshot()
     usePlanStore.setState({
       plans: desired.studyPlans,
@@ -243,6 +260,7 @@ describe('Phase 4B canonical store adapter', () => {
     })
     usePracticeStore.setState({ records: desired.practiceRecords, mutationRevision: 4 })
     useTimerStore.setState({ records: desired.timerRecords, mutationRevision: 5 })
+    useWordStore.setState({ records: desired.wordRecords, mutationRevision: 6 })
 
     expect(readTrackerPhase4bStoreSnapshot()).toEqual(desired)
   })
@@ -265,7 +283,7 @@ describe('Phase 4B canonical store adapter', () => {
     expect(useAchievementStore.getState().totalXP).toBe(0)
   })
 
-  it('installs all four record classes atomically and keeps ledger, XP and streak projections aligned', async () => {
+  it('installs all five record classes atomically and keeps ledger, XP and streak projections aligned', async () => {
     const desired = snapshot()
     const before = readTrackerPhase4bStoreSnapshot()
 
@@ -290,15 +308,20 @@ describe('Phase 4B canonical store adapter', () => {
       records: desired.timerRecords,
       mutationRevision: 1,
     })
+    expect(readPersistedState(WORD_STORAGE_KEY)).toMatchObject({
+      records: desired.wordRecords,
+      mutationRevision: 1,
+    })
 
     const ledger = useActivityLedgerStore.getState()
     expect(ledger.events.map((event) => event.entityKind)).toEqual([
       'plan_execution',
       'practice_record',
       'timer_record',
+      'word_record',
     ])
     expect(useAchievementStore.getState().totalXP).toBeGreaterThan(0)
-    expect(useStreakStore.getState().heatmapData['2026-08-03']).toBe(3)
+    expect(useStreakStore.getState().heatmapData['2026-08-03']).toBe(4)
     if (!ledger.baseline) throw new Error('Activity ledger was not initialized')
     const replayed = replayActivityLedger({
       schemaVersion: ledger.schemaVersion,
@@ -407,6 +430,10 @@ describe('Phase 4B canonical store adapter', () => {
       mutationRevision: 0,
     })
     expect(readPersistedState(TIMER_STORAGE_KEY)).toMatchObject({
+      records: [],
+      mutationRevision: 0,
+    })
+    expect(readPersistedState(WORD_STORAGE_KEY)).toMatchObject({
       records: [],
       mutationRevision: 0,
     })

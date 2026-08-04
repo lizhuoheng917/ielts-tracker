@@ -1,7 +1,9 @@
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+import { deleteCurrentLexiAccount } from '@/auth/accountDeletion'
 import { safeAuthErrorMessage } from '@/auth/authErrors'
+import { removeCurrentDevicePresence } from '@/auth/devicePresence'
 import {
   confirmManagedAiDataBindingForCurrentAccount,
   inspectManagedAiDataBinding,
@@ -222,6 +224,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const client = clientRef.current
       if (!client) return { ok: false, message: '当前环境尚未连接 Lexi 账号服务。' }
       try {
+        const userId = sessionRef.current?.user.id
+        if (userId) {
+          try {
+            await removeCurrentDevicePresence(userId)
+          } catch {
+            // Device presence expires shortly even if the best-effort cleanup fails.
+          }
+        }
         const { error } = await client.auth.signOut({ scope: 'local' })
         if (error) return { ok: false, message: safeAuthErrorMessage(error) }
         sessionRef.current = null
@@ -234,6 +244,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: true }
       } catch (error) {
         return { ok: false, message: safeAuthErrorMessage(error) }
+      }
+    },
+    deleteAccount: async () => {
+      const client = clientRef.current
+      if (!client || !sessionRef.current) return { ok: false, message: '请先登录 Lexi 账号。' }
+      try {
+        await deleteCurrentLexiAccount(client)
+        // The server has deleted this shared identity. Stop all local auth and
+        // sync work even if Supabase does not emit a local SIGNED_OUT event.
+        sessionRef.current = null
+        setSession(null)
+        setStatus('signed-out')
+        writeGuestMode(false)
+        setGuestMode(false)
+        setRecoveryMode(false)
+        setManagedAiDataBinding({ status: 'unavailable' })
+        return { ok: true }
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : '账号暂时无法注销，请稍后再试。',
+        }
       }
     },
     enterGuest: () => {

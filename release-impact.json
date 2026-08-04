@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-04-tracker-writing-reference-and-plan-schedule-v1",
+  "release": "2026-08-04-tracker-word-sync-and-shared-account-center-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Existing quota/regeneration UI remains intact. Writing feedback now creates a V3 sourceReference request from required Cambridge book/Test plus the existing module, Task and essay fields; it migrates V2 local drafts without losing essay text, retains V2 reports, labels automatic recognition as a reference assessment, records the Academic Task 1 missing-image limitation, and uses an opaque mobile-safe action footer. Learning plans now distinguish a dated one-time task from daily/weekly recurrence, collect optional start time/duration and recurring start/end boundaries, resolve Today by concrete local date, separately surface overdue/upcoming one-time tasks, and keep legacy custom plans readable until the learner explicitly re-arranges them."
+    "reason": "Word records now join the canonical Phase 4B source-data snapshot and use the existing local-first transaction, cross-tab pulse, revision trigger, byte-capped batch and conflict path. The word entry dialog now waits for the local transaction result before closing, so a lock or storage failure is visible rather than silently losing the edit. Dashboard totals, XP, badges and activity projections remain local derivations and are never sent as word-record payload fields. Tracker also upgrades its account dialog into a personal center: it shows the shared Lexi login, recent account devices, local sign-out, and a two-step permanent-account-deletion flow. After a server-confirmed deletion, only this browser origin's Tracker records, session marker and durable Phase 4B outbox are cleared; other devices and the separate Words browser origin are accurately disclosed as outside this page's local-storage reach."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The Tracker client gateway contract now accepts only the bounded V3 sourceReference shape alongside legacy V2 submissions, includes it in the private writing snapshot, and requires an automatic-reference limitation in returned feedback. Plan drafts now require the shared once/daily/weekly schedule fields before a user-confirmed local write. Study-plan sync payloads include only the compact schedule rule (scheduledDate or startDate/endDate) rather than materialized future occurrences; actual completions remain the existing per-date plan_execution records. The paired Formal release must accept both contracts, apply the compatible plan-validator migration, and keep the existing quota-reservation authority."
+    "reason": "A paired Formal release is required before enablement: add word_record to Tracker capabilities and the private sync validator with the same exact raw fields and byte/count/date/timestamp bounds, while preserving ownership, optimistic versions, tombstone cleanup and aggregate byte accounting. The Tracker client will remain paused rather than send a partially compatible record set until that capability is present. The permanent shared-account deletion endpoint must authenticate the bearer identity server-side, require the fixed confirmation payload, delete only that Auth user using a server-only credential, revoke sessions through Auth deletion, and never expose a service-role credential or another user's identity to the browser. Existing user_devices RLS is reused for recent-device display."
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "Lexi Control continues to own provider, prompt and quota policy. Individual learner plan dates are not an administrator-managed or reportable resource; existing Tracker sync aggregate capacity and the updated plan-draft contract explanation cover the operational review, so no additional Tracker-specific control surface is required."
+    "status": "changed",
+    "reason": "The paired Lexi Control release must include word_record in Tracker sync aggregate capacity/reporting and contract coverage, without exposing learner notes or content. It must also expose only aggregate account-deletion health if the new deletion audit is measured. No per-record administrator browsing or editing surface is required."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. Publish only with the paired Formal gateway and backward-compatible Tracker plan-validator migration after both compatible backend contracts are verified. Then smoke-test a V3 writing request, legacy V2 report readability, Task 1 limitation display, single-date and date-bounded recurring plan creation, AI draft confirmation without auto-write, overdue rescheduling, legacy custom readability, compact cross-device sync, quota state and cross-account isolation."
+    "reason": "Not deployed. First apply and verify the backward-compatible Formal word_record validator/RPC and protected lexi-account-delete function; then use protected Lexi Control authority to enable the new kind (the old four-kind client safely ignores it); only then deploy this strict five-kind Tracker client. Finally smoke-test word create/update/delete, second-device pull, restart/offline retry, byte-limit rejection, cross-account isolation, aggregate byte metrics, account device list, local sign-out, and permanent deletion with a disposable account only."
   },
   "Verification": {
     "status": "required",
-    "reason": "Focused V3 contract, artifact/export, gateway and report rendering checks must pass together with the new schedule, sync and AI-draft contract tests plus Tracker typecheck/lint. Before a release, run the complete Tracker and Formal verification gates, then perform the paired signed-in production smoke checks."
+    "reason": "Focused word payload, Phase 4B runtime, canonical store, cross-tab, IndexedDB-clear, account-deletion request and local-cleanup tests must pass with Tracker typecheck/lint. Before a release, run both full release gates, verify the shared validator/RLS/RPC, protected function CORS/auth behavior and Lexi Control aggregate output, then perform the paired signed-in production smoke checks."
   }
 }

@@ -19,6 +19,7 @@ import { usePlanStore } from '@/stores/planStore'
 import { usePracticeStore } from '@/stores/practiceStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useTimerStore } from '@/stores/timerStore'
+import { useWordStore } from '@/stores/wordStore'
 
 const SETTINGS_STORAGE_KEY = `${STORAGE_PREFIX}:settings`
 
@@ -190,10 +191,14 @@ export function TrackerShadowSyncBridge() {
         const unsubscribeTimer = useTimerStore.subscribe((state, previous) => {
           if (state.mutationRevision !== previous.mutationRevision) listener()
         })
+        const unsubscribeWords = useWordStore.subscribe((state, previous) => {
+          if (state.mutationRevision !== previous.mutationRevision) listener()
+        })
         return () => {
           unsubscribePlan()
           unsubscribePractice()
           unsubscribeTimer()
+          unsubscribeWords()
         }
       },
       windowTarget: window,

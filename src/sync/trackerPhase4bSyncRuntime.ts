@@ -44,6 +44,7 @@ import {
 import { usePlanStore } from '@/stores/planStore'
 import { usePracticeStore } from '@/stores/practiceStore'
 import { useTimerStore } from '@/stores/timerStore'
+import { useWordStore } from '@/stores/wordStore'
 
 export const TRACKER_PHASE4B_SYNC_COALESCE_MS = 5_000
 export const TRACKER_PHASE4B_MAX_BATCH_OPERATIONS = 50
@@ -125,6 +126,7 @@ function readRawTrackerPhase4bStoreSnapshot(): unknown {
     planExecutions: planState.executions,
     practiceRecords: usePracticeStore.getState().records,
     timerRecords: useTimerStore.getState().records,
+    wordRecords: useWordStore.getState().records,
   })
 }
 
@@ -161,6 +163,7 @@ function localEntitiesToSnapshot(entities: readonly TrackerPhase4bLocalEntity[])
     planExecutions: [],
     practiceRecords: [],
     timerRecords: [],
+    wordRecords: [],
   }
   entities.forEach((entity) => {
     const value = { id: entity.entityId, ...entity.payload, updatedAt: entity.updatedAt }
@@ -168,11 +171,13 @@ function localEntitiesToSnapshot(entities: readonly TrackerPhase4bLocalEntity[])
     if (entity.entityKind === 'plan_execution') snapshot.planExecutions.push(value as TrackerPhase4bLocalSnapshot['planExecutions'][number])
     if (entity.entityKind === 'practice_record') snapshot.practiceRecords.push(value as TrackerPhase4bLocalSnapshot['practiceRecords'][number])
     if (entity.entityKind === 'timer_record') snapshot.timerRecords.push(value as TrackerPhase4bLocalSnapshot['timerRecords'][number])
+    if (entity.entityKind === 'word_record') snapshot.wordRecords.push(value as TrackerPhase4bLocalSnapshot['wordRecords'][number])
   })
   snapshot.studyPlans.sort((a, b) => a.id.localeCompare(b.id))
   snapshot.planExecutions.sort((a, b) => a.id.localeCompare(b.id))
   snapshot.practiceRecords.sort((a, b) => a.id.localeCompare(b.id))
   snapshot.timerRecords.sort((a, b) => a.id.localeCompare(b.id))
+  snapshot.wordRecords.sort((a, b) => a.id.localeCompare(b.id))
   return snapshot
 }
 
@@ -656,7 +661,12 @@ export class TrackerPhase4bSyncRuntime {
 
     if (!state.baselineEstablished) {
       const remote = await this.snapshot(state, token, capabilities.accountEpoch)
-      await this.reconcileAndInstall({ state, local, remote, authoritative: true })
+      await this.reconcileAndInstall({
+        state,
+        local,
+        remote,
+        authoritative: true,
+      })
       state.baselineEstablished = true
     } else if (!state.sealedBatch && capabilities.currentCursor > state.cursor) {
       const remote = await this.pullOrSnapshot(state, token, capabilities.accountEpoch)
@@ -715,7 +725,12 @@ export class TrackerPhase4bSyncRuntime {
     if (apply.status === 'snapshot_required') {
       state.sealedBatch = null
       const remote = await this.snapshot(state, token, apply.accountEpoch)
-      await this.reconcileAndInstall({ state, local: this.readLocal(), remote, authoritative: true })
+      await this.reconcileAndInstall({
+        state,
+        local: this.readLocal(),
+        remote,
+        authoritative: true,
+      })
       state.baselineEstablished = true
       await this.persistence.save(state)
       this.queued = true
@@ -786,7 +801,7 @@ export class TrackerPhase4bSyncRuntime {
           ? '可用的新增与修改已同步；删除会在异常记录修复后补传'
           : state.restoreRequired.length
             ? '其余记录已同步；云端已删除的记录暂留本机等待后续确认'
-          : '学习记录已同步',
+            : '学习记录已同步',
       quarantinedCount: latestLocal.quarantined.length,
       restoreRequired: state.restoreRequired,
     })

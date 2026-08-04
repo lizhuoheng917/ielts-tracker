@@ -286,33 +286,39 @@ export default function Words() {
     setFormOpen(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const finalCategory = form.isCustomCategory
       ? form.customCategory.trim()
       : form.category
     if (!finalCategory || form.count <= 0 || !form.date) return
 
-    if (editingId) {
-      updateRecord(editingId, {
+    const result = editingId
+      ? await updateRecord(editingId, {
         date: form.date,
         category: finalCategory,
         count: form.count,
         note: form.note || undefined,
       })
-    } else {
-      addRecord({
+      : await addRecord({
         date: form.date,
         category: finalCategory,
         count: form.count,
         note: form.note || undefined,
       })
+    if (result.status !== 'applied') {
+      window.alert(result.error?.message ?? '单词记录暂时无法保存，请稍后重试。')
+      return
     }
     setFormOpen(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteTarget) {
-      deleteRecord(deleteTarget.id)
+      const result = await deleteRecord(deleteTarget.id)
+      if (result.status !== 'applied') {
+        window.alert(result.error?.message ?? '单词记录暂时无法删除，请稍后重试。')
+        return
+      }
       setDeleteTarget(null)
     }
   }

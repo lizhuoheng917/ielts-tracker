@@ -79,11 +79,15 @@ export interface TrackerPhase4bSyncAccountState {
 export interface TrackerPhase4bSyncPersistence {
   load(accountUserId: string): Promise<TrackerPhase4bSyncAccountState | null>
   save(state: TrackerPhase4bSyncAccountState): Promise<void>
+  /** Clears this device's baseline and outbox for a permanently deleted account. */
+  delete(accountUserId: string): Promise<void>
 }
 
 export interface TrackerPhase4bSyncKeyValueStore {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<void>
+  /** Optional only for injected test stores; browser IndexedDB always supports it. */
+  remove?(key: string): Promise<void>
 }
 
 function clone<T>(value: T): T {
@@ -452,6 +456,17 @@ class IndexedDbTrackerPhase4bKeyValueStore implements TrackerPhase4bSyncKeyValue
       transaction.onabort = () => reject(transaction.error ?? new Error('Phase 4B IndexedDB write aborted.'))
     })
   }
+
+  async remove(key: string): Promise<void> {
+    const database = await this.database()
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(PHASE4B_SYNC_OBJECT_STORE, 'readwrite')
+      transaction.objectStore(PHASE4B_SYNC_OBJECT_STORE).delete(key)
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error ?? new Error('Phase 4B IndexedDB delete failed.'))
+      transaction.onabort = () => reject(transaction.error ?? new Error('Phase 4B IndexedDB delete aborted.'))
+    })
+  }
 }
 
 /**
@@ -488,6 +503,14 @@ export class BrowserTrackerPhase4bSyncPersistence implements TrackerPhase4bSyncP
     if (!this.store) throw new Error('Phase 4B IndexedDB storage is unavailable.')
     const validated = parseTrackerPhase4bSyncAccountState(state, state.accountUserId)
     await this.store.set(state.accountUserId, JSON.stringify(validated))
+  }
+
+  async delete(accountUserId: string): Promise<void> {
+    if (!this.store) throw new Error('Phase 4B IndexedDB storage is unavailable.')
+    if (!this.store.remove) {
+      throw new Error('Phase 4B IndexedDB storage cannot clear an account state.')
+    }
+    await this.store.remove(accountUserId)
   }
 }
 

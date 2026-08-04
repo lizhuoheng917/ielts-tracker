@@ -27,6 +27,10 @@ class MemoryKeyValueStore implements TrackerPhase4bSyncKeyValueStore {
   async set(key: string, value: string): Promise<void> {
     this.values.set(key, value)
   }
+
+  async remove(key: string): Promise<void> {
+    this.values.delete(key)
+  }
 }
 
 describe('Phase 4B IndexedDB persistence contract', () => {
@@ -86,6 +90,20 @@ describe('Phase 4B IndexedDB persistence contract', () => {
     const persistence = new BrowserTrackerPhase4bSyncPersistence(store)
 
     await expect(persistence.load(accountUserId)).rejects.toThrow('malformed')
+  })
+
+  it('removes the current device outbox and baseline after permanent account deletion', async () => {
+    const store = new MemoryKeyValueStore()
+    const persistence = new BrowserTrackerPhase4bSyncPersistence(store)
+    const state = createTrackerPhase4bSyncAccountState({
+      accountUserId, deviceId, localDataEpoch: 'initial', now,
+    })
+    await persistence.save(state)
+
+    await persistence.delete(accountUserId)
+
+    expect(await persistence.load(accountUserId)).toBeNull()
+    expect(store.values.has(accountUserId)).toBe(false)
   })
 
   it('round-trips an execution tombstone with its inherited plan/date semantic key', async () => {

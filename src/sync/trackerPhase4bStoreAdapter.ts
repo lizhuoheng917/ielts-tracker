@@ -13,7 +13,13 @@ import {
 } from '@/data/localMutationJournal'
 import { STORAGE_PREFIX } from '@/lib/constants'
 import { canonicalizePlanExecutions } from '@/lib/planExecution'
-import type { PlanExecution, PracticeRecord, StudyPlan, TimerRecord } from '@/lib/types'
+import type {
+  PlanExecution,
+  PracticeRecord,
+  StudyPlan,
+  TimerRecord,
+  WordRecord,
+} from '@/lib/types'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useActivityLedgerStore } from '@/stores/activityLedgerStore'
 import { usePlanStore } from '@/stores/planStore'
@@ -21,6 +27,7 @@ import { usePracticeStore } from '@/stores/practiceStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useTimerStore } from '@/stores/timerStore'
+import { useWordStore } from '@/stores/wordStore'
 import {
   parseTrackerPhase4bLocalSnapshot,
   stableTrackerPhase4bJson,
@@ -30,6 +37,7 @@ import {
 const PLAN_STORAGE_KEY = `${STORAGE_PREFIX}:studyPlans`
 const PRACTICE_STORAGE_KEY = `${STORAGE_PREFIX}:practiceRecords`
 const TIMER_STORAGE_KEY = `${STORAGE_PREFIX}:timerRecords`
+const WORD_STORAGE_KEY = `${STORAGE_PREFIX}:wordRecords`
 
 export type TrackerPhase4bStoreInstallResult =
   | { status: 'installed'; snapshot: TrackerPhase4bLocalSnapshot }
@@ -67,8 +75,8 @@ function collectionChanges<T extends { id: string }>(
   return changes
 }
 
-function activityEvents<T extends PracticeRecord | TimerRecord | PlanExecution>(
-  entityKind: 'practice_record' | 'timer_record' | 'plan_execution',
+function activityEvents<T extends PracticeRecord | TimerRecord | PlanExecution | WordRecord>(
+  entityKind: 'practice_record' | 'timer_record' | 'plan_execution' | 'word_record',
   changes: readonly EntityMutationChange[],
   occurredAt: string,
 ): LedgerEventDraft[] {
@@ -94,6 +102,7 @@ async function rehydrateCanonicalStores(): Promise<void> {
     Promise.resolve(usePlanStore.persist.rehydrate()),
     Promise.resolve(usePracticeStore.persist.rehydrate()),
     Promise.resolve(useTimerStore.persist.rehydrate()),
+    Promise.resolve(useWordStore.persist.rehydrate()),
     Promise.resolve(useAchievementStore.persist.rehydrate()),
     Promise.resolve(useStreakStore.persist.rehydrate()),
     Promise.resolve(useSettingsStore.persist.rehydrate()),
@@ -108,6 +117,7 @@ export function readTrackerPhase4bStoreSnapshot(): TrackerPhase4bLocalSnapshot {
     planExecutions: clone(canonicalizePlanExecutions(plans.executions).executions),
     practiceRecords: clone(usePracticeStore.getState().records),
     timerRecords: clone(useTimerStore.getState().records),
+    wordRecords: clone(useWordStore.getState().records),
   })
 }
 
@@ -166,12 +176,15 @@ export async function installTrackerPhase4bStoreSnapshot(input: {
       current.timerRecords,
       desired.timerRecords,
     )
+    const wordChanges = collectionChanges<WordRecord>(current.wordRecords, desired.wordRecords)
     const planState = usePlanStore.getState()
     const practiceState = usePracticeStore.getState()
     const timerState = useTimerStore.getState()
+    const wordState = useWordStore.getState()
     const planRevision = planState.mutationRevision + (planChanges.length || executionChanges.length ? 1 : 0)
     const practiceRevision = practiceState.mutationRevision + (practiceChanges.length ? 1 : 0)
     const timerRevision = timerState.mutationRevision + (timerChanges.length ? 1 : 0)
+    const wordRevision = wordState.mutationRevision + (wordChanges.length ? 1 : 0)
     const domainPatches: LocalMutationPatch[] = []
 
     if (planChanges.length) {
@@ -233,6 +246,23 @@ export async function installTrackerPhase4bStoreSnapshot(input: {
         }),
       )
     }
+    if (wordChanges.length) {
+      domainPatches.push(
+        createEntityCollectionPatch({
+          storage: localStorage,
+          storageKey: WORD_STORAGE_KEY,
+          collection: 'records',
+          changes: wordChanges,
+        }),
+        createStateFieldsPatch({
+          storage: localStorage,
+          storageKey: WORD_STORAGE_KEY,
+          beforeState: { mutationRevision: wordState.mutationRevision },
+          expectedAfterState: { mutationRevision: wordRevision },
+          fields: ['mutationRevision'],
+        }),
+      )
+    }
 
     const transaction = createActivityTransactionPlan({
       action: 'sync.merge',
@@ -241,6 +271,7 @@ export async function installTrackerPhase4bStoreSnapshot(input: {
         ...activityEvents<PlanExecution>('plan_execution', executionChanges, occurredAt),
         ...activityEvents<PracticeRecord>('practice_record', practiceChanges, occurredAt),
         ...activityEvents<TimerRecord>('timer_record', timerChanges, occurredAt),
+        ...activityEvents<WordRecord>('word_record', wordChanges, occurredAt),
       ],
       achievements: useAchievementStore.getState(),
       streak: useStreakStore.getState(),
@@ -265,6 +296,12 @@ export async function installTrackerPhase4bStoreSnapshot(input: {
         useTimerStore.setState({
           records: clone(desired.timerRecords),
           mutationRevision: timerRevision,
+        })
+      }
+      if (wordChanges.length) {
+        useWordStore.setState({
+          records: clone(desired.wordRecords),
+          mutationRevision: wordRevision,
         })
       }
     })

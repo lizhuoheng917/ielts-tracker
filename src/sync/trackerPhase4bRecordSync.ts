@@ -4,6 +4,7 @@ import type {
   PracticeRecord,
   StudyPlan,
   TimerRecord,
+  WordRecord,
 } from '@/lib/types'
 
 export const TRACKER_PHASE4B_ENTITY_KINDS = [
@@ -11,6 +12,7 @@ export const TRACKER_PHASE4B_ENTITY_KINDS = [
   'plan_execution',
   'practice_record',
   'timer_record',
+  'word_record',
 ] as const
 
 export const TRACKER_PHASE4B_EXECUTION_KEY_SEPARATOR = '\u001f'
@@ -23,11 +25,14 @@ export const TRACKER_PHASE4B_UTF8_LIMITS = {
   description: 4 * 1024,
   topic: 512,
   note: 4 * 1024,
+  wordCategory: 256,
+  wordSubCategory: 256,
   payload: {
     study_plan: 8 * 1024,
     plan_execution: 8 * 1024,
     practice_record: 8 * 1024,
     timer_record: 8 * 1024,
+    word_record: 8 * 1024,
   },
 } as const
 
@@ -37,18 +42,21 @@ export const TRACKER_PHASE4B_NUMERIC_LIMITS = {
   executionDuration: 1_000_000,
   practiceDuration: 1_000_000,
   timerDuration: 1_000_000_000,
+  wordCount: 1_000_000_000,
 } as const
 
 export type TrackerPhase4bPlanPayload = Omit<StudyPlan, 'id' | 'updatedAt'>
 export type TrackerPhase4bExecutionPayload = Omit<PlanExecution, 'id' | 'updatedAt'>
 export type TrackerPhase4bPracticePayload = Omit<PracticeRecord, 'id' | 'updatedAt'>
 export type TrackerPhase4bTimerPayload = Omit<TimerRecord, 'id' | 'updatedAt'>
+export type TrackerPhase4bWordPayload = Omit<WordRecord, 'id' | 'updatedAt'>
 
 export interface TrackerPhase4bPayloadByKind {
   study_plan: TrackerPhase4bPlanPayload
   plan_execution: TrackerPhase4bExecutionPayload
   practice_record: TrackerPhase4bPracticePayload
   timer_record: TrackerPhase4bTimerPayload
+  word_record: TrackerPhase4bWordPayload
 }
 
 export interface TrackerPhase4bSourceByKind {
@@ -56,6 +64,7 @@ export interface TrackerPhase4bSourceByKind {
   plan_execution: PlanExecution
   practice_record: PracticeRecord
   timer_record: TimerRecord
+  word_record: WordRecord
 }
 
 export interface TrackerPhase4bLocalSnapshot {
@@ -63,6 +72,7 @@ export interface TrackerPhase4bLocalSnapshot {
   planExecutions: PlanExecution[]
   practiceRecords: PracticeRecord[]
   timerRecords: TimerRecord[]
+  wordRecords: WordRecord[]
 }
 
 export interface TrackerPhase4bQuarantinedRecord {
@@ -580,6 +590,54 @@ function parseTimerRecord(
   return parsed as TimerRecord | TrackerPhase4bTimerPayload
 }
 
+/**
+ * Word records are learner-authored source data. Keep their category and note
+ * compact, but never replace them with dashboard totals, badge state, or any
+ * other derived projection.
+ */
+function parseWordRecord(
+  value: unknown,
+  path: string,
+  payloadOnly: boolean,
+): WordRecord | TrackerPhase4bWordPayload {
+  const object = record(value, path)
+  exactKeys(object, [
+    ...(payloadOnly ? [] : ['id']),
+    'date',
+    'category',
+    'subCategory',
+    'count',
+    'note',
+    'createdAt',
+    ...(payloadOnly ? [] : ['updatedAt']),
+  ], path)
+  const parsed = withoutUndefined({
+    ...(payloadOnly ? {} : { id: identifier(object.id, `${path}.id`) }),
+    date: localDate(object.date, `${path}.date`),
+    category: boundedString(
+      object.category,
+      `${path}.category`,
+      TRACKER_PHASE4B_UTF8_LIMITS.wordCategory,
+    ),
+    subCategory: optionalText(
+      object,
+      'subCategory',
+      path,
+      TRACKER_PHASE4B_UTF8_LIMITS.wordSubCategory,
+    ),
+    count: boundedNonNegative(
+      object.count,
+      `${path}.count`,
+      TRACKER_PHASE4B_NUMERIC_LIMITS.wordCount,
+    ),
+    note: optionalText(object, 'note', path, TRACKER_PHASE4B_UTF8_LIMITS.note),
+    createdAt: timestamp(object.createdAt, `${path}.createdAt`),
+    ...(payloadOnly ? {} : { updatedAt: timestamp(object.updatedAt, `${path}.updatedAt`) }),
+  })
+  if (payloadOnly) assertPayloadBytes('word_record', parsed as TrackerPhase4bWordPayload, path)
+  return parsed as WordRecord | TrackerPhase4bWordPayload
+}
+
 function uniqueById<T extends { id: string }>(values: T[], path: string): T[] {
   const ids = new Set<string>()
   values.forEach((value, index) => {
@@ -591,7 +649,7 @@ function uniqueById<T extends { id: string }>(values: T[], path: string): T[] {
 
 export function parseTrackerPhase4bLocalSnapshot(value: unknown): TrackerPhase4bLocalSnapshot {
   const object = record(value, '$')
-  exactKeys(object, ['studyPlans', 'planExecutions', 'practiceRecords', 'timerRecords'], '$')
+  exactKeys(object, ['studyPlans', 'planExecutions', 'practiceRecords', 'timerRecords', 'wordRecords'], '$')
   const studyPlans = uniqueById(
     array(object.studyPlans, '$.studyPlans').map((item, index) => (
       parseStudyPlan(item, `$.studyPlans[${index}]`, false) as StudyPlan
@@ -616,6 +674,12 @@ export function parseTrackerPhase4bLocalSnapshot(value: unknown): TrackerPhase4b
     )),
     '$.timerRecords',
   )
+  const wordRecords = uniqueById(
+    array(object.wordRecords, '$.wordRecords').map((item, index) => (
+      parseWordRecord(item, `$.wordRecords[${index}]`, false) as WordRecord
+    )),
+    '$.wordRecords',
+  )
 
   const executionKeys = new Set<string>()
   planExecutions.forEach((execution, index) => {
@@ -626,7 +690,7 @@ export function parseTrackerPhase4bLocalSnapshot(value: unknown): TrackerPhase4b
     executionKeys.add(key)
   })
 
-  return { studyPlans, planExecutions, practiceRecords, timerRecords }
+  return { studyPlans, planExecutions, practiceRecords, timerRecords, wordRecords }
 }
 
 function quarantineEntityId(value: unknown): string | undefined {
@@ -649,11 +713,12 @@ export function inspectTrackerPhase4bLocalSnapshot(
   value: unknown,
 ): TrackerPhase4bLocalSnapshotInspection {
   const object = record(value, '$')
-  exactKeys(object, ['studyPlans', 'planExecutions', 'practiceRecords', 'timerRecords'], '$')
+  exactKeys(object, ['studyPlans', 'planExecutions', 'practiceRecords', 'timerRecords', 'wordRecords'], '$')
   const rawPlans = array(object.studyPlans, '$.studyPlans')
   const rawExecutions = array(object.planExecutions, '$.planExecutions')
   const rawPractices = array(object.practiceRecords, '$.practiceRecords')
   const rawTimers = array(object.timerRecords, '$.timerRecords')
+  const rawWords = array(object.wordRecords, '$.wordRecords')
   const quarantined: TrackerPhase4bQuarantinedRecord[] = []
 
   const parseRows = <T extends { id: string }>(input: {
@@ -706,6 +771,11 @@ export function inspectTrackerPhase4bLocalSnapshot(
     values: rawTimers,
     parse: (item, path) => parseTimerRecord(item, path, false) as TimerRecord,
   })
+  const wordRecords = parseRows<WordRecord>({
+    entityKind: 'word_record',
+    values: rawWords,
+    parse: (item, path) => parseWordRecord(item, path, false) as WordRecord,
+  })
 
   const syncablePlanIds = new Set(studyPlans.map((plan) => plan.id))
   const executionKeys = new Set<string>()
@@ -735,7 +805,7 @@ export function inspectTrackerPhase4bLocalSnapshot(
   })
 
   return {
-    snapshot: { studyPlans, planExecutions, practiceRecords, timerRecords },
+    snapshot: { studyPlans, planExecutions, practiceRecords, timerRecords, wordRecords },
     quarantined,
   }
 }
@@ -754,6 +824,8 @@ export function parseTrackerPhase4bPayload<K extends TrackerPhase4bEntityKind>(
       return parsePracticeRecord(value, path, true) as TrackerPhase4bPayloadByKind[K]
     case 'timer_record':
       return parseTimerRecord(value, path, true) as TrackerPhase4bPayloadByKind[K]
+    case 'word_record':
+      return parseWordRecord(value, path, true) as TrackerPhase4bPayloadByKind[K]
   }
 }
 
@@ -809,6 +881,17 @@ export function createTrackerPhase4bPayload<K extends TrackerPhase4bEntityKind>(
         subject: value.subject,
         date: value.date,
         duration: value.duration,
+        note: value.note,
+        createdAt: value.createdAt,
+      }) as TrackerPhase4bPayloadByKind[K]
+    }
+    case 'word_record': {
+      const value = source as WordRecord
+      return parseTrackerPhase4bPayload('word_record', {
+        date: value.date,
+        category: value.category,
+        subCategory: value.subCategory,
+        count: value.count,
         note: value.note,
         createdAt: value.createdAt,
       }) as TrackerPhase4bPayloadByKind[K]
@@ -880,6 +963,14 @@ export function materializeTrackerPhase4bLocalEntities(
       entityId: source.id,
       semanticKey: defaultSemanticKey('timer_record', source.id),
       payload: createTrackerPhase4bPayload('timer_record', source),
+      updatedAt: source.updatedAt,
+      updatedAtSource: 'record' as const,
+    })),
+    ...snapshot.wordRecords.map((source) => ({
+      entityKind: 'word_record' as const,
+      entityId: source.id,
+      semanticKey: defaultSemanticKey('word_record', source.id),
+      payload: createTrackerPhase4bPayload('word_record', source),
       updatedAt: source.updatedAt,
       updatedAtSource: 'record' as const,
     })),

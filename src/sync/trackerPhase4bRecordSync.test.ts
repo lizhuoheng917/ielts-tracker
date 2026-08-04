@@ -5,6 +5,7 @@ import type {
   PracticeRecord,
   StudyPlan,
   TimerRecord,
+  WordRecord,
 } from '@/lib/types'
 import {
   canonicalizeTrackerPhase4bRemoteEntities,
@@ -92,12 +93,26 @@ function timer(id = 'timer-1', updatedAt = t1): TimerRecord {
   }
 }
 
+function word(id = 'word-1', updatedAt = t1): WordRecord {
+  return {
+    id,
+    date: '2026-08-03',
+    category: '学术词汇',
+    subCategory: '教育',
+    count: 24,
+    note: '搭配与同义替换',
+    createdAt: t0,
+    updatedAt,
+  }
+}
+
 function snapshot(overrides: Partial<TrackerPhase4bLocalSnapshot> = {}): TrackerPhase4bLocalSnapshot {
   return {
     studyPlans: [plan()],
     planExecutions: [execution()],
     practiceRecords: [practice()],
     timerRecords: [timer()],
+    wordRecords: [],
     ...overrides,
   }
 }
@@ -173,6 +188,28 @@ describe('Phase 4B strict snapshot and compact payload parsing', () => {
     })).toThrow('unsupported field apiKey')
   })
 
+  it('syncs only raw word-study fields and keeps derived data out of the payload', () => {
+    const source = { ...word(), totalXP: 900, heatmapData: { '2026-08-03': 1 } }
+    const payload = createTrackerPhase4bPayload('word_record', source)
+
+    expect(payload).toEqual({
+      date: '2026-08-03',
+      category: '学术词汇',
+      subCategory: '教育',
+      count: 24,
+      note: '搭配与同义替换',
+      createdAt: t0,
+    })
+    expect(payload).not.toHaveProperty('id')
+    expect(payload).not.toHaveProperty('updatedAt')
+    expect(payload).not.toHaveProperty('totalXP')
+    expect(payload).not.toHaveProperty('heatmapData')
+    expect(() => parseTrackerPhase4bPayload('word_record', {
+      ...payload,
+      totalXP: 1,
+    })).toThrow('unsupported field totalXP')
+  })
+
   it('applies UTF-8 byte limits without truncating multibyte learner text', () => {
     const oversized = '雅'.repeat(Math.floor(TRACKER_PHASE4B_UTF8_LIMITS.note / 3) + 1)
     expect(trackerPhase4bUtf8Bytes(oversized)).toBeGreaterThan(TRACKER_PHASE4B_UTF8_LIMITS.note)
@@ -198,6 +235,10 @@ describe('Phase 4B strict snapshot and compact payload parsing', () => {
     ['negative timer seconds', () => parseTrackerPhase4bPayload('timer_record', {
       ...createTrackerPhase4bPayload('timer_record', timer()),
       duration: -1,
+    })],
+    ['blank word category', () => parseTrackerPhase4bPayload('word_record', {
+      ...createTrackerPhase4bPayload('word_record', word()),
+      category: ' ',
     })],
   ])('rejects %s', (_label, parse) => {
     expect(parse).toThrow()

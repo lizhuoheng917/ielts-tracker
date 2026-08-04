@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { StudyPlan } from '@/lib/types'
+import type { StudyPlan, WordRecord } from '@/lib/types'
 import {
   createTrackerPhase4bPayload,
   diffTrackerPhase4bLocalEntities,
@@ -40,12 +40,26 @@ function plan(id = 'plan-1'): StudyPlan {
   }
 }
 
+function word(id = 'word-1'): WordRecord {
+  return {
+    id,
+    date: '2026-08-03',
+    category: '学术词汇',
+    subCategory: '教育',
+    count: 18,
+    note: '搭配复习',
+    createdAt: t0,
+    updatedAt: t1,
+  }
+}
+
 function snapshot(input: Partial<TrackerPhase4bLocalSnapshot> = {}): TrackerPhase4bLocalSnapshot {
   return {
     studyPlans: [plan()],
     planExecutions: [],
     practiceRecords: [],
     timerRecords: [],
+    wordRecords: [],
     ...input,
   }
 }
@@ -59,6 +73,10 @@ class MemoryPersistence implements TrackerPhase4bSyncPersistence {
 
   async save(state: TrackerPhase4bSyncAccountState): Promise<void> {
     this.state = structuredClone(state)
+  }
+
+  async delete(): Promise<void> {
+    this.state = null
   }
 }
 
@@ -75,7 +93,13 @@ function capabilities(currentCursor = 0) {
     enabled: true,
     accountEpoch: 1,
     currentCursor,
-    allowedEntityKinds: ['study_plan', 'plan_execution', 'practice_record', 'timer_record'],
+    allowedEntityKinds: [
+      'study_plan',
+      'plan_execution',
+      'practice_record',
+      'timer_record',
+      'word_record',
+    ],
     maxBatchSize: 50,
     maxPayloadBytes: 64 * 1024,
   }
@@ -278,6 +302,130 @@ describe('Phase 4B runtime contract', () => {
       'plan_execution',
       'study_plan',
     ])
+  })
+
+  it('queues a compact word record through the existing Phase 4B runtime', async () => {
+    const local = snapshot({ studyPlans: [], wordRecords: [word()] })
+    const persistence = new MemoryPersistence()
+    const appliedOperations: TrackerPhase4bSyncOperation[] = []
+    const rpc: TrackerPhase4bSyncRpc = {
+      getVerifiedIdentity: async () => ({ accountUserId, accessToken: 'token' }),
+      getCapabilities: async () => capabilities(),
+      getSnapshot: async () => ({
+        enabled: true,
+        accountEpoch: 1,
+        cursor: 0,
+        generatedAt: t0,
+        snapshotHash: 'empty',
+        entities: [],
+      }),
+      applyBatch: async (_token, input) => {
+        appliedOperations.push(...input.operations)
+        return {
+          status: 'applied',
+          requestId: input.requestId,
+          requestHash: input.requestHash,
+          accountEpoch: 1,
+          cursor: 1,
+          results: input.operations.map((operation) => ({
+            operationId: operation.operationId,
+            entityKind: operation.entityKind,
+            entityId: operation.entityId,
+            status: 'applied',
+            version: 1,
+            cursor: 1,
+          })),
+        }
+      },
+      pull: async () => ({
+        enabled: true,
+        accountEpoch: 1,
+        cursor: 0,
+        nextCursor: 1,
+        hasMore: false,
+        changes: appliedOperations.map((operation) => ({
+          cursor: 1,
+          entityKind: operation.entityKind,
+          entityId: operation.entityId,
+          version: 1,
+          payload: operation.payload ?? null,
+          deletedAt: null,
+          updatedAt: t1,
+        })),
+      }),
+    }
+    const runtime = new TrackerPhase4bSyncRuntime({
+      accountUserId,
+      persistence,
+      rpc,
+      inspectBinding: () => ({ status: 'bound' }),
+      readLocalDataEpoch: () => 'initial',
+      readLocalSnapshot: () => local,
+      installLocalSnapshot: async ({ snapshot: installed }) => ({ status: 'unchanged', snapshot: installed }),
+      now: () => new Date(t1),
+      createId: idFactory(),
+    })
+
+    await runtime.flush()
+
+    expect(appliedOperations).toHaveLength(1)
+    expect(appliedOperations[0]).toMatchObject({
+      entityKind: 'word_record',
+      entityId: 'word-1',
+      action: 'upsert',
+      baseVersion: 0,
+      payload: {
+        date: '2026-08-03',
+        category: '学术词汇',
+        subCategory: '教育',
+        count: 18,
+        note: '搭配复习',
+        createdAt: t0,
+      },
+    })
+    expect(appliedOperations[0]?.payload).not.toHaveProperty('updatedAt')
+    expect(persistence.state?.baseline).toHaveLength(1)
+    expect(persistence.state?.baseline[0]?.entityKind).toBe('word_record')
+  })
+
+  it('keeps all Phase 4B records local until the shared capability explicitly allows word records', async () => {
+    const persistence = new MemoryPersistence()
+    const applyBatch = vi.fn()
+    const status = vi.fn()
+    const runtime = new TrackerPhase4bSyncRuntime({
+      accountUserId,
+      persistence,
+      rpc: {
+        getVerifiedIdentity: async () => ({ accountUserId, accessToken: 'token' }),
+        getCapabilities: async () => ({
+          ...capabilities(),
+          allowedEntityKinds: [
+            'study_plan',
+            'plan_execution',
+            'practice_record',
+            'timer_record',
+          ],
+        }),
+        getSnapshot: async () => { throw new Error('snapshot should not run') },
+        applyBatch,
+        pull: async () => { throw new Error('pull should not run') },
+      },
+      inspectBinding: () => ({ status: 'bound' }),
+      readLocalDataEpoch: () => 'initial',
+      readLocalSnapshot: () => snapshot({ studyPlans: [], wordRecords: [word()] }),
+      installLocalSnapshot: async ({ snapshot: installed }) => ({ status: 'unchanged', snapshot: installed }),
+      now: () => new Date(t1),
+      createId: idFactory(),
+      onStatusChange: status,
+    })
+
+    await runtime.flush()
+
+    expect(applyBatch).not.toHaveBeenCalled()
+    expect(status).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: 'paused',
+      detail: expect.stringContaining('暂未开放'),
+    }))
   })
 
   it('keeps a rejected operation local and does not rebuild the same diagnostic on the next flush', async () => {

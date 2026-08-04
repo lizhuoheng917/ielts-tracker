@@ -269,16 +269,18 @@ describe('activity ledger store integration', () => {
     expect(useActivityLedgerStore.getState().events).toEqual([])
   })
 
-  it('keeps canonical mutations available when shadow persistence hits quota', () => {
+  it('keeps canonical mutations available when shadow persistence hits quota', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const today = toLocalDate()
     memoryStorage.failNextWriteForKey('ielts-tracker:activityLedger')
 
-    expect(() => useWordStore.getState().addRecord({
+    const result = await useWordStore.getState().addRecord({
       date: today,
       category: 'academic',
       count: 10,
-    })).not.toThrow()
+    })
+
+    expect(result.status).toBe('applied')
 
     expect(useWordStore.getState().records).toHaveLength(1)
     expect(useAchievementStore.getState().totalXP).toBe(5)
@@ -418,11 +420,11 @@ describe('activity ledger store integration', () => {
     })
   })
 
-  it('keeps word XP and activity reversible through create, move, edit and delete', () => {
+  it('keeps word XP and activity reversible through create, move, edit and delete', async () => {
     const firstDate = toLocalDate()
     const secondDate = firstDate === '2026-08-01' ? '2026-07-31' : '2026-08-01'
 
-    useWordStore.getState().addRecord({
+    await useWordStore.getState().addRecord({
       date: firstDate,
       category: 'academic',
       count: 5,
@@ -433,13 +435,13 @@ describe('activity ledger store integration', () => {
     expect(useStreakStore.getState().heatmapData).toEqual({ [firstDate]: 1 })
     expectReplayMatchesCurrentProjection()
 
-    useWordStore.getState().updateRecord(record.id, { date: secondDate, count: 10 })
+    await useWordStore.getState().updateRecord(record.id, { date: secondDate, count: 10 })
 
     expect(useAchievementStore.getState().totalXP).toBe(5)
     expect(useStreakStore.getState().heatmapData).toEqual({ [secondDate]: 1 })
     expectReplayMatchesCurrentProjection()
 
-    useWordStore.getState().deleteRecord(record.id)
+    await useWordStore.getState().deleteRecord(record.id)
 
     expect(useAchievementStore.getState().totalXP).toBe(0)
     expect(useStreakStore.getState().heatmapData).toEqual({})
@@ -567,7 +569,7 @@ describe('activity ledger store integration', () => {
     ]))
   })
 
-  it('rehydrates plan, practice and timer records through one canonical refresh', async () => {
+  it('rehydrates plan, practice, timer and word records through one canonical refresh', async () => {
     const timestamp = '2026-08-03T01:00:00.000Z'
     localStorage.setItem('ielts-tracker:practiceRecords', JSON.stringify({
       state: {
@@ -597,6 +599,20 @@ describe('activity ledger store integration', () => {
       },
       version: 0,
     }))
+    localStorage.setItem('ielts-tracker:wordRecords', JSON.stringify({
+      state: {
+        mutationRevision: 9,
+        records: [{
+          id: 'cross-tab-word',
+          date: toLocalDate(),
+          category: '学术词汇',
+          count: 12,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }],
+      },
+      version: 0,
+    }))
 
     const status = await refreshTrackerCanonicalStores()
 
@@ -609,11 +625,15 @@ describe('activity ledger store integration', () => {
       mutationRevision: 8,
       records: [{ id: 'cross-tab-timer' }],
     })
+    expect(useWordStore.getState()).toMatchObject({
+      mutationRevision: 9,
+      records: [{ id: 'cross-tab-word' }],
+    })
   })
 
-  it('awards a manual daily checkin even after another learning action', () => {
+  it('awards a manual daily checkin even after another learning action', async () => {
     const today = toLocalDate()
-    useWordStore.getState().addRecord({ date: today, category: 'academic', count: 5 })
+    await useWordStore.getState().addRecord({ date: today, category: 'academic', count: 5 })
 
     expect(useSettingsStore.getState().completeDailyCheckin(today)).toBe(true)
     expect(useSettingsStore.getState().completeDailyCheckin(today)).toBe(false)
@@ -622,10 +642,10 @@ describe('activity ledger store integration', () => {
     expectReplayMatchesCurrentProjection()
   })
 
-  it('unlocks continuous-learning milestones from ordinary learning activity', () => {
+  it('unlocks continuous-learning milestones from ordinary learning activity', async () => {
     const today = toLocalDate()
     for (let offset = -6; offset <= 0; offset += 1) {
-      useWordStore.getState().addRecord({
+      await useWordStore.getState().addRecord({
         date: addLocalDays(today, offset),
         category: 'academic',
         count: 1,
@@ -866,8 +886,8 @@ describe('activity ledger store integration', () => {
     expect(persisted.state).toMatchObject({ migrationVersion: 0, awards: [] })
   })
 
-  it('rebases the shadow ledger on a successful browser backup import', () => {
-    useWordStore.getState().addRecord({
+  it('rebases the shadow ledger on a successful browser backup import', async () => {
+    await useWordStore.getState().addRecord({
       date: toLocalDate(),
       category: 'academic',
       count: 5,
@@ -956,8 +976,8 @@ describe('activity ledger store integration', () => {
     ])
   })
 
-  it('restores canonical browser stores when a multi-store import write fails', () => {
-    useWordStore.getState().addRecord({
+  it('restores canonical browser stores when a multi-store import write fails', async () => {
+    await useWordStore.getState().addRecord({
       date: toLocalDate(),
       category: 'academic',
       count: 5,
@@ -1001,8 +1021,8 @@ describe('activity ledger store integration', () => {
   })
 
   it('ignores mutations for missing ids without changing projections', async () => {
-    useWordStore.getState().updateRecord('missing', { count: 999 })
-    useWordStore.getState().deleteRecord('missing')
+    await useWordStore.getState().updateRecord('missing', { count: 999 })
+    await useWordStore.getState().deleteRecord('missing')
     await usePlanStore.getState().setExecutionForDate({
       planId: 'missing',
       date: toLocalDate(),

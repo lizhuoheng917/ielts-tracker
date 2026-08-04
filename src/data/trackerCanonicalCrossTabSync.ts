@@ -16,11 +16,13 @@ import { usePracticeStore } from '@/stores/practiceStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useStreakStore } from '@/stores/streakStore'
 import { useTimerStore } from '@/stores/timerStore'
+import { useWordStore } from '@/stores/wordStore'
 
 const TRACKER_CANONICAL_SCOPES = new Set([
   'studyPlans',
   'practiceRecords',
   'timerRecords',
+  'wordRecords',
   'trackerCore',
 ])
 
@@ -34,6 +36,7 @@ async function rehydrateTrackerCanonicalStores(): Promise<void> {
     Promise.resolve(usePlanStore.persist.rehydrate()),
     Promise.resolve(usePracticeStore.persist.rehydrate()),
     Promise.resolve(useTimerStore.persist.rehydrate()),
+    Promise.resolve(useWordStore.persist.rehydrate()),
     Promise.resolve(useDailyCheckinStore.persist.rehydrate()),
     Promise.resolve(useAchievementStore.persist.rehydrate()),
     Promise.resolve(useStreakStore.persist.rehydrate()),
