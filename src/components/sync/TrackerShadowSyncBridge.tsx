@@ -22,13 +22,17 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useTimerStore } from '@/stores/timerStore'
 import { useWordStore } from '@/stores/wordStore'
 import {
+  applyTrackerContentCloudCapabilities,
   identitiesFromTrackerContentSnapshot,
   TRACKER_CONTENT_CLOUD_DEVICE_SCOPE,
+  TRACKER_CONTENT_CLOUD_POLICY_REFRESH_EVENT,
   TRACKER_CONTENT_CLOUD_POLICY_STORAGE_KEY,
   TRACKER_CONTENT_CLOUD_SYNC_EVENT,
+  type TrackerContentCloudPolicyRefreshRequest,
   trackerContentCloudPolicyRevision,
   useTrackerContentCloudPolicyStore,
 } from '@/sync/trackerContentCloudPolicy'
+import { TrackerContentCloudPolicyRefreshRuntime } from '@/sync/trackerContentCloudPolicyRefresh'
 
 const SETTINGS_STORAGE_KEY = `${STORAGE_PREFIX}:settings`
 
@@ -85,6 +89,10 @@ export function TrackerShadowSyncBridge() {
     if (!accountUserId) return
 
     let active = true
+    const contentPolicyRefresh = new TrackerContentCloudPolicyRefreshRuntime({ accountUserId })
+    const refreshContentPolicy = (request: TrackerContentCloudPolicyRefreshRequest = {}) => {
+      void contentPolicyRefresh.refresh(request)
+    }
     const emptyStream = (): TrackerSyncStreamStatus => ({
       phase: 'idle',
       detail: '',
@@ -162,9 +170,12 @@ export function TrackerShadowSyncBridge() {
     const learningRuntime = new TrackerPhase4bSyncRuntime({
       accountUserId,
       onCapabilities: (capabilities) => {
-        const contentPolicy = useTrackerContentCloudPolicyStore.getState()
-        contentPolicy.setSelectiveCloudAvailable(capabilities.selectiveContentCloudEnabled)
-        contentPolicy.setQuota(capabilities.contentQuota)
+        applyTrackerContentCloudCapabilities({
+          accountUserId,
+          selectiveCloudAvailable: capabilities.selectiveContentCloudEnabled,
+          quota: capabilities.contentQuota,
+          status: { contentCursor: capabilities.currentCursor },
+        })
       },
       onOperationRejected: ({ entityKind, entityId, reason }) => {
         useTrackerContentCloudPolicyStore.getState().markRejected(entityKind, entityId, reason)
@@ -176,6 +187,9 @@ export function TrackerShadowSyncBridge() {
           policy.completeContentTransfer(entityKind, entityId, action === 'upsert' ? 'cloud' : 'local')
         }
         if (restoreDeleted) policy.acknowledgeRestore(entityKind, entityId)
+        // A completed upload/delete can change the server count. Refresh the
+        // visible allowance without forcing another record reconciliation.
+        refreshContentPolicy({ force: true, reason: 'after-save' })
       },
       onStatusChange: (event: TrackerPhase4bSyncStatusEvent) => {
         if (!active) return
@@ -258,6 +272,34 @@ export function TrackerShadowSyncBridge() {
       updateFailureStatus('exam')
       updateFailureStatus('learning')
     }
+    const onContentCloudPolicyRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail
+      if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return
+      const request = detail as { force?: unknown; reason?: unknown }
+      if (
+        (request.force !== undefined && typeof request.force !== 'boolean')
+        || (request.reason !== undefined && typeof request.reason !== 'string')
+      ) return
+      refreshContentPolicy({
+        ...(request.force === true ? { force: true } : {}),
+        ...(typeof request.reason === 'string'
+          ? { reason: request.reason as TrackerContentCloudPolicyRefreshRequest['reason'] }
+          : {}),
+      })
+    }
+    const onContentCloudPolicyFocus = () => refreshContentPolicy({ reason: 'focus' })
+    const onContentCloudPolicyVisibility = () => {
+      if (document.visibilityState === 'visible') refreshContentPolicy({ reason: 'visibility' })
+    }
+    const onContentCloudPolicyOnline = () => refreshContentPolicy({ force: true, reason: 'online' })
+    // While a learner stays on a save-location form, an administrator change
+    // should arrive without requiring a tab switch. The refresh runtime uses
+    // the lightweight status RPC when available and still enforces its own TTL.
+    const contentCloudPolicyInterval = window.setInterval(() => {
+      if (navigator.onLine && document.visibilityState === 'visible') {
+        refreshContentPolicy({ reason: 'interval' })
+      }
+    }, 60_000)
     const onStorage = (event: StorageEvent) => {
       if (event.key === SETTINGS_STORAGE_KEY) void useSettingsStore.persist.rehydrate()
       if (event.key === TRACKER_CONTENT_CLOUD_POLICY_STORAGE_KEY) {
@@ -283,27 +325,38 @@ export function TrackerShadowSyncBridge() {
         request.entityKind === 'study_plan'
         && (request.planTransfer === 'uploading' || request.planTransfer === 'removing')
       ) {
-        void learningRuntime.transferPlan(request.entityId, request.planTransfer).catch((error) => {
-          reportSyncFailure('learning-records', error)
-          updateFailureStatus('learning', error)
-        })
+        void learningRuntime.transferPlan(request.entityId, request.planTransfer)
+          .catch((error) => {
+            reportSyncFailure('learning-records', error)
+            updateFailureStatus('learning', error)
+          })
+          .finally(() => refreshContentPolicy({ force: true, reason: 'after-save' }))
         return
       }
       if (request.retry) {
-        void learningRuntime.retryEntity(request.entityKind, request.entityId).catch((error) => {
+        void learningRuntime.retryEntity(request.entityKind, request.entityId)
+          .catch((error) => {
+            reportSyncFailure('learning-records', error)
+            updateFailureStatus('learning', error)
+          })
+          .finally(() => refreshContentPolicy({ force: true, reason: 'after-save' }))
+        return
+      }
+      void learningRuntime.flush()
+        .catch((error) => {
           reportSyncFailure('learning-records', error)
           updateFailureStatus('learning', error)
         })
-        return
-      }
-      void learningRuntime.flush().catch((error) => {
-        reportSyncFailure('learning-records', error)
-        updateFailureStatus('learning', error)
-      })
+        .finally(() => refreshContentPolicy({ force: true, reason: 'after-save' }))
     }
     window.addEventListener('offline', onOffline)
     window.addEventListener('storage', onStorage)
     window.addEventListener(TRACKER_CONTENT_CLOUD_SYNC_EVENT, onContentCloudSyncRequest)
+    window.addEventListener(TRACKER_CONTENT_CLOUD_POLICY_REFRESH_EVENT, onContentCloudPolicyRefresh)
+    window.addEventListener('focus', onContentCloudPolicyFocus)
+    window.addEventListener('online', onContentCloudPolicyOnline)
+    document.addEventListener('visibilitychange', onContentCloudPolicyVisibility)
+    refreshContentPolicy({ force: true, reason: 'initial' })
     if (!navigator.onLine) onOffline()
 
     return () => {
@@ -312,9 +365,15 @@ export function TrackerShadowSyncBridge() {
       removeLearningTriggers()
       examDateRuntime.dispose()
       learningRuntime.dispose()
+      contentPolicyRefresh.dispose()
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('storage', onStorage)
       window.removeEventListener(TRACKER_CONTENT_CLOUD_SYNC_EVENT, onContentCloudSyncRequest)
+      window.removeEventListener(TRACKER_CONTENT_CLOUD_POLICY_REFRESH_EVENT, onContentCloudPolicyRefresh)
+      window.removeEventListener('focus', onContentCloudPolicyFocus)
+      window.removeEventListener('online', onContentCloudPolicyOnline)
+      document.removeEventListener('visibilitychange', onContentCloudPolicyVisibility)
+      window.clearInterval(contentCloudPolicyInterval)
     }
   }, [accountUserId])
 

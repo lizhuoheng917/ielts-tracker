@@ -467,7 +467,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
           </Button>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="outline">Lexi AI</Badge>
-            <Badge variant="secondary">{preview.submission.wordCount} 词</Badge>
+            <Badge variant="secondary">英文 {preview.submission.wordCount} 词</Badge>
             {status === 'saved' && <Badge className="gap-1"><CheckCircle2 className="size-3" />已保存</Badge>}
           </div>
         </div>
@@ -622,7 +622,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         <div className="flex items-end justify-between gap-3">
           <Label htmlFor="writing-essay" className="text-sm font-semibold">3. 作文正文</Label>
           <span className={cn('text-xs tabular-nums', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
-            {wordCount} 词
+            英文 {wordCount} 词
           </span>
         </div>
         <Textarea
@@ -637,8 +637,8 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         />
         <p className={cn('text-xs leading-5', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
           {belowMinimum
-            ? `当前少于 IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 的 ${minimumWords} 词最低要求；仍可批改，但报告会说明这一局限。`
-            : `IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 建议不少于 ${minimumWords} 词。`}
+            ? `当前英文词数少于 IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 的 ${minimumWords} 词最低要求；仍可批改，但报告会说明这一局限。`
+            : `IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 建议不少于 ${minimumWords} 个英文词；中文不会计入英文词数。`}
         </p>
       </section>
 

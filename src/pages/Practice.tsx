@@ -1108,7 +1108,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{report.title}</span>
                         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                          {report.content.submission.wordCount} 词 · {report.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
+                          英文 {report.content.submission.wordCount} 词 · {report.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(report.createdAt), 'yyyy-MM-dd HH:mm')}
                         </span>
                       </span>
                     </button>
@@ -1160,7 +1160,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               <DialogHeader className="border-b px-4 pb-3 pt-4 sm:px-5">
                 <DialogTitle className="pr-8">{selectedWritingReport.title}</DialogTitle>
                 <DialogDescription>
-                  {selectedWritingReport.content.submission.wordCount} 词 · {selectedWritingReport.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(selectedWritingReport.createdAt), 'yyyy-MM-dd HH:mm')}
+                  英文 {selectedWritingReport.content.submission.wordCount} 词 · {selectedWritingReport.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(selectedWritingReport.createdAt), 'yyyy-MM-dd HH:mm')}
                 </DialogDescription>
               </DialogHeader>
               <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-5">

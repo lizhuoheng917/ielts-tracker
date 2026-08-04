@@ -30,6 +30,14 @@ export class TrackerShadowSyncRpcError extends Error {
 export interface TrackerShadowSyncRpc {
   getVerifiedIdentity(): Promise<TrackerShadowSyncIdentity | null>
   getCapabilities(accessToken: string): Promise<unknown>
+  /** Optional lightweight policy/allowance probe added after the original
+   * capabilities endpoint. Older backends deliberately omit it. */
+  getContentCloudStatus?(accessToken: string, input: {
+    expectedUserId: string
+    knownPolicyVersion: number | null
+    knownOverrideVersion: number | null
+    knownContentCursor: number | null
+  }): Promise<unknown>
   applyBatch(accessToken: string, input: {
     deviceId: string
     requestId: string
@@ -96,6 +104,7 @@ async function withAbortRetry<Value>(
 
 const singleFlightIdentity = createSingleFlight<'current-session', TrackerShadowSyncIdentity | null>()
 const singleFlightCapabilities = createSingleFlight<string, unknown>()
+const singleFlightContentCloudStatus = createSingleFlight<string, unknown>()
 
 async function invokePinnedRpcAttempt(
   functionName: string,
@@ -165,6 +174,28 @@ function getCapabilitiesSingleFlight(accessToken: string): Promise<unknown> {
   )
 }
 
+function getContentCloudStatusSingleFlight(
+  accessToken: string,
+  input: Parameters<NonNullable<TrackerShadowSyncRpc['getContentCloudStatus']>>[1],
+): Promise<unknown> {
+  const key = [
+    accessToken,
+    input.expectedUserId,
+    input.knownPolicyVersion ?? '',
+    input.knownOverrideVersion ?? '',
+    input.knownContentCursor ?? '',
+  ].join('\u0000')
+  return singleFlightContentCloudStatus(
+    key,
+    () => invokePinnedRpc('tracker_get_content_cloud_status', accessToken, {
+      p_expected_user_id: input.expectedUserId,
+      p_known_policy_version: input.knownPolicyVersion,
+      p_known_override_version: input.knownOverrideVersion,
+      p_known_content_cursor: input.knownContentCursor,
+    }),
+  )
+}
+
 async function loadVerifiedIdentity(): Promise<TrackerShadowSyncIdentity | null> {
   const { supabase } = await import('@/lib/supabase')
   if (!supabase) return null
@@ -183,6 +214,7 @@ function getVerifiedIdentitySingleFlight(): Promise<TrackerShadowSyncIdentity | 
 export const browserTrackerShadowSyncRpc: TrackerShadowSyncRpc = {
   getVerifiedIdentity: getVerifiedIdentitySingleFlight,
   getCapabilities: getCapabilitiesSingleFlight,
+  getContentCloudStatus: getContentCloudStatusSingleFlight,
   applyBatch: (accessToken, input) => invokePinnedRpc(
     'tracker_apply_sync_batch',
     accessToken,

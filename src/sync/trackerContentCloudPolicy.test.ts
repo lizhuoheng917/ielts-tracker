@@ -126,6 +126,29 @@ describe('Tracker content cloud location policy', () => {
     expect(policy.trackerContentCloudPlanTransferState('plan-1')).toBe('removing')
   })
 
+  it('asks the bridge to refresh policy before an explicit cloud-location save', () => {
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    try {
+      const events: Array<{ type: string; detail: unknown }> = []
+      target.addEventListener(policy.TRACKER_CONTENT_CLOUD_POLICY_REFRESH_EVENT, (event) => {
+        events.push({ type: 'refresh', detail: (event as CustomEvent<unknown>).detail })
+      })
+      target.addEventListener(policy.TRACKER_CONTENT_CLOUD_SYNC_EVENT, (event) => {
+        events.push({ type: 'sync', detail: (event as CustomEvent<unknown>).detail })
+      })
+
+      policy.setTrackerContentCloudLocation({ entityKind: 'word_record', entityId: 'word-1', mode: 'cloud' })
+
+      expect(events).toEqual([
+        { type: 'refresh', detail: { force: true, reason: 'before-save' } },
+        expect.objectContaining({ type: 'sync' }),
+      ])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps plan executions together and does not expose a partial plan during upload', () => {
     const store = policy.useTrackerContentCloudPolicyStore.getState()
     store.ensureLegacyContent([])

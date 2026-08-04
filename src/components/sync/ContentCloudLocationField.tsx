@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Cloud, HardDrive, LoaderCircle, RefreshCw } from 'lucide-react'
 
 import { useAuth } from '@/auth/authContext'
@@ -5,6 +6,7 @@ import { cn } from '@/lib/utils'
 import type { TrackerPhase4bEntityKind } from '@/sync/trackerPhase4bRecordSync'
 import {
   readableTrackerContentCloudFailure,
+  requestTrackerContentCloudPolicyRefresh,
   requestTrackerContentCloudSync,
   trackerContentCloudFailure,
   trackerContentCloudFirstFailureId,
@@ -14,6 +16,12 @@ import {
   type TrackerContentCloudSelectableKind,
   useTrackerContentCloudPolicyStore,
 } from '@/sync/trackerContentCloudPolicy'
+
+const EMPTY_POLICY_REFRESH = {
+  phase: 'idle' as const,
+  lastCheckedAt: null,
+  lastErrorAt: null,
+}
 
 interface ContentCloudLocationFieldProps {
   entityKind: TrackerContentCloudSelectableKind
@@ -74,11 +82,14 @@ export function ContentCloudLocationField({
 }: ContentCloudLocationFieldProps) {
   const { status, managedAiDataBinding } = useAuth()
   const cloudReady = status === 'signed-in' && managedAiDataBinding.status === 'bound'
+  const selectiveCloudAvailability = useTrackerContentCloudPolicyStore((state) => (
+    state.selectiveCloudAvailableByScope[state.activeScope]
+  ))
   const quota = useTrackerContentCloudPolicyStore((state) => (
     state.quotaByScope[state.activeScope]?.[entityKind] ?? null
   ))
-  const selectiveCloudAvailable = useTrackerContentCloudPolicyStore((state) => (
-    state.selectiveCloudAvailableByScope[state.activeScope] === true
+  const policyRefresh = useTrackerContentCloudPolicyStore((state) => (
+    state.contentCloudRefreshByScope[state.activeScope] ?? null
   ))
   const relatedQuota = useTrackerContentCloudPolicyStore((state) => (
     relatedContent ? state.quotaByScope[state.activeScope]?.[relatedContent.entityKind] ?? null : null
@@ -108,11 +119,28 @@ export function ContentCloudLocationField({
       ? { entityKind: relatedContent.entityKind, entityId: relatedFailureEntityId }
       : null
   const retryEntityId = failureTarget?.entityId ?? null
+  const hasConfirmedCloudPolicy = typeof selectiveCloudAvailability === 'boolean'
+  const selectiveCloudAvailable = selectiveCloudAvailability === true
+  const refreshState = policyRefresh ?? EMPTY_POLICY_REFRESH
+  const isCheckingPolicy = cloudReady && refreshState.phase === 'refreshing'
+  const policyRefreshFailed = cloudReady && refreshState.phase === 'error'
   const quotaExhausted = value !== 'cloud' && !trackerContentCloudQuotaHasCapacity(quota)
   const relatedQuotaExhausted = value !== 'cloud'
     && Boolean(relatedContent)
     && !trackerContentCloudQuotaHasCapacity(relatedQuota, relatedContent?.count ?? 0)
-  const cloudDisabled = disabled || !cloudReady || !selectiveCloudAvailable || quotaExhausted || relatedQuotaExhausted
+  const cloudDisabled = disabled
+    || !cloudReady
+    || !hasConfirmedCloudPolicy
+    || isCheckingPolicy
+    || policyRefreshFailed
+    || !selectiveCloudAvailable
+    || quotaExhausted
+    || relatedQuotaExhausted
+
+  useEffect(() => {
+    if (!cloudReady) return
+    requestTrackerContentCloudPolicyRefresh({ force: true, reason: 'page-enter' })
+  }, [cloudReady, entityId, entityKind])
 
   return (
     <section
@@ -129,6 +157,18 @@ export function ContentCloudLocationField({
             <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
             {transferState === 'uploading' ? '等待上传' : '等待移除'}
           </span>
+        )}
+        {cloudReady && !transferState && (
+          <button
+            type="button"
+            onClick={() => requestTrackerContentCloudPolicyRefresh({ force: true, reason: 'manual' })}
+            disabled={disabled || isCheckingPolicy}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="刷新云端规则和额度"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', isCheckingPolicy && 'animate-spin')} aria-hidden="true" />
+            {isCheckingPolicy ? '确认中' : '刷新'}
+          </button>
         )}
       </div>
 
@@ -150,7 +190,10 @@ export function ContentCloudLocationField({
           type="button"
           aria-pressed={value === 'cloud'}
           disabled={cloudDisabled}
-          onClick={() => onValueChange('cloud')}
+          onClick={() => {
+            requestTrackerContentCloudPolicyRefresh({ force: true, reason: 'before-save' })
+            onValueChange('cloud')
+          }}
           className={cn(
             'flex min-h-12 items-center gap-2 rounded-lg border px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
             value === 'cloud' ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent',
@@ -166,12 +209,18 @@ export function ContentCloudLocationField({
           ? readableTrackerContentCloudFailure(visibleFailure.reason)
           : !cloudReady
             ? '登录并确认本机数据归属后，可选择同步云端。'
-            : !selectiveCloudAvailable
-              ? '当前暂未开放内容上云，本机内容已保存。'
-            : quotaDescription({ entityKind, quota, relatedContent, relatedQuota })
-              ?? (value === 'cloud'
-                ? '会同步到已登录设备。'
-                : '改为仅本机后，会立即请求移除云端副本。')}
+            : isCheckingPolicy && !hasConfirmedCloudPolicy
+              ? '正在确认云端规则与可用额度，本机内容不会受影响。'
+              : policyRefreshFailed
+                ? '暂时无法确认云端规则，请刷新后再选择；本机内容不会受影响。'
+                : !hasConfirmedCloudPolicy
+                  ? '正在等待云端规则确认，本机内容已保存。'
+                  : !selectiveCloudAvailable
+                    ? '管理员暂未开放内容上云，本机内容已保存。'
+                    : quotaDescription({ entityKind, quota, relatedContent, relatedQuota })
+                      ?? (value === 'cloud'
+                        ? '会同步到已登录设备。'
+                        : '改为仅本机后，会立即请求移除云端副本。')}
       </p>
 
       {visibleFailure && retryEntityId && failureTarget && (

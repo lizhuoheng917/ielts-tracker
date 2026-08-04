@@ -16,6 +16,7 @@ import type {
  */
 export const TRACKER_CONTENT_CLOUD_POLICY_STORAGE_KEY = `${STORAGE_PREFIX}:contentCloudPolicy:v1`
 export const TRACKER_CONTENT_CLOUD_SYNC_EVENT = 'tracker-content-cloud-sync-request-v1'
+export const TRACKER_CONTENT_CLOUD_POLICY_REFRESH_EVENT = 'tracker-content-cloud-policy-refresh-request-v1'
 export const TRACKER_CONTENT_CLOUD_DEVICE_SCOPE = 'device'
 
 // Some non-browser consumers (notably pure sync tests and SSR tooling) expose
@@ -44,6 +45,22 @@ function contentCloudPolicyStorage(): Storage {
 
 export type TrackerContentCloudMode = 'local' | 'cloud'
 export type TrackerContentCloudSelectableKind = Exclude<TrackerPhase4bEntityKind, 'plan_execution'>
+export type TrackerContentCloudPolicyRefreshReason =
+  | 'initial'
+  | 'focus'
+  | 'visibility'
+  | 'online'
+  | 'interval'
+  | 'page-enter'
+  | 'before-save'
+  | 'after-save'
+  | 'manual'
+
+export interface TrackerContentCloudPolicyRefreshRequest {
+  /** Explicit saves and page entries may bypass the normal low-frequency gate. */
+  force?: boolean
+  reason?: TrackerContentCloudPolicyRefreshReason
+}
 
 export interface TrackerContentCloudIdentity {
   entityKind: TrackerPhase4bEntityKind
@@ -77,6 +94,28 @@ export type TrackerContentCloudQuotaByKind = Partial<
   Record<TrackerPhase4bEntityKind, TrackerContentCloudQuota>
 >
 
+/** Volatile server revision markers used by the lightweight refresh RPC. */
+export interface TrackerContentCloudPolicyStatus {
+  policyVersion: number | null
+  overrideVersion: number | null
+  contentCursor: number | null
+}
+
+export type TrackerContentCloudPolicyStatusUpdate = Partial<TrackerContentCloudPolicyStatus>
+
+/** UI-facing, non-persisted state for the small policy/allowance probe. */
+export interface TrackerContentCloudPolicyRefreshState {
+  phase: 'idle' | 'refreshing' | 'ready' | 'error'
+  /** The last time a server response (changed or unchanged) was accepted. */
+  lastCheckedAt: string | null
+  /** A generic timestamp only; detailed transport errors stay out of learner UI. */
+  lastErrorAt: string | null
+}
+
+export type TrackerContentCloudPolicyRefreshStateUpdate = Partial<TrackerContentCloudPolicyRefreshState> & {
+  phase: TrackerContentCloudPolicyRefreshState['phase']
+}
+
 interface TrackerContentCloudPolicyScope {
   initialized: boolean
   revision: number
@@ -98,6 +137,8 @@ interface TrackerContentCloudPolicyState extends TrackerContentCloudPolicyReadSt
   deviceScopeClaimed: boolean
   selectiveCloudAvailableByScope: Record<string, boolean>
   quotaByScope: Record<string, TrackerContentCloudQuotaByKind | null>
+  contentCloudStatusByScope: Record<string, TrackerContentCloudPolicyStatus>
+  contentCloudRefreshByScope: Record<string, TrackerContentCloudPolicyRefreshState>
   activateScope: (scope: string, options?: { adoptDeviceScope?: boolean }) => void
   clearScope: (scope: string) => void
   ensureLegacyContent: (entities: readonly TrackerContentCloudIdentity[], now?: string) => void
@@ -119,6 +160,15 @@ interface TrackerContentCloudPolicyState extends TrackerContentCloudPolicyReadSt
   acknowledgeRestore: (entityKind: TrackerPhase4bEntityKind, entityId: string) => void
   setSelectiveCloudAvailable: (available: boolean) => void
   setQuota: (quota: TrackerContentCloudQuotaByKind | null) => void
+  /** Applies a server capability response only to the account scope that asked
+   * for it. A late response must never overwrite a newly signed-in account. */
+  setCapabilitiesForScope: (scope: string, input: {
+    selectiveCloudAvailable: boolean
+    quota: TrackerContentCloudQuotaByKind | null
+    status?: TrackerContentCloudPolicyStatusUpdate
+  }) => boolean
+  setStatusForScope: (scope: string, status: TrackerContentCloudPolicyStatusUpdate) => boolean
+  setRefreshStateForScope: (scope: string, input: TrackerContentCloudPolicyRefreshStateUpdate) => boolean
 }
 
 function keyFor(entityKind: TrackerPhase4bEntityKind, entityId: string): string {
@@ -200,13 +250,15 @@ function projectPlanToCloud(
 
 export const useTrackerContentCloudPolicyStore = create<TrackerContentCloudPolicyState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       schemaVersion: 1,
       activeScope: TRACKER_CONTENT_CLOUD_DEVICE_SCOPE,
       scopes: { [TRACKER_CONTENT_CLOUD_DEVICE_SCOPE]: emptyScope() },
       deviceScopeClaimed: false,
       selectiveCloudAvailableByScope: {},
       quotaByScope: {},
+      contentCloudStatusByScope: {},
+      contentCloudRefreshByScope: {},
       activateScope: (scope, options) => {
         const nextScopeKey = safeScope(scope)
         set((state) => {
@@ -265,9 +317,19 @@ export const useTrackerContentCloudPolicyStore = create<TrackerContentCloudPolic
           const scopes = { ...state.scopes, [target]: emptyScope() }
           const quotaByScope = { ...state.quotaByScope }
           const selectiveCloudAvailableByScope = { ...state.selectiveCloudAvailableByScope }
+          const contentCloudStatusByScope = { ...state.contentCloudStatusByScope }
+          const contentCloudRefreshByScope = { ...state.contentCloudRefreshByScope }
           delete quotaByScope[target]
           delete selectiveCloudAvailableByScope[target]
-          return { scopes, quotaByScope, selectiveCloudAvailableByScope }
+          delete contentCloudStatusByScope[target]
+          delete contentCloudRefreshByScope[target]
+          return {
+            scopes,
+            quotaByScope,
+            selectiveCloudAvailableByScope,
+            contentCloudStatusByScope,
+            contentCloudRefreshByScope,
+          }
         })
       },
       ensureLegacyContent: (entities, now) => {
@@ -437,6 +499,83 @@ export const useTrackerContentCloudPolicyStore = create<TrackerContentCloudPolic
           [state.activeScope]: quota ? clone(quota) : null,
         },
       })),
+      setCapabilitiesForScope: (scope, input) => {
+        const target = safeScope(scope)
+        // Capability responses are volatile account state. Do not let a
+        // delayed request populate device scope or the next account's scope.
+        if (target !== scope || get().activeScope !== target) return false
+        set((state) => {
+          if (state.activeScope !== target) return state
+          return {
+            selectiveCloudAvailableByScope: {
+              ...state.selectiveCloudAvailableByScope,
+              [target]: input.selectiveCloudAvailable,
+            },
+            quotaByScope: {
+              ...state.quotaByScope,
+              [target]: input.quota ? clone(input.quota) : null,
+            },
+            ...(input.status
+              ? {
+                  contentCloudStatusByScope: {
+                    ...state.contentCloudStatusByScope,
+                    [target]: {
+                      ...(state.contentCloudStatusByScope[target] ?? {
+                        policyVersion: null,
+                        overrideVersion: null,
+                        contentCursor: null,
+                      }),
+                      ...input.status,
+                    },
+                  },
+                }
+              : {}),
+          }
+        })
+        return true
+      },
+      setStatusForScope: (scope, status) => {
+        const target = safeScope(scope)
+        if (target !== scope || get().activeScope !== target) return false
+        set((state) => {
+          if (state.activeScope !== target) return state
+          return {
+            contentCloudStatusByScope: {
+              ...state.contentCloudStatusByScope,
+              [target]: {
+                ...(state.contentCloudStatusByScope[target] ?? {
+                  policyVersion: null,
+                  overrideVersion: null,
+                  contentCursor: null,
+                }),
+                ...status,
+              },
+            },
+          }
+        })
+        return true
+      },
+      setRefreshStateForScope: (scope, input) => {
+        const target = safeScope(scope)
+        if (target !== scope || get().activeScope !== target) return false
+        set((state) => {
+          if (state.activeScope !== target) return state
+          return {
+            contentCloudRefreshByScope: {
+              ...state.contentCloudRefreshByScope,
+              [target]: {
+                ...(state.contentCloudRefreshByScope[target] ?? {
+                  phase: 'idle',
+                  lastCheckedAt: null,
+                  lastErrorAt: null,
+                }),
+                ...input,
+              },
+            },
+          }
+        })
+        return true
+      },
     }),
     {
       name: TRACKER_CONTENT_CLOUD_POLICY_STORAGE_KEY,
@@ -676,12 +815,91 @@ export function requestTrackerContentCloudSync(input: {
   window.dispatchEvent(new CustomEvent(TRACKER_CONTENT_CLOUD_SYNC_EVENT, { detail: input }))
 }
 
+/**
+ * Requests a fresh server view of the administrator's content-cloud switch and
+ * per-kind allowance. The bridge owns the authenticated network request, so a
+ * page can safely call this without importing credentials or mutating policy
+ * state itself. It is intentionally best-effort: local saves never depend on
+ * a refresh succeeding.
+ */
+export function requestTrackerContentCloudPolicyRefresh(
+  input: TrackerContentCloudPolicyRefreshRequest = {},
+): void {
+  if (
+    typeof window === 'undefined'
+    || typeof window.dispatchEvent !== 'function'
+    || typeof CustomEvent !== 'function'
+  ) return
+  window.dispatchEvent(new CustomEvent(TRACKER_CONTENT_CLOUD_POLICY_REFRESH_EVENT, {
+    detail: {
+      ...(input.force ? { force: true } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+  }))
+}
+
+/** Applies a verified server response to its matching active account scope. */
+export function applyTrackerContentCloudCapabilities(input: {
+  accountUserId: string
+  selectiveCloudAvailable: boolean
+  quota: TrackerContentCloudQuotaByKind | null
+  status?: TrackerContentCloudPolicyStatusUpdate
+}): boolean {
+  return useTrackerContentCloudPolicyStore.getState().setCapabilitiesForScope(
+    input.accountUserId,
+    input,
+  )
+}
+
+export function trackerContentCloudPolicyStatus(
+  scope = useTrackerContentCloudPolicyStore.getState().activeScope,
+): TrackerContentCloudPolicyStatus {
+  return useTrackerContentCloudPolicyStore.getState().contentCloudStatusByScope[scope] ?? {
+    policyVersion: null,
+    overrideVersion: null,
+    contentCursor: null,
+  }
+}
+
+export function applyTrackerContentCloudPolicyStatus(input: {
+  accountUserId: string
+  status: TrackerContentCloudPolicyStatusUpdate
+}): boolean {
+  return useTrackerContentCloudPolicyStore.getState().setStatusForScope(
+    input.accountUserId,
+    input.status,
+  )
+}
+
+export function trackerContentCloudPolicyRefreshState(
+  scope = useTrackerContentCloudPolicyStore.getState().activeScope,
+): TrackerContentCloudPolicyRefreshState {
+  return useTrackerContentCloudPolicyStore.getState().contentCloudRefreshByScope[scope] ?? {
+    phase: 'idle',
+    lastCheckedAt: null,
+    lastErrorAt: null,
+  }
+}
+
+export function applyTrackerContentCloudPolicyRefreshState(input: {
+  accountUserId: string
+  state: TrackerContentCloudPolicyRefreshStateUpdate
+}): boolean {
+  return useTrackerContentCloudPolicyStore.getState().setRefreshStateForScope(
+    input.accountUserId,
+    input.state,
+  )
+}
+
 /** Commits a saved record's location only after its local-store write succeeds. */
 export function setTrackerContentCloudLocation(input: {
   entityKind: TrackerContentCloudSelectableKind
   entityId: string
   mode: TrackerContentCloudMode
 }): void {
+  // Ask for the current administrator policy before the following sync work.
+  // The server remains authoritative if the response is still in flight.
+  requestTrackerContentCloudPolicyRefresh({ force: true, reason: 'before-save' })
   const state = useTrackerContentCloudPolicyStore.getState()
   const previous = trackerContentCloudMode({
     entityKind: input.entityKind,

@@ -223,9 +223,51 @@ function parseSourceMaterial(
   }
 }
 
+/**
+ * Count the English-token equivalent used for IELTS writing guidance.
+ *
+ * A Latin-script word counts once even when it contains a contraction,
+ * possessive apostrophe or a hyphenated compound. A contiguous number, date,
+ * time, percentage or currency amount also counts once. Punctuation and every
+ * Unicode whitespace character are separators. CJK and other non-Latin text
+ * is deliberately not silently treated as an English word.
+ *
+ * This grammar is kept byte-for-byte in the Edge contract so the live editor,
+ * the AI request and server-side validation always agree.
+ */
+const WRITING_WORD_TOKEN = /(?:\p{Sc}?[-+]?\d+(?:[,.]\d+)*(?:[/-]\d+(?:[,.]\d+)*)*(?::\d+(?:\.\d+)?)?(?:[sS][tT]|[nN][dD]|[rR][dD]|[tT][hH])?(?:[%‰])?)|(?:\p{Script=Latin}(?:\.\p{Script=Latin})+\.?)|(?:\p{Script=Latin}(?:\p{Script=Latin}|\p{M}|\d)*(?:['\u2018\u2019\u02BC\-\u2010\u2011](?:\p{Script=Latin}(?:\p{Script=Latin}|\p{M}|\d)*|\d+))*(?:['\u2018\u2019\u02BC])?)/gu
+
+/** V2/V3 reports predate the English-token policy and have no policy field. */
+const LEGACY_WRITING_WORD_TOKEN = /[\p{L}\p{N}]+(?:[\u2019'][\p{L}\p{N}]+)*/gu
+
 export function countWritingWords(text: string): number {
   if (typeof text !== 'string') return 0
-  return text.match(/[\p{L}\p{N}]+(?:[\u2019'][\p{L}\p{N}]+)*/gu)?.length ?? 0
+  return text.match(WRITING_WORD_TOKEN)?.length ?? 0
+}
+
+function countLegacyWritingWords(text: string): number {
+  return text.match(LEGACY_WRITING_WORD_TOKEN)?.length ?? 0
+}
+
+/**
+ * New creation paths always write the current count. Exact legacy counts are
+ * accepted for V2/V3 compatibility, then normalized in the returned submission
+ * so the current editor and newly generated AI context stay correct.
+ */
+function normalizeWritingWordCount(
+  supplied: unknown,
+  essayText: string,
+  label: string,
+): number {
+  const currentCount = countWritingWords(essayText)
+  const legacyCount = countLegacyWritingWords(essayText)
+  if (
+    !Number.isInteger(supplied)
+    || (supplied !== currentCount && supplied !== legacyCount)
+  ) {
+    fail(`${label} must match the host-computed essay word count`)
+  }
+  return currentCount
 }
 
 export function parseWritingSubmissionV2(value: unknown): WritingSubmissionV2 {
@@ -258,10 +300,11 @@ export function parseWritingSubmissionV2(value: unknown): WritingSubmissionV2 {
     'writing submission.essayText',
     MAX_ESSAY_LENGTH,
   )
-  const wordCount = countWritingWords(essayText)
-  if (!Number.isInteger(submission.wordCount) || submission.wordCount !== wordCount) {
-    fail('writing submission.wordCount must match the host-computed essay word count')
-  }
+  const wordCount = normalizeWritingWordCount(
+    submission.wordCount,
+    essayText,
+    'writing submission.wordCount',
+  )
 
   return {
     schemaVersion: WRITING_FEEDBACK_SCHEMA_VERSION,
@@ -351,10 +394,11 @@ export function parseWritingSubmissionV3(value: unknown): WritingSubmissionV3 {
     'writing submission.essayText',
     MAX_ESSAY_LENGTH,
   )
-  const wordCount = countWritingWords(essayText)
-  if (!Number.isInteger(submission.wordCount) || submission.wordCount !== wordCount) {
-    fail('writing submission.wordCount must match the host-computed essay word count')
-  }
+  const wordCount = normalizeWritingWordCount(
+    submission.wordCount,
+    essayText,
+    'writing submission.wordCount',
+  )
 
   return {
     schemaVersion: WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION,
@@ -464,7 +508,7 @@ export function buildWritingContextSnapshot(
   }
   const recommendedMinimum = submission.task === 'task1' ? 150 : 250
   if (submission.wordCount < recommendedMinimum) {
-    warnings.push(`作文少于 ${recommendedMinimum} 词，评分证据有限。`)
+    warnings.push(`作文英文词数少于 ${recommendedMinimum} 词，评分证据有限。`)
   }
 
   const data: WritingContextData = { submission }
@@ -812,7 +856,7 @@ export function formatWritingFeedbackAsMarkdown(
             : []),
         ]
       : []),
-    `- 词数：${submission.wordCount}`,
+    `- 英文词数：${submission.wordCount}`,
     `- 总分：${overallBand === null ? '证据不足，未评分' : overallBand}`,
     `- 评分标准：${feedback.rubricVersion}`,
     '',

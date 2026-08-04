@@ -307,7 +307,7 @@ export function WritingFeedbackContent({
                 题目自动识别 · 参考评估
               </Badge>
             )}
-            <span>{submission.wordCount} 词</span>
+            <span>英文 {submission.wordCount} 词</span>
           </div>
           {isScored && overallBand !== null ? (
             <p className="flex items-baseline gap-1.5 text-sm text-muted-foreground">

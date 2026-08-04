@@ -215,9 +215,58 @@ describe('WritingSubmissionV2', () => {
     expect(parseWritingSubmissionV2(created)).toEqual(created)
   })
 
+  it('uses the IELTS-friendly English-token policy for punctuation, numbers and mixed scripts', () => {
+    const cases: Array<[string, number]> = [
+      ["Don't let students' well-being—nor O’Neill’s examples—go unnoticed.", 9],
+      ['A well-known state-of-the-art, non‑linear method.', 5],
+      ['On 2026-08-04, 1,000 people paid $3.50 (50%) at 7:30.', 9],
+      ['First\u00a0line\r\nsecond\u2028third\tfourth', 5],
+      ['naïve co\u0308operate', 2],
+      ['中文不计入 English words，混合Test文本 and café.', 5],
+      ['e.g. U.S.A. is an abbreviation.', 5],
+      ['Hello,world... (again)!', 3],
+      ['中文 العربية русский', 0],
+      ['COVID-19 21st 24/7 3.14', 4],
+      ['rock ’n’ roll', 3],
+    ]
+
+    for (const [essay, expected] of cases) {
+      expect(countWritingWords(essay), essay).toBe(expected)
+    }
+  })
+
+  it('normalizes exact legacy report counts without accepting an arbitrary count', () => {
+    const essayText = '中文不计入 English words，混合Test文本 and a well-known method from 2026-08-04.'
+    const legacyWordCount = 13
+    expect(countWritingWords(essayText)).toBe(9)
+
+    const legacyV2 = parseWritingSubmissionV2({
+      ...submission(),
+      essayText,
+      wordCount: legacyWordCount,
+    })
+    expect(legacyV2.wordCount).toBe(9)
+
+    const legacyV3 = parseWritingSubmission({
+      schemaVersion: 3,
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText,
+      wordCount: legacyWordCount,
+    })
+    expect(legacyV3.wordCount).toBe(9)
+
+    expect(() => parseWritingSubmissionV2({
+      ...submission(),
+      essayText,
+      wordCount: legacyWordCount - 1,
+    })).toThrow(/host-computed/)
+  })
+
   it('rejects forged counts, unsupported fields and source material on the wrong task', () => {
     const valid = submission()
-    expect(() => parseWritingSubmissionV2({ ...valid, wordCount: valid.wordCount + 1 })).toThrow(/host-computed/)
+    expect(() => parseWritingSubmissionV2({ ...valid, wordCount: valid.wordCount + 100 })).toThrow(/host-computed/)
     expect(() => parseWritingSubmissionV2({ ...valid, wordCount: valid.wordCount + 0.5 })).toThrow(/host-computed/)
     expect(() => parseWritingSubmissionV2({ ...valid, debug: true })).toThrow(/unsupported fields/)
     expect(() => createWritingSubmissionV2({

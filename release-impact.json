@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-04-tracker-selective-content-cloud-v1",
+  "release": "2026-08-04-tracker-content-cloud-refresh-writing-reliability-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker keeps learning content local by default and lets a signed-in learner choose cloud storage for a new or edited plan, including each AI-confirmed plan, practice record, timer record, or word record. The plan editor and AI confirmation show the plan allowance before a paired transfer. Cloud failures, offline retry and switching back to local keep the local content intact and state the real pending outcome instead of claiming a completed upload or deletion. The existing word-record sync and shared account-center work remain part of the same coordinated Tracker release."
+    "reason": "Tracker keeps learning content local by default and lets a signed-in learner choose cloud storage for a new or edited plan, including each AI-confirmed plan, practice record, timer record, or word record. The plan editor and AI confirmation show the plan allowance before a paired transfer, refresh global storage availability and remaining allowance during normal use, and keep local content intact on cloud failures. The IELTS writing editor now shows an explicit English-word count; contractions, hyphenated compounds, dates, amounts and Unicode whitespace use the same rule as the AI request, while Chinese text is not counted as English words."
   },
   "Backend": {
     "status": "changed",
-    "reason": "A paired Formal release adds optional per-kind Tracker cloud quotas, caller-only aggregate quota capabilities, a backward-compatible batch marker, and atomic upload/detach endpoints for a plan together with its executions. Existing cloud data is kept and grandfathered; data the learner removes and later uploads again uses the current allowance. The shared word-record validator and permanent-account-deletion endpoint remain required counterparts, with all ownership and server-secret boundaries preserved."
+    "reason": "A paired Formal release adds optional per-kind Tracker cloud quotas, a caller-only version-and-cursor status refresh RPC, a backward-compatible batch marker, and atomic upload/detach endpoints for a plan together with its executions. Existing cloud data is kept and grandfathered; data the learner removes and later uploads again uses the current allowance. The shared Edge writing contract now validates the same English-word grammar as the editor, so an AI payload cannot accept a stale or provider-supplied word count. For the default Agnes writing route only, the gateway also uses a 24-second provider window plus one bounded schema-repair retry for an otherwise valid response; transport, refusal and provider-server errors are not retried. The shared word-record validator and permanent-account-deletion endpoint remain required counterparts, with all ownership and server-secret boundaries preserved."
   },
   "Admin": {
-    "status": "changed",
-    "reason": "The paired Lexi Control release adds a simple global switch, five content-type allowances, aggregate per-user use counts and sparse per-user overrides. It continues to expose only aggregate sync and account information, never individual plans, notes, execution details, or word-record payloads."
+    "status": "reviewed-not-needed",
+    "reason": "Existing Lexi Control global policy and per-user override settings already increment the versions consumed by the client refresh. The word-count correction adds no administrator setting, report field, search field or learner-content exposure; the control site was reviewed and needs no code change."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. First apply and verify the compatible Formal database migrations and protected shared-account endpoints; then deploy the matching Tracker client and Lexi Control build; finally enable optional content-cloud storage in Lexi Control. The vocabulary product and its already deployed cloud-wordbook behavior are not changed by this Tracker release."
+    "reason": "Not deployed. First apply and verify the compatible Formal database migrations and Edge contract; then deploy the matching Tracker client and Lexi Control build; finally enable optional content-cloud storage in Lexi Control. The vocabulary product and its already deployed cloud-wordbook behavior are not changed by this Tracker release."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker impact/typecheck/lint/test/build gates passed locally, including 66 test files and 424 tests. The Formal full release gate also passed, including the new Tracker quota migrations and Lexi Control checks. Production still needs authenticated RPC, normal second-device and cross-account smoke tests after the compatible migrations and matching Pages builds are deployed."
+    "reason": "Tracker verify:release passed: release impact, typecheck, lint, 67 test files / 435 tests and production bundle checks. Formal verify:release also passed, including the conditional status migration, Edge AI gateway function scenarios and SQL contracts; coordinated writing-contract parity passed with TRACKER_REPO_ROOT. Production still needs authenticated RPC, normal second-device, writing submission and cross-account smoke tests after the compatible migration and matching Pages builds are deployed."
   }
 }
