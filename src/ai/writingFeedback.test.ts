@@ -6,8 +6,10 @@ import {
   calculateWritingOverallBand,
   countWritingWords,
   createWritingSubmissionV2,
+  createWritingSubmissionV3,
   formatWritingFeedbackAsMarkdown,
   parseWritingFeedbackV2,
+  parseWritingSubmission,
   parseWritingSubmissionV2,
   type WritingFeedbackV2,
   type WritingSubmissionV2,
@@ -304,6 +306,96 @@ describe('WritingSubmissionV2', () => {
       data: { submission: noChart },
     })
     expect(snapshot.quality.warnings.join(' ')).toContain('图表')
+  })
+})
+
+describe('WritingSubmissionV3 reference mode', () => {
+  it('keeps only a Cambridge reference plus the essay and marks automatic recognition as limited', () => {
+    const created = createWritingSubmissionV3({
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText: `  ${ESSAY}\r\n  `,
+    })
+    const snapshot = buildWritingContextSnapshot(created, {
+      now: new Date('2026-08-04T08:00:00.000Z'),
+      createId: () => 'writing-reference-snapshot-1',
+    })
+
+    expect(created).toEqual({
+      schemaVersion: 3,
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText: ESSAY,
+      wordCount: countWritingWords(ESSAY),
+    })
+    expect(parseWritingSubmission(created)).toEqual(created)
+    expect(() => parseWritingSubmissionV2(created)).toThrow(/unsupported fields|schemaVersion/)
+    expect(snapshot).toMatchObject({
+      quality: { status: 'limited', recordCount: 1 },
+      data: { submission: created },
+    })
+    expect(snapshot.quality.warnings.join(' ')).toContain('题目自动识别')
+    const feedback = { ...scoredFeedback(), limitations: ['题目自动识别仅作参考评估。'] }
+    expect(parseWritingFeedbackV2(feedback, created).assessmentStatus).toBe('scored')
+    expect(formatWritingFeedbackAsMarkdown(created, feedback, 6.5)).toContain('题目自动识别 · 参考评估')
+  })
+
+  it('allows an Academic Task 1 reference without a copied chart but records the scoring limitation', () => {
+    const created = createWritingSubmissionV3({
+      module: 'academic',
+      task: 'task1',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 18, testNumber: 1 },
+      essayText: ESSAY,
+    })
+    const snapshot = buildWritingContextSnapshot(created, {
+      now: new Date('2026-08-04T08:00:00.000Z'),
+      createId: () => 'writing-reference-task1-snapshot-1',
+    })
+    const feedback = {
+      ...scoredFeedback(),
+      taskCriterion: 'task_achievement' as const,
+      limitations: ['未提供原图，Task Achievement 仅作参考。'],
+    }
+
+    expect(snapshot.quality.warnings.join(' ')).toContain('未提供原图')
+    expect(parseWritingFeedbackV2(feedback, created).assessmentStatus).toBe('scored')
+  })
+
+  it('rejects invalid book/Test references and extra fields', () => {
+    expect(() => createWritingSubmissionV3({
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 0, testNumber: 1 },
+      essayText: ESSAY,
+    })).toThrow(/bookNumber/)
+    expect(() => parseWritingSubmission({
+      schemaVersion: 3,
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 5 },
+      essayText: ESSAY,
+      wordCount: countWritingWords(ESSAY),
+    })).toThrow(/testNumber/)
+    expect(() => parseWritingSubmission({
+      schemaVersion: 3,
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 1, extra: true },
+      essayText: ESSAY,
+      wordCount: countWritingWords(ESSAY),
+    })).toThrow(/unsupported fields/)
+  })
+
+  it('requires automatic-reference feedback to disclose its limitation', () => {
+    const created = createWritingSubmissionV3({
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText: ESSAY,
+    })
+    expect(() => parseWritingFeedbackV2(scoredFeedback(), created)).toThrow(/automatic-reference feedback/)
   })
 })
 

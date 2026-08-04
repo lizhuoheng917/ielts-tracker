@@ -71,6 +71,9 @@ function planDraft(): PlanDraftV2 {
       description: '完成精听并记录错因。',
       category: 'listening',
       frequency: 'weekly',
+      scheduledDate: null,
+      startDate: '2026-08-03',
+      endDate: null,
       weekDays: [1, 3, 5],
       targetTime: '08:00',
       targetDuration: 25,
@@ -118,6 +121,21 @@ describe('structured AI output contracts', () => {
     })).toThrow(/required for weekly/)
     expect(() => parsePlanDraftV2({
       ...planDraft(),
+      plans: [{
+        ...planDraft().plans[0],
+        frequency: 'once',
+        scheduledDate: null,
+        startDate: null,
+        endDate: null,
+        weekDays: [],
+      }],
+    })).toThrow(/required for once/)
+    expect(() => parsePlanDraftV2({
+      ...planDraft(),
+      plans: [{ ...planDraft().plans[0], endDate: '2026-08-02' }],
+    })).toThrow(/must not be before startDate/)
+    expect(() => parsePlanDraftV2({
+      ...planDraft(),
       plans: [{ ...planDraft().plans[0], weekDays: [1, 1] }],
     })).toThrow(/unique/)
     expect(() => parsePlanDraftV2({
@@ -128,6 +146,28 @@ describe('structured AI output contracts', () => {
       ...planDraft(),
       plans: Array.from({ length: 5 }, () => planDraft().plans[0]),
     })).toThrow(/between 1 and 4/)
+  })
+
+  it('accepts a one-time draft only with its concrete calendar date', () => {
+    const once = parsePlanDraftV2({
+      ...planDraft(),
+      plans: [{
+        ...planDraft().plans[0],
+        frequency: 'once',
+        scheduledDate: '2026-08-12',
+        startDate: null,
+        endDate: null,
+        weekDays: [],
+      }],
+    })
+
+    expect(once.plans[0]).toMatchObject({
+      frequency: 'once',
+      scheduledDate: '2026-08-12',
+      startDate: null,
+      endDate: null,
+      weekDays: [],
+    })
   })
 
   it('enforces purpose matching and accepts only plain JSON or one JSON fence', () => {

@@ -6,7 +6,7 @@ import {
   WritingFeedbackContent,
 } from './StructuredAIContent'
 import type { DailySuggestionV2, LearningAnalysisV2 } from '@/ai/structuredOutputs'
-import type { WritingFeedbackV2, WritingSubmissionV2 } from '@/ai/writingFeedback'
+import type { WritingFeedbackV2, WritingSubmissionV2, WritingSubmissionV3 } from '@/ai/writingFeedback'
 
 const dailySuggestion: DailySuggestionV2 = {
   schemaVersion: 2,
@@ -214,5 +214,28 @@ describe('StructuredAIContent', () => {
     expect(html).toContain('作文题目')
     expect(html).toContain('图表材料描述')
     expect(html).toContain('three cities from 2000 to 2020')
+  })
+
+  it('labels a V3 automatic-reference report as a reference assessment and shows the Task 1 limitation', () => {
+    const referenceSubmission: WritingSubmissionV3 = {
+      schemaVersion: 3,
+      module: 'academic',
+      task: 'task1',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText: writingSubmission.essayText,
+      wordCount: writingSubmission.wordCount,
+    }
+    const html = renderToStaticMarkup(
+      <WritingFeedbackContent
+        feedback={{ ...writingFeedback, taskCriterion: 'task_achievement' }}
+        submission={referenceSubmission}
+        overallBand={6.5}
+      />,
+    )
+
+    expect(html).toContain('题目自动识别 · 参考评估')
+    expect(html).toContain('剑雅 19 · Test 2 · Academic · Task 1')
+    expect(html).toContain('未提供原图')
+    expect(html).not.toContain('作文题目')
   })
 })

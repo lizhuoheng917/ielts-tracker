@@ -176,7 +176,7 @@ const PLAN_CATEGORIES = new Set([
   'vocabulary',
   'general',
 ])
-const PLAN_FREQUENCIES = new Set(['daily', 'weekly', 'custom'])
+const PLAN_FREQUENCIES = new Set(['once', 'daily', 'weekly', 'custom'])
 const PRACTICE_TYPES = new Set(['reading', 'listening', 'writing', 'speaking'])
 const TIMER_SUBJECTS = new Set(['reading', 'listening', 'writing', 'speaking', 'general'])
 const TARGET_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -308,6 +308,16 @@ function localDate(value: unknown, path: string): string {
   return value
 }
 
+function optionalLocalDate(
+  object: UnknownRecord,
+  key: string,
+  path: string,
+): string | undefined {
+  return object[key] === undefined
+    ? undefined
+    : localDate(object[key], `${path}.${key}`)
+}
+
 function timestamp(value: unknown, path: string): string {
   const parsed = stringValue(value, path)
   if (!parsed || !Number.isFinite(Date.parse(parsed))) fail(path, 'must be a valid timestamp')
@@ -347,6 +357,47 @@ function assertPayloadBytes<K extends TrackerPhase4bEntityKind>(
   }
 }
 
+/**
+ * Existing daily/weekly/custom records pre-date explicit calendar scheduling.
+ * Keep those records syncable while rejecting contradictory new schedule data.
+ */
+function validateStudyPlanSchedule(input: {
+  frequency: StudyPlan['frequency']
+  scheduledDate?: string
+  startDate?: string
+  endDate?: string
+  weekDays?: number[]
+}, path: string): void {
+  if (input.frequency === 'once') {
+    if (input.scheduledDate === undefined) {
+      fail(`${path}.scheduledDate`, 'is required for a once plan')
+    }
+    if (input.startDate !== undefined || input.endDate !== undefined) {
+      fail(path, 'a once plan cannot contain recurring date boundaries')
+    }
+    if ((input.weekDays?.length ?? 0) > 0) {
+      fail(`${path}.weekDays`, 'must be empty for a once plan')
+    }
+    return
+  }
+
+  if (input.frequency === 'daily' || input.frequency === 'weekly') {
+    if (input.scheduledDate !== undefined) {
+      fail(`${path}.scheduledDate`, 'is only supported for a once plan')
+    }
+    if (input.endDate !== undefined && input.startDate === undefined) {
+      fail(`${path}.endDate`, 'requires startDate')
+    }
+    if (
+      input.startDate !== undefined
+      && input.endDate !== undefined
+      && input.endDate < input.startDate
+    ) {
+      fail(`${path}.endDate`, 'must not be before startDate')
+    }
+  }
+}
+
 function parseStudyPlan(
   value: unknown,
   path: string,
@@ -359,6 +410,9 @@ function parseStudyPlan(
     'description',
     'category',
     'frequency',
+    'scheduledDate',
+    'startDate',
+    'endDate',
     'weekDays',
     'targetTime',
     'targetDuration',
@@ -384,6 +438,9 @@ function parseStudyPlan(
     ),
     category: enumValue<StudyPlan['category']>(object.category, PLAN_CATEGORIES, `${path}.category`),
     frequency: enumValue<StudyPlan['frequency']>(object.frequency, PLAN_FREQUENCIES, `${path}.frequency`),
+    scheduledDate: optionalLocalDate(object, 'scheduledDate', path),
+    startDate: optionalLocalDate(object, 'startDate', path),
+    endDate: optionalLocalDate(object, 'endDate', path),
     weekDays: optionalWeekDays(object, path),
     targetTime,
     targetDuration: optionalBoundedNonNegative(
@@ -402,6 +459,7 @@ function parseStudyPlan(
     createdAt: timestamp(object.createdAt, `${path}.createdAt`),
     ...(payloadOnly ? {} : { updatedAt: timestamp(object.updatedAt, `${path}.updatedAt`) }),
   })
+  validateStudyPlanSchedule(parsed, path)
   if (payloadOnly) assertPayloadBytes('study_plan', parsed as TrackerPhase4bPlanPayload, path)
   return parsed as StudyPlan | TrackerPhase4bPlanPayload
 }
@@ -711,6 +769,9 @@ export function createTrackerPhase4bPayload<K extends TrackerPhase4bEntityKind>(
         description: value.description,
         category: value.category,
         frequency: value.frequency,
+        scheduledDate: value.scheduledDate,
+        startDate: value.startDate,
+        endDate: value.endDate,
         weekDays: value.weekDays,
         targetTime: value.targetTime,
         targetDuration: value.targetDuration,

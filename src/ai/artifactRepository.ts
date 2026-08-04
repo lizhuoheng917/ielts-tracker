@@ -14,12 +14,13 @@ import {
 } from './structuredOutputs'
 import {
   calculateWritingOverallBand,
+  formatWritingSourceReference,
   formatWritingFeedbackAsMarkdown,
   parseWritingFeedbackV2,
-  parseWritingSubmissionV2,
+  parseWritingSubmission,
   type WritingBand,
   type WritingFeedbackV2,
-  type WritingSubmissionV2,
+  type WritingSubmission,
 } from './writingFeedback'
 
 export const AI_ARTIFACT_REPOSITORY_SCHEMA_VERSION = 2 as const
@@ -85,7 +86,8 @@ export interface LearningAnalysisArtifactV2 extends AiArtifactBaseV2 {
 }
 
 export interface WritingFeedbackArtifactContentV2 {
-  submission: WritingSubmissionV2
+  /** V2 reports retain copied prompts; V3 reports retain only the learner's reference. */
+  submission: WritingSubmission
   feedback: WritingFeedbackV2
   overallBand: WritingBand | null
 }
@@ -134,7 +136,7 @@ export interface SaveLearningAnalysisArtifactInputV2 extends SaveArtifactInputBa
 }
 
 export interface SaveWritingFeedbackArtifactInputV2 extends SaveArtifactInputBase {
-  submission: WritingSubmissionV2
+  submission: WritingSubmission
   feedback: WritingFeedbackV2
 }
 
@@ -298,7 +300,7 @@ export function createWritingFeedbackArtifactV2(
   input: SaveWritingFeedbackArtifactInputV2,
   access: AiArtifactAccessV2,
 ): WritingFeedbackArtifactV2 {
-  const submission = parseWritingSubmissionV2(input.submission)
+  const submission = parseWritingSubmission(input.submission)
   const feedback = parseWritingFeedbackV2(input.feedback, submission)
   const overallBand = calculateWritingOverallBand(feedback)
   const taskLabel = submission.task === 'task1' ? 'Task 1' : 'Task 2'
@@ -483,7 +485,7 @@ export function parseAiArtifactRecordV2(value: unknown): AiArtifactRecordV2 {
       if (!exactKeys(content, ['submission', 'feedback', 'overallBand'])) {
         throw new Error('Invalid writing feedback artifact fields')
       }
-      const submission = parseWritingSubmissionV2(content.submission)
+      const submission = parseWritingSubmission(content.submission)
       const feedback = parseWritingFeedbackV2(content.feedback, submission)
       const overallBand = calculateWritingOverallBand(feedback)
       if (content.overallBand !== overallBand) throw new Error('Invalid writing feedback overall band')
@@ -553,9 +555,23 @@ export function aiArtifactToMarkdown(artifact: AiArtifactRecordV2): string {
       const fence = '`'.repeat(Math.max(3, longestRun + 1))
       return `${fence}text\n${text || '未提供'}\n${fence}`
     }
-    lines.push('', '## 原始题目', '', fenced(submission.promptText))
-    if (submission.sourceMaterial.kind === 'text_description') {
-      lines.push('', '## Task 1 材料描述', '', fenced(submission.sourceMaterial.description))
+    if (submission.schemaVersion === 3) {
+      lines.push(
+        '',
+        '## 题目引用',
+        '',
+        fenced(formatWritingSourceReference(submission) ?? '剑雅题目引用'),
+        '',
+        '题目自动识别 · 参考评估（可能与原题不完全一致）',
+      )
+      if (submission.module === 'academic' && submission.task === 'task1') {
+        lines.push('', '未提供原图，Task Achievement 仅作参考。')
+      }
+    } else {
+      lines.push('', '## 原始题目', '', fenced(submission.promptText))
+      if (submission.sourceMaterial.kind === 'text_description') {
+        lines.push('', '## Task 1 材料描述', '', fenced(submission.sourceMaterial.description))
+      }
     }
     lines.push('', '## 作文原文', '', fenced(submission.essayText), '', '## AI 反馈')
   }

@@ -12,7 +12,11 @@ export interface WordRecord {
 
 // ===== 学习计划 =====
 export type PlanCategory = 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general'
-export type PlanFrequency = 'daily' | 'weekly' | 'custom'
+/**
+ * `custom` is a legacy value. New plans use `once`, `daily`, or `weekly` so
+ * their schedule can be interpreted consistently on every device.
+ */
+export type PlanFrequency = 'once' | 'daily' | 'weekly' | 'custom'
 
 export interface StudyPlan {
   id: string
@@ -20,6 +24,18 @@ export interface StudyPlan {
   description?: string
   category: PlanCategory
   frequency: PlanFrequency
+  /**
+   * The concrete local calendar date for a one-time plan. Required when
+   * `frequency === 'once'`; omitted for recurring and legacy plans.
+   */
+  scheduledDate?: string // YYYY-MM-DD
+  /**
+   * Optional compatibility boundary for recurring plans. New recurring plans
+   * provide this date; existing daily/weekly records without it remain valid.
+   */
+  startDate?: string // YYYY-MM-DD
+  /** Optional inclusive end boundary for a recurring plan. */
+  endDate?: string // YYYY-MM-DD
   weekDays?: number[] // 0=Sunday, 1=Monday, ... 6=Saturday
   targetTime?: string // HH:mm 格式，计划完成时间
   targetDuration?: number // 分钟

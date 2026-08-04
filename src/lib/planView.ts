@@ -1,10 +1,11 @@
 import type { PlanCategory, PlanExecution, PlanFrequency, StudyPlan } from '@/lib/types'
+import { isLocalDate, parseLocalDate } from '@/lib/localDate'
 
 export type PlanStatusFilter = 'all' | 'active' | 'paused'
 export type PlanCategoryFilter = 'all' | PlanCategory
 export type PlanFrequencyFilter = 'all' | PlanFrequency
 export type PlanSortOrder = 'newest' | 'oldest' | 'title-asc' | 'time-asc'
-export type EditablePlanFrequency = 'daily' | 'weekly'
+export type EditablePlanFrequency = 'once' | 'daily' | 'weekly'
 
 export interface PlanFilters {
   searchQuery: string
@@ -17,7 +18,8 @@ export interface PlanFilters {
 export function toEditablePlanFrequency(
   frequency: PlanFrequency,
 ): EditablePlanFrequency {
-  return frequency === 'weekly' ? 'weekly' : 'daily'
+  if (frequency === 'once' || frequency === 'weekly') return frequency
+  return 'daily'
 }
 
 export function resolveWeeklyPlanDays(
@@ -44,6 +46,47 @@ export function isPlanScheduledForDay(
   if (plan.frequency === 'daily') return true
   if (plan.frequency !== 'weekly') return false
   if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) return false
+  return plan.weekDays?.includes(dayOfWeek) ?? false
+}
+
+/**
+ * Resolves a plan against a concrete local calendar date. This is the source
+ * of truth for once-off tasks and date-bounded recurring plans. The older
+ * `isPlanScheduledForDay` helper stays available for legacy callers that only
+ * know a weekday, but cannot safely decide a one-time or bounded schedule.
+ */
+export function isPlanScheduledForDate(
+  plan: Pick<
+    StudyPlan,
+    'frequency' | 'isActive' | 'scheduledDate' | 'startDate' | 'endDate' | 'weekDays'
+  >,
+  date: string,
+): boolean {
+  if (!plan.isActive || !isLocalDate(date)) return false
+
+  if (plan.frequency === 'once') {
+    return isLocalDate(plan.scheduledDate) && plan.scheduledDate === date
+  }
+
+  // Legacy `custom` plans were never given enough structured information to
+  // schedule automatically. Preserve them for editing/history, but do not
+  // unexpectedly turn them into daily tasks.
+  if (plan.frequency === 'custom') return false
+
+  const startDate = plan.startDate
+  const endDate = plan.endDate
+  if ((startDate !== undefined && !isLocalDate(startDate)) || (
+    endDate !== undefined && !isLocalDate(endDate)
+  )) return false
+  if (startDate !== undefined && endDate !== undefined && endDate < startDate) {
+    return false
+  }
+  if (startDate !== undefined && date < startDate) return false
+  if (endDate !== undefined && date > endDate) return false
+
+  if (plan.frequency === 'daily') return true
+
+  const dayOfWeek = parseLocalDate(date).getDay()
   return plan.weekDays?.includes(dayOfWeek) ?? false
 }
 

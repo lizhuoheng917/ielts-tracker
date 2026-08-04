@@ -41,7 +41,7 @@ type UnknownRecord = Record<string, unknown>
 const PRACTICE_TYPES = ['reading', 'listening', 'writing', 'speaking'] as const
 const TIMER_SUBJECTS = [...PRACTICE_TYPES, 'general'] as const
 const PLAN_CATEGORIES = [...PRACTICE_TYPES, 'vocabulary', 'general'] as const
-const PLAN_FREQUENCIES = ['daily', 'weekly', 'custom'] as const
+const PLAN_FREQUENCIES = ['once', 'daily', 'weekly', 'custom'] as const
 const MOODS = ['great', 'good', 'normal', 'bad'] as const
 const THEMES = ['light', 'dark', 'system'] as const
 const CHAT_ROLES = ['user', 'assistant'] as const
@@ -143,6 +143,11 @@ function optionalString(object: UnknownRecord, key: string, path: string): strin
   return asString(object[key], `${path}.${key}`)
 }
 
+function optionalLocalDate(object: UnknownRecord, key: string, path: string): string | undefined {
+  if (object[key] === undefined) return undefined
+  return asLocalDate(object[key], `${path}.${key}`)
+}
+
 function optionalNonNegativeNumber(
   object: UnknownRecord,
   key: string,
@@ -218,12 +223,42 @@ function validateStudyPlan(value: unknown, path: string): StudyPlan {
   asString(object.title, `${path}.title`, false)
   optionalString(object, 'description', path)
   asEnum(object.category, PLAN_CATEGORIES, `${path}.category`)
-  asEnum(object.frequency, PLAN_FREQUENCIES, `${path}.frequency`)
+  const frequency = asEnum(object.frequency, PLAN_FREQUENCIES, `${path}.frequency`)
+  const scheduledDate = optionalLocalDate(object, 'scheduledDate', path)
+  const startDate = optionalLocalDate(object, 'startDate', path)
+  const endDate = optionalLocalDate(object, 'endDate', path)
+  if (frequency === 'once') {
+    if (scheduledDate === undefined) {
+      fail(`${path}.scheduledDate`, '单次计划必须提供安排日期')
+    }
+    if (startDate !== undefined || endDate !== undefined) {
+      fail(path, '单次计划不能包含重复计划的起止日期')
+    }
+  } else if (frequency === 'daily' || frequency === 'weekly') {
+    if (scheduledDate !== undefined) {
+      fail(`${path}.scheduledDate`, '仅单次计划可以提供安排日期')
+    }
+    // Pre-scheduling daily/weekly plans legitimately have neither date. An
+    // explicit end date, however, has no safe interpretation without a start.
+    if (endDate !== undefined && startDate === undefined) {
+      fail(`${path}.endDate`, '需要同时提供 startDate')
+    }
+    if (startDate !== undefined && endDate !== undefined && endDate < startDate) {
+      fail(`${path}.endDate`, '不能早于 startDate')
+    }
+  }
   if (object.weekDays !== undefined) {
     asArray(object.weekDays, `${path}.weekDays`).forEach((day, index) => {
       const weekday = asNonNegativeInteger(day, `${path}.weekDays[${index}]`)
       if (weekday > 6) fail(`${path}.weekDays[${index}]`, '应介于 0 到 6')
     })
+  }
+  if (
+    frequency === 'once'
+    && object.weekDays !== undefined
+    && asArray(object.weekDays, `${path}.weekDays`).length > 0
+  ) {
+    fail(`${path}.weekDays`, '单次计划不应包含重复星期')
   }
   if (object.targetTime !== undefined) {
     const targetTime = asString(object.targetTime, `${path}.targetTime`)

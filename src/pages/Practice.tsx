@@ -856,7 +856,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               </div>
               <div>
                 <p className="text-sm font-semibold">AI 写作批改</p>
-                <p className="text-xs text-muted-foreground">填写题目与作文，按公开标准生成学习反馈</p>
+                <p className="text-xs text-muted-foreground">填写剑雅书号、Test 与作文，生成参考评估</p>
               </div>
             </div>
             <span className="text-xs text-muted-foreground shrink-0">点击展开 →</span>

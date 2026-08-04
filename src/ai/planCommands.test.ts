@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createPlanCommandDrafts,
   parsePlanCreateCommandDraft,
+  planCommandPayloadToStudyPlan,
 } from './planCommands'
 import type { PlanDraftV2 } from './structuredOutputs'
 
@@ -15,6 +16,9 @@ const CONTENT: PlanDraftV2 = {
     description: '完成精听并记录错因。',
     category: 'listening',
     frequency: 'weekly',
+    scheduledDate: null,
+    startDate: '2026-08-03',
+    endDate: null,
     weekDays: [1, 3, 5],
     targetTime: '08:00',
     targetDuration: 25,
@@ -61,5 +65,25 @@ describe('plan command lifecycle', () => {
       ...draft,
       providerAction: 'delete_everything',
     })).toThrow('Invalid plan command draft')
+  })
+
+  it('maps nullable AI schedule fields into a compact one-time local plan', () => {
+    const mapped = planCommandPayloadToStudyPlan({
+      ...CONTENT.plans[0],
+      frequency: 'once',
+      scheduledDate: '2026-08-14',
+      startDate: null,
+      endDate: null,
+      weekDays: [],
+    })
+
+    expect(mapped).toMatchObject({
+      frequency: 'once',
+      scheduledDate: '2026-08-14',
+      isActive: true,
+    })
+    expect(mapped).not.toHaveProperty('startDate')
+    expect(mapped).not.toHaveProperty('endDate')
+    expect(mapped).not.toHaveProperty('weekDays')
   })
 })

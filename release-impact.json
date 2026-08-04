@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-04-tracker-ai-quota-and-regeneration",
+  "release": "2026-08-04-tracker-writing-reference-and-plan-schedule-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "All four managed AI dialogs now show their own remaining daily calls and local reset time while open, refresh after a managed request or tab focus, and never guess a stale count after a failed read. The learning-analysis success state also exposes a real 重新生成 action that starts a fresh task and current learning snapshot."
+    "reason": "Existing quota/regeneration UI remains intact. Writing feedback now creates a V3 sourceReference request from required Cambridge book/Test plus the existing module, Task and essay fields; it migrates V2 local drafts without losing essay text, retains V2 reports, labels automatic recognition as a reference assessment, records the Academic Task 1 missing-image limitation, and uses an opaque mobile-safe action footer. Learning plans now distinguish a dated one-time task from daily/weekly recurrence, collect optional start time/duration and recurring start/end boundaries, resolve Today by concrete local date, separately surface overdue/upcoming one-time tasks, and keep legacy custom plans readable until the learner explicitly re-arranges them."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The coordinated Formal release adds the authenticated ai_gateway_get_quota preview RPC for exactly one caller and one Tracker purpose. It keeps ai_gateway_reserve as the atomic admission authority and returns no request body, user usage row, provider route, model or secret."
+    "reason": "The Tracker client gateway contract now accepts only the bounded V3 sourceReference shape alongside legacy V2 submissions, includes it in the private writing snapshot, and requires an automatic-reference limitation in returned feedback. Plan drafts now require the shared once/daily/weekly schedule fields before a user-confirmed local write. Study-plan sync payloads include only the compact schedule rule (scheduledDate or startDate/endDate) rather than materialized future occurrences; actual completions remain the existing per-date plan_execution records. The paired Formal release must accept both contracts, apply the compatible plan-validator migration, and keep the existing quota-reservation authority."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "Lexi Control already owns each purpose's enabled switch and daily limit. The new learner-only preview neither creates an administrator action nor exposes new account, provider or secret data."
+    "reason": "Lexi Control continues to own provider, prompt and quota policy. Individual learner plan dates are not an administrator-managed or reportable resource; existing Tracker sync aggregate capacity and the updated plan-draft contract explanation cover the operational review, so no additional Tracker-specific control surface is required."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. The compatible Supabase migration must be applied with the paired Tracker Pages build, followed by signed-in checks of all four dialogs, a fresh report regeneration, quota exhaustion and cross-account isolation."
+    "reason": "Not deployed. Publish only with the paired Formal gateway and backward-compatible Tracker plan-validator migration after both compatible backend contracts are verified. Then smoke-test a V3 writing request, legacy V2 report readability, Task 1 limitation display, single-date and date-bounded recurring plan creation, AI draft confirmation without auto-write, overdue rescheduling, legacy custom readability, compact cross-device sync, quota state and cross-account isolation."
   },
   "Verification": {
-    "status": "passed",
-    "reason": "Tracker verify:release passed with TypeScript, oxlint, 60 Vitest files and 375 tests, production build and bundle secret guard. Formal verify:release and the PGlite quota RPC isolation/grant scenarios also passed; production deployment and signed-in browser smoke remain required."
+    "status": "required",
+    "reason": "Focused V3 contract, artifact/export, gateway and report rendering checks must pass together with the new schedule, sync and AI-draft contract tests plus Tracker typecheck/lint. Before a release, run the complete Tracker and Formal verification gates, then perform the paired signed-in production smoke checks."
   }
 }

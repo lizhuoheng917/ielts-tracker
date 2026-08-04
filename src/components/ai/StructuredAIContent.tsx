@@ -13,8 +13,9 @@ import {
 import type { DailySuggestionV2, LearningAnalysisV2 } from '@/ai/structuredOutputs'
 import {
   calculateWritingOverallBand,
+  formatWritingSourceReference,
   type WritingFeedbackV2,
-  type WritingSubmissionV2,
+  type WritingSubmission,
 } from '@/ai/writingFeedback'
 import { Badge } from '@/components/ui/badge'
 
@@ -274,7 +275,7 @@ export function WritingFeedbackContent({
   overallBand: suppliedOverallBand,
 }: {
   feedback: WritingFeedbackV2
-  submission: WritingSubmissionV2
+  submission: WritingSubmission
   overallBand?: ReturnType<typeof calculateWritingOverallBand>
 }) {
   const value = feedback
@@ -286,6 +287,7 @@ export function WritingFeedbackContent({
   const taskLabel = submission.task === 'task1' ? 'Task 1' : 'Task 2'
   const moduleLabel = submission.module === 'academic' ? 'Academic' : 'General Training'
   const taskCriterionLabel = WRITING_CRITERION_LABELS.task[value.taskCriterion]
+  const automaticReference = submission.schemaVersion === 3
 
   const criteria = [
     { key: 'task', label: taskCriterionLabel, value: value.criteria.task },
@@ -300,6 +302,11 @@ export function WritingFeedbackContent({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <Badge variant="secondary" className="font-medium">{moduleLabel} · {taskLabel}</Badge>
+            {automaticReference && (
+              <Badge variant="outline" className="border-primary/25 bg-primary/5 font-medium text-primary">
+                题目自动识别 · 参考评估
+              </Badge>
+            )}
             <span>{submission.wordCount} 词</span>
           </div>
           {isScored && overallBand !== null ? (
@@ -319,16 +326,35 @@ export function WritingFeedbackContent({
           基于公开评分标准的学习估分，不是 IELTS 官方成绩。
         </p>
         <div className="mt-3 border-l-2 border-border pl-3">
-          <p className="text-[11px] font-medium text-muted-foreground">作文题目</p>
-          <p className="mt-1 text-xs leading-5 text-foreground/85">
-            {submission.promptText || '未提供题目'}
-          </p>
-          {submission.sourceMaterial.kind === 'text_description' && (
+          {automaticReference ? (
             <>
-              <p className="mt-2 text-[11px] font-medium text-muted-foreground">图表材料描述</p>
+              <p className="text-[11px] font-medium text-muted-foreground">题目引用</p>
               <p className="mt-1 text-xs leading-5 text-foreground/85">
-                {submission.sourceMaterial.description}
+                {formatWritingSourceReference(submission)}
               </p>
+              <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+                AI 会按此引用尝试识别题目，结果可能与原题不完全一致。
+              </p>
+              {submission.module === 'academic' && submission.task === 'task1' && (
+                <p className="mt-1.5 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
+                  未提供原图，Task Achievement 仅作参考；本报告以语言、结构和表达反馈为主。
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] font-medium text-muted-foreground">作文题目</p>
+              <p className="mt-1 text-xs leading-5 text-foreground/85">
+                {submission.promptText || '未提供题目'}
+              </p>
+              {submission.sourceMaterial.kind === 'text_description' && (
+                <>
+                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">图表材料描述</p>
+                  <p className="mt-1 text-xs leading-5 text-foreground/85">
+                    {submission.sourceMaterial.description}
+                  </p>
+                </>
+              )}
             </>
           )}
         </div>

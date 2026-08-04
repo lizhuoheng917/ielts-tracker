@@ -1,31 +1,42 @@
 import type { ManagedAiPurpose } from './gateway'
+import { isLocalDate } from '@/lib/localDate'
 import {
   parseWritingFeedbackV2,
   type WritingFeedbackV2,
-  type WritingSubmissionV2,
+  type WritingSubmission,
 } from './writingFeedback'
 
 export {
   WRITING_FEEDBACK_SCHEMA_VERSION,
+  WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION,
   WRITING_RUBRIC_VERSION,
   buildWritingContextSnapshot,
   calculateWritingOverallBand,
   countWritingWords,
   createWritingSubmissionV2,
+  createWritingSubmissionV3,
+  formatWritingSourceReference,
   formatWritingFeedbackAsMarkdown,
   hasSufficientWritingTaskEvidence,
   parseWritingFeedbackV2,
+  parseWritingSubmission,
   parseWritingSubmissionV2,
+  parseWritingSubmissionV3,
   WritingFeedbackValidationError,
   type BuildWritingContextSnapshotOptions,
   type CreateWritingSubmissionV2Input,
+  type CreateWritingSubmissionV3Input,
   type WritingBand,
   type WritingContextDataV2,
+  type WritingContextData,
   type WritingCriterionFeedbackV2,
   type WritingFeedbackV2,
   type WritingModule,
+  type WritingSourceReferenceV3,
   type WritingSourceMaterialV2,
   type WritingSubmissionV2,
+  type WritingSubmissionV3,
+  type WritingSubmission,
   type WritingTask,
 } from './writingFeedback'
 
@@ -59,7 +70,7 @@ export const AI_PLAN_CATEGORIES = [
 ] as const
 export type AiPlanCategory = (typeof AI_PLAN_CATEGORIES)[number]
 
-export const AI_PLAN_FREQUENCIES = ['daily', 'weekly'] as const
+export const AI_PLAN_FREQUENCIES = ['once', 'daily', 'weekly'] as const
 export type AiPlanFrequency = (typeof AI_PLAN_FREQUENCIES)[number]
 
 export interface DailySuggestionV2 {
@@ -112,7 +123,13 @@ export interface PlanDraftV2 {
     description: string
     category: AiPlanCategory
     frequency: AiPlanFrequency
-    /** 0=Sunday ... 6=Saturday. Daily plans must use an empty list. */
+    /** A concrete date for `once`; otherwise null. */
+    scheduledDate: string | null
+    /** The inclusive start date for recurring plans; otherwise null. */
+    startDate: string | null
+    /** Optional inclusive end date for recurring plans. */
+    endDate: string | null
+    /** 0=Sunday ... 6=Saturday. Only weekly plans contain weekdays. */
     weekDays: number[]
     targetTime: string | null
     targetDuration: number | null
@@ -180,6 +197,12 @@ function boundedString(value: unknown, label: string, maxLength: number): string
     fail(`${label} must be a non-empty string no longer than ${maxLength} characters`)
   }
   return normalized
+}
+
+function nullableLocalDate(value: unknown, label: string): string | null {
+  if (value === null) return null
+  if (!isLocalDate(value)) fail(`${label} must be a valid local date in YYYY-MM-DD form`)
+  return value
 }
 
 function boundedMinutes(value: unknown, label: string): number {
@@ -379,6 +402,9 @@ export function parsePlanDraftV2(value: unknown): PlanDraftV2 {
       'description',
       'category',
       'frequency',
+      'scheduledDate',
+      'startDate',
+      'endDate',
       'weekDays',
       'targetTime',
       'targetDuration',
@@ -401,11 +427,41 @@ export function parsePlanDraftV2(value: unknown): PlanDraftV2 {
     if (new Set(weekDays).size !== weekDays.length) {
       fail(`plan draft.plans[${index}].weekDays must be unique`)
     }
-    if (frequency === 'daily' && weekDays.length !== 0) {
-      fail(`plan draft.plans[${index}].weekDays must be empty for daily plans`)
-    }
-    if (frequency === 'weekly' && weekDays.length === 0) {
-      fail(`plan draft.plans[${index}].weekDays is required for weekly plans`)
+    const scheduledDate = nullableLocalDate(
+      plan.scheduledDate,
+      `plan draft.plans[${index}].scheduledDate`,
+    )
+    const startDate = nullableLocalDate(
+      plan.startDate,
+      `plan draft.plans[${index}].startDate`,
+    )
+    const endDate = nullableLocalDate(
+      plan.endDate,
+      `plan draft.plans[${index}].endDate`,
+    )
+    if (frequency === 'once') {
+      if (scheduledDate === null) {
+        fail(`plan draft.plans[${index}].scheduledDate is required for once plans`)
+      }
+      if (startDate !== null || endDate !== null || weekDays.length !== 0) {
+        fail(`plan draft.plans[${index}] has invalid recurring fields for a once plan`)
+      }
+    } else {
+      if (scheduledDate !== null) {
+        fail(`plan draft.plans[${index}].scheduledDate must be null for recurring plans`)
+      }
+      if (startDate === null) {
+        fail(`plan draft.plans[${index}].startDate is required for recurring plans`)
+      }
+      if (endDate !== null && endDate < startDate) {
+        fail(`plan draft.plans[${index}].endDate must not be before startDate`)
+      }
+      if (frequency === 'daily' && weekDays.length !== 0) {
+        fail(`plan draft.plans[${index}].weekDays must be empty for daily plans`)
+      }
+      if (frequency === 'weekly' && weekDays.length === 0) {
+        fail(`plan draft.plans[${index}].weekDays is required for weekly plans`)
+      }
     }
     return {
       title: boundedString(plan.title, `plan draft.plans[${index}].title`, 60),
@@ -416,6 +472,9 @@ export function parsePlanDraftV2(value: unknown): PlanDraftV2 {
         `plan draft.plans[${index}].category`,
       ),
       frequency,
+      scheduledDate,
+      startDate,
+      endDate,
       weekDays: [...weekDays].sort((a, b) => a - b),
       targetTime: nullableTime(plan.targetTime, `plan draft.plans[${index}].targetTime`),
       targetDuration: nullableBoundedInteger(
@@ -447,7 +506,7 @@ export function parsePlanDraftV2(value: unknown): PlanDraftV2 {
 export function parseStructuredAiOutput<TPurpose extends ManagedAiPurpose>(
   value: unknown,
   purpose: TPurpose,
-  writingSubmission?: WritingSubmissionV2,
+  writingSubmission?: WritingSubmission,
 ): AiStructuredContentForPurpose<TPurpose> {
   return (purpose === 'daily_suggestion'
     ? parseDailySuggestionV2(value)
@@ -461,7 +520,7 @@ export function parseStructuredAiOutput<TPurpose extends ManagedAiPurpose>(
 export function parseStructuredAiOutputJson<TPurpose extends ManagedAiPurpose>(
   rawContent: string,
   purpose: TPurpose,
-  writingSubmission?: WritingSubmissionV2,
+  writingSubmission?: WritingSubmission,
 ): AiStructuredContentForPurpose<TPurpose> {
   if (typeof rawContent !== 'string' || !rawContent.trim() || rawContent.length > MAX_SERIALIZED_OUTPUT_LENGTH) {
     fail('AI output must be a bounded JSON string')
@@ -507,7 +566,7 @@ export function isPlanDraftV2(value: unknown): value is PlanDraftV2 {
 
 export function isWritingFeedbackV2(
   value: unknown,
-  submission?: WritingSubmissionV2,
+  submission?: WritingSubmission,
 ): value is WritingFeedbackV2 {
   try {
     parseWritingFeedbackV2(value, submission)

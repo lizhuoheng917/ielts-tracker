@@ -18,6 +18,7 @@ import type { DailySuggestionV2, LearningAnalysisV2 } from './structuredOutputs'
 import {
   WRITING_RUBRIC_VERSION,
   createWritingSubmissionV2,
+  createWritingSubmissionV3,
   type WritingFeedbackV2,
 } from './writingFeedback'
 
@@ -311,5 +312,39 @@ describe('AI artifact repository V2', () => {
       : '')
     expect(exported).toContain(task1Submission.essayText)
     expect(exported).toContain('## AI 反馈')
+  })
+
+  it('keeps a V3 automatic-reference report portable without reintroducing a copied question', () => {
+    const referenceSubmission = createWritingSubmissionV3({
+      module: 'academic',
+      task: 'task1',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText: writingSubmission.essayText,
+    })
+    const artifact = createWritingFeedbackArtifactV2({
+      submission: referenceSubmission,
+      feedback: {
+        ...writingFeedback(),
+        taskCriterion: 'task_achievement',
+        limitations: ['题目自动识别仅作参考评估；未提供原图。'],
+      },
+      recordId: 'writing-reference-export',
+      dataAsOf: CREATED_AT,
+      createdAt: CREATED_AT,
+      savedAt: CREATED_AT,
+      source: 'managed',
+      promptVersion: 'writing-feedback-v3-reference',
+    }, { status: 'ready', mode: 'device' })
+
+    const exported = aiArtifactToMarkdown(artifact)
+    expect(artifact.content.submission).toMatchObject({
+      schemaVersion: 3,
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+    })
+    expect(artifact.markdownProjection).toContain('题目自动识别 · 参考评估')
+    expect(exported).toContain('剑雅 19 · Test 2 · Academic · Task 1')
+    expect(exported).toContain('未提供原图')
+    expect(exported).not.toContain('## 原始题目')
+    expect(exported).toContain(referenceSubmission.essayText)
   })
 })

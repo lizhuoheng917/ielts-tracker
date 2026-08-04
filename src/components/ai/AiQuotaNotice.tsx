@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 interface AiQuotaNoticeProps {
   purpose: ManagedAiPurpose
   active?: boolean
+  /** A gateway request has been submitted; the displayed quota may be stale until it settles. */
+  pending?: boolean
   className?: string
 }
 
@@ -18,6 +20,7 @@ interface AiQuotaNoticeProps {
 export function AiQuotaNotice({
   purpose,
   active = true,
+  pending = false,
   className,
 }: AiQuotaNoticeProps) {
   const { status: authStatus } = useAuth()
@@ -66,6 +69,25 @@ export function AiQuotaNotice({
   }
 
   const resetTime = quota.resetAt ? formatManagedAiQuotaResetAt(quota.resetAt) : null
+  if (pending) {
+    return (
+      <div
+        className={cn('flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-xs text-muted-foreground', className)}
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
+        <span>请求已提交，今日 AI 次数正在同步。</span>
+        {resetTime && (
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <span aria-hidden="true">·</span>
+            <Clock3 className="size-3" aria-hidden="true" />
+            于本地时间 {resetTime} 重置
+          </span>
+        )}
+      </div>
+    )
+  }
   return (
     <div
       className={cn('flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-xs text-muted-foreground', className)}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { WordRecord } from '@/lib/types'
+import type { StudyPlan, WordRecord } from '@/lib/types'
 import {
   compactTrackerSyncOperations,
   createTrackerSyncDelete,
@@ -22,6 +22,21 @@ function word(id: string, count = 20): WordRecord {
     note: '复习同义替换',
     createdAt: now,
     updatedAt: now,
+  }
+}
+
+function plan(overrides: Partial<StudyPlan> = {}): StudyPlan {
+  return {
+    id: 'plan-1',
+    title: '阅读模考',
+    category: 'reading',
+    frequency: 'weekly',
+    startDate: '2026-08-03',
+    weekDays: [1, 3, 5],
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
   }
 }
 
@@ -62,6 +77,40 @@ describe('Tracker low-storage sync contract', () => {
     expect(payload).toEqual({
       examDate: '2026-11-01',
     })
+  })
+
+  it('serializes one-time and recurring schedule fields without expanding legacy custom plans', () => {
+    const once = createTrackerSyncPayload('study_plan', plan({
+      id: 'once-plan',
+      frequency: 'once',
+      scheduledDate: '2026-08-16',
+      startDate: undefined,
+      weekDays: undefined,
+    }))
+    expect(once).toMatchObject({
+      frequency: 'once',
+      scheduledDate: '2026-08-16',
+    })
+    expect(once).not.toHaveProperty('startDate')
+    expect(once).not.toHaveProperty('weekDays')
+
+    const recurring = createTrackerSyncPayload('study_plan', plan({ endDate: '2026-08-31' }))
+    expect(recurring).toMatchObject({
+      frequency: 'weekly',
+      startDate: '2026-08-03',
+      endDate: '2026-08-31',
+      weekDays: [1, 3, 5],
+    })
+
+    const legacy = createTrackerSyncPayload('study_plan', plan({
+      id: 'legacy-plan',
+      frequency: 'custom',
+      startDate: undefined,
+      weekDays: undefined,
+    }))
+    expect(legacy).toMatchObject({ frequency: 'custom' })
+    expect(legacy).not.toHaveProperty('scheduledDate')
+    expect(legacy).not.toHaveProperty('startDate')
   })
 
   it('stores only one compact checkpoint for irreversible legacy progress', () => {

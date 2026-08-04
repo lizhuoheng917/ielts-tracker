@@ -9,6 +9,7 @@ import {
   WRITING_RUBRIC_VERSION,
   buildWritingContextSnapshot,
   createWritingSubmissionV2,
+  createWritingSubmissionV3,
 } from './writingFeedback'
 import {
   ManagedAiGateway,
@@ -81,6 +82,9 @@ function planDraftContent() {
       description: '完成精听并记录错因。',
       category: 'listening' as const,
       frequency: 'weekly' as const,
+      scheduledDate: null,
+      startDate: '2026-08-03',
+      endDate: null,
       weekDays: [1, 3, 5],
       targetTime: '08:00',
       targetDuration: 25,
@@ -146,6 +150,25 @@ function createWritingRequest(): AiGatewayRequest {
     snapshot: buildWritingContextSnapshot(submission, {
       now: NOW,
       createId: () => 'snapshot-writing-1',
+    }),
+    userInput: '',
+  }
+}
+
+function createReferenceWritingRequest(): AiGatewayRequest {
+  const submission = createWritingSubmissionV3({
+    module: 'academic',
+    task: 'task2',
+    sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+    essayText: WRITING_ESSAY,
+  })
+  return {
+    requestId: '123e4567-e89b-42d3-a456-426614174097',
+    idempotencyKey: 'idempotency-writing-reference-1',
+    purpose: 'writing_feedback',
+    snapshot: buildWritingContextSnapshot(submission, {
+      now: NOW,
+      createId: () => 'snapshot-writing-reference-1',
     }),
     userInput: '',
   }
@@ -317,7 +340,10 @@ describe('managed AI gateway wire validation', () => {
     expect(wire.userInput).toBe('')
 
     const response = createSuccessResponse(request)
-    response.artifact.content = writingFeedbackContent() as never
+    response.artifact.content = {
+      ...writingFeedbackContent(),
+      limitations: ['题目自动识别仅作参考评估。'],
+    } as never
     expect(parseAiGatewayResponse(response, wire)).toMatchObject({
       ok: true,
       artifact: {
@@ -349,6 +375,35 @@ describe('managed AI gateway wire validation', () => {
     expect(() => createAiGatewayWireRequest(secondInstructionChannel, NOW)).toThrowError(
       expect.objectContaining({ code: 'INVALID_REQUEST' }),
     )
+  })
+
+  it('serializes a V3 writing reference without a manually copied prompt or Task 1 material', () => {
+    const request = createReferenceWritingRequest()
+    const wire = createAiGatewayWireRequest(request, NOW)
+    const serialized = JSON.stringify(wire)
+
+    expect(wire.snapshot).toMatchObject({
+      quality: { status: 'limited', recordCount: 1 },
+      data: {
+        submission: {
+          schemaVersion: 3,
+          sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+          essayText: WRITING_ESSAY,
+        },
+      },
+    })
+    expect(serialized).not.toContain('promptText')
+    expect(serialized).not.toContain('sourceMaterial')
+
+    const response = createSuccessResponse(request)
+    response.artifact.content = {
+      ...writingFeedbackContent(),
+      limitations: ['题目自动识别仅作参考评估。'],
+    } as never
+    expect(parseAiGatewayResponse(response, wire)).toMatchObject({
+      ok: true,
+      artifact: { kind: 'writing_feedback', content: { assessmentStatus: 'scored' } },
+    })
   })
 
   it('requires the exact writing scope grant and exactly one writing record', () => {

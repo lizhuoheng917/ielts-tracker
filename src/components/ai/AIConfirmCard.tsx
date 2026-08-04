@@ -11,6 +11,7 @@ import type { AiCommandReceipt } from '@/ai/contracts'
 import type { PlanCreateCommandDraft } from '@/ai/planCommands'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { isLocalDate } from '@/lib/localDate'
 import { cn } from '@/lib/utils'
 
 interface AIConfirmCardProps {
@@ -32,10 +33,35 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
+function formatScheduleDate(value: string | null): string | null {
+  if (!isLocalDate(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return `${year}年${month}月${day}日`
+}
+
 function scheduleLabel(draft: PlanCreateCommandDraft): string {
   const payload = draft.payload
-  if (payload.frequency === 'daily') return '每天'
-  return payload.weekDays.map((day) => WEEKDAY_LABELS[day]).join('、')
+  if (payload.frequency === 'once') {
+    const scheduledDate = formatScheduleDate(payload.scheduledDate)
+    return scheduledDate ? `单次任务 · ${scheduledDate}` : '单次任务 · 日期待确认'
+  }
+
+  const startDate = formatScheduleDate(payload.startDate)
+  const endDate = formatScheduleDate(payload.endDate)
+  const dateRange = [
+    startDate ? `自 ${startDate} 起` : null,
+    endDate ? `至 ${endDate}` : null,
+  ].filter(Boolean).join('，')
+
+  if (payload.frequency === 'daily') {
+    return `重复计划 · 每日${dateRange ? ` · ${dateRange}` : ''}`
+  }
+
+  const weekDays = payload.weekDays
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    .map((day) => WEEKDAY_LABELS[day])
+    .join('、')
+  return `重复计划 · ${weekDays || '每周'}${dateRange ? ` · ${dateRange}` : ''}`
 }
 
 function receiptMessage(receipt: AiCommandReceipt): string {

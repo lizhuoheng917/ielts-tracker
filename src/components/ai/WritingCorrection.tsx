@@ -25,12 +25,12 @@ import {
   buildWritingContextSnapshot,
   calculateWritingOverallBand,
   countWritingWords,
-  createWritingSubmissionV2,
+  createWritingSubmissionV3,
   parseWritingFeedbackV2,
   type WritingBand,
   type WritingFeedbackV2,
   type WritingModule,
-  type WritingSubmissionV2,
+  type WritingSubmission,
   type WritingTask,
 } from '@/ai/writingFeedback'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
@@ -40,15 +40,27 @@ import { WritingFeedbackContent } from '@/components/ai/StructuredAIContent'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 
-const WRITING_DRAFT_VERSION = 2 as const
+const WRITING_DRAFT_VERSION = 3 as const
+// Keep the existing storage key so a V2 editor draft can be migrated in place.
 const WRITING_DRAFT_PREFIX = 'ielts-tracker:writingDraftV2'
 
-interface WritingDraftV2 {
+interface WritingDraftV3 {
   version: typeof WRITING_DRAFT_VERSION
+  module: WritingModule
+  task: WritingTask
+  bookNumber: string
+  testNumber: string
+  essayText: string
+  updatedAt: string
+}
+
+interface LegacyWritingDraftV2 {
+  version: 2
   module: WritingModule
   task: WritingTask
   promptText: string
@@ -58,7 +70,7 @@ interface WritingDraftV2 {
 }
 
 interface FeedbackPreview {
-  submission: WritingSubmissionV2
+  submission: WritingSubmission
   feedback: WritingFeedbackV2
   overallBand: WritingBand | null
   snapshot: ReturnType<typeof buildWritingContextSnapshot>
@@ -72,7 +84,7 @@ interface FeedbackPreview {
 }
 
 interface WritingTaskContext {
-  submission: WritingSubmissionV2
+  submission: WritingSubmission
   snapshot: ReturnType<typeof buildWritingContextSnapshot>
 }
 
@@ -96,23 +108,42 @@ function isWritingTask(value: unknown): value is WritingTask {
   return value === 'task1' || value === 'task2'
 }
 
-function loadDraft(storageKey: string): WritingDraftV2 | null {
+function loadDraft(storageKey: string): WritingDraftV3 | null {
   try {
     const raw = localStorage.getItem(storageKey)
     if (!raw) return null
     const value: unknown = JSON.parse(raw)
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
     const draft = value as Record<string, unknown>
+    if (!isWritingModule(draft.module) || !isWritingTask(draft.task) || typeof draft.essayText !== 'string' || typeof draft.updatedAt !== 'string') {
+      return null
+    }
     if (
-      draft.version !== WRITING_DRAFT_VERSION
-      || !isWritingModule(draft.module)
-      || !isWritingTask(draft.task)
-      || typeof draft.promptText !== 'string'
-      || typeof draft.sourceMaterialDescription !== 'string'
-      || typeof draft.essayText !== 'string'
-      || typeof draft.updatedAt !== 'string'
-    ) return null
-    return draft as unknown as WritingDraftV2
+      draft.version === WRITING_DRAFT_VERSION
+      && typeof draft.bookNumber === 'string'
+      && typeof draft.testNumber === 'string'
+    ) {
+      return draft as unknown as WritingDraftV3
+    }
+    // Manual V2 prompt/material fields are intentionally retired. Preserve the
+    // learner's essay plus the selected module/task when migrating the draft.
+    if (
+      draft.version === 2
+      && typeof draft.promptText === 'string'
+      && typeof draft.sourceMaterialDescription === 'string'
+    ) {
+      const legacy = draft as unknown as LegacyWritingDraftV2
+      return {
+        version: WRITING_DRAFT_VERSION,
+        module: legacy.module,
+        task: legacy.task,
+        bookNumber: '',
+        testNumber: '',
+        essayText: legacy.essayText,
+        updatedAt: legacy.updatedAt,
+      }
+    }
+    return null
   } catch {
     return null
   }
@@ -144,8 +175,8 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
   const [module, setModule] = useState<WritingModule>('academic')
   const [task, setTask] = useState<WritingTask>('task2')
-  const [promptText, setPromptText] = useState('')
-  const [sourceMaterialDescription, setSourceMaterialDescription] = useState('')
+  const [bookNumber, setBookNumber] = useState('')
+  const [testNumber, setTestNumber] = useState('')
   const [essayText, setEssayText] = useState('')
   const [status, setStatus] = useState<WorkspaceStatus>('editing')
   const [preview, setPreview] = useState<FeedbackPreview | null>(null)
@@ -170,8 +201,8 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
     setLoadedDraftStorageKey(null)
     setModule('academic')
     setTask('task2')
-    setPromptText('')
-    setSourceMaterialDescription('')
+    setBookNumber('')
+    setTestNumber('')
     setEssayText('')
     setPreview(null)
     setSavedRecordId(null)
@@ -182,8 +213,8 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
     if (draft) {
       setModule(draft.module)
       setTask(draft.task)
-      setPromptText(draft.promptText)
-      setSourceMaterialDescription(draft.sourceMaterialDescription)
+      setBookNumber(draft.bookNumber)
+      setTestNumber(draft.testNumber)
       setEssayText(draft.essayText)
     }
     setLoadedDraftStorageKey(draftStorageKey)
@@ -191,12 +222,12 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
   useEffect(() => {
     if (!draftStorageKey || loadedDraftStorageKey !== draftStorageKey || savedRecordId) return
-    const draft: WritingDraftV2 = {
+    const draft: WritingDraftV3 = {
       version: WRITING_DRAFT_VERSION,
       module,
       task,
-      promptText,
-      sourceMaterialDescription,
+      bookNumber,
+      testNumber,
       essayText,
       updatedAt: new Date().toISOString(),
     }
@@ -206,7 +237,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       // The editor remains usable. A save error is shown only when the user
       // explicitly saves a generated report.
     }
-  }, [draftStorageKey, essayText, loadedDraftStorageKey, module, promptText, savedRecordId, sourceMaterialDescription, task])
+  }, [bookNumber, draftStorageKey, essayText, loadedDraftStorageKey, module, savedRecordId, task, testNumber])
 
   useEffect(() => {
     onWorkspaceStateChange?.({
@@ -244,7 +275,10 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
           generatedAt,
           dataAsOf: result.artifact?.dataAsOf ?? taskContext.snapshot.dataAsOf,
           contextHash: result.artifact?.contextHash ?? taskContext.snapshot.contextHash,
-          warnings: result.warnings,
+          warnings: [...new Set([
+            ...taskContext.snapshot.quality.warnings,
+            ...result.warnings,
+          ])],
         })
         setError(null)
         setStatus('preview')
@@ -272,10 +306,17 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
   }
 
   const validateBeforeGenerate = (): string | null => {
-    if (!promptText.trim()) return '请先填写原始写作题目。'
+    if (!bookNumber.trim()) return '请填写剑雅书号。'
+    if (!testNumber.trim()) return '请填写 Test。'
     if (!essayText.trim()) return '请先粘贴或输入作文正文。'
-    if (promptText.length > 2_000) return '题目内容过长，请控制在 2,000 个字符以内。'
-    if (sourceMaterialDescription.length > 4_000) return '图表材料描述过长，请控制在 4,000 个字符以内。'
+    const parsedBookNumber = Number(bookNumber)
+    if (!Number.isInteger(parsedBookNumber) || parsedBookNumber < 1 || parsedBookNumber > 99) {
+      return '剑雅书号请填写 1 到 99 的整数。'
+    }
+    const parsedTestNumber = Number(testNumber)
+    if (!Number.isInteger(parsedTestNumber) || parsedTestNumber < 1 || parsedTestNumber > 4) {
+      return 'Test 请填写 1 到 4 的整数。'
+    }
     if (essayText.length > 12_000) return '作文内容过长，请控制在 12,000 个字符以内。'
     return null
   }
@@ -293,19 +334,20 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       return
     }
 
-    let submission: WritingSubmissionV2
+    let submission: WritingSubmission
     try {
-      submission = createWritingSubmissionV2({
+      submission = createWritingSubmissionV3({
         module,
         task,
-        promptText,
-        sourceMaterial: needsTaskOneMaterial && sourceMaterialDescription.trim()
-          ? { kind: 'text_description', description: sourceMaterialDescription }
-          : { kind: 'none' },
+        sourceReference: {
+          collection: 'cambridge_ielts',
+          bookNumber: Number(bookNumber),
+          testNumber: Number(testNumber),
+        },
         essayText,
       })
     } catch {
-      setError({ message: '请检查题目、材料和作文内容后再试。', code: 'SUBMISSION_INVALID' })
+      setError({ message: '请检查剑雅书号、Test 和作文内容后再试。', code: 'SUBMISSION_INVALID' })
       setStatus('error')
       return
     }
@@ -360,7 +402,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         runId: preview.runId,
         snapshotId: preview.snapshot.snapshotId,
         contextHash: preview.contextHash,
-        promptVersion: 'writing-feedback-v2',
+        promptVersion: 'writing-feedback-v3-reference',
         rubricVersion: preview.feedback.rubricVersion,
         createdAt: preview.generatedAt,
         dataAsOf: preview.dataAsOf,
@@ -391,7 +433,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       runId: preview.runId,
       snapshotId: preview.snapshot.snapshotId,
       contextHash: preview.contextHash,
-      promptVersion: 'writing-feedback-v2',
+      promptVersion: 'writing-feedback-v3-reference',
       createdAt: preview.generatedAt,
       savedAt: preview.generatedAt,
       dataAsOf: preview.dataAsOf,
@@ -452,7 +494,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
           </div>
         )}
 
-        <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-popover/95 px-4 py-3 backdrop-blur sm:flex-row sm:justify-end">
+        <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t border-border/80 bg-background px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_18px_-16px_rgba(15,23,42,0.28)] sm:flex-row sm:items-center sm:justify-end">
           <Button type="button" variant="outline" onClick={handleExport}>
             <Download className="size-4" aria-hidden="true" />
             导出 Markdown
@@ -468,7 +510,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
   return (
     <div className="space-y-5" aria-busy={status === 'generating'}>
-      <AiQuotaNotice purpose="writing_feedback" active={quotaActive} />
+      <AiQuotaNotice purpose="writing_feedback" active={quotaActive} pending={status === 'generating'} />
       {access.status === 'locked' && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -523,54 +565,62 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         </div>
       </section>
 
-      <section className="space-y-2 border-t border-border/70 pt-4">
-        <div className="flex items-end justify-between gap-3">
-          <Label htmlFor="writing-task-prompt" className="text-sm font-semibold">2. 原始题目</Label>
-          <span className="text-[11px] tabular-nums text-muted-foreground">{promptText.length} / 2000</span>
+      <section className="space-y-3 border-t border-border/70 pt-4">
+        <div>
+          <Label className="text-sm font-semibold">2. 题目引用</Label>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            不必粘贴题目。AI 会根据剑雅书号、Test、考试类型和 Task 尝试识别题目，并按参考评估生成反馈。
+          </p>
         </div>
-        <Textarea
-          id="writing-task-prompt"
-          value={promptText}
-          onChange={(event) => setPromptText(event.target.value)}
-          disabled={inputLocked}
-          maxLength={2_000}
-          rows={4}
-          className="min-h-24 resize-y"
-          placeholder={task === 'task1' ? '粘贴完整 Task 1 题目、说明和要点…' : '粘贴完整 Task 2 题目…'}
-        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="writing-cambridge-book" className="text-xs">剑雅书号</Label>
+            <Input
+              id="writing-cambridge-book"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={99}
+              step={1}
+              value={bookNumber}
+              onChange={(event) => setBookNumber(event.target.value)}
+              disabled={inputLocked}
+              placeholder="例如 19"
+              aria-describedby="writing-reference-note"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="writing-cambridge-test" className="text-xs">Test</Label>
+            <Input
+              id="writing-cambridge-test"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={4}
+              step={1}
+              value={testNumber}
+              onChange={(event) => setTestNumber(event.target.value)}
+              disabled={inputLocked}
+              placeholder="例如 2"
+              aria-describedby="writing-reference-note"
+            />
+          </div>
+        </div>
+        <p id="writing-reference-note" className="rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-xs leading-5 text-muted-foreground">
+          <span className="font-medium text-primary">题目自动识别 · 参考评估</span>
+          {' '}书号和 Test 都必填；即使填写完整，结果也可能与原题不完全一致。
+        </p>
+        {needsTaskOneMaterial && (
+          <p className="flex items-start gap-1.5 text-xs leading-5 text-amber-700 dark:text-amber-300">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            未提供原图，Task Achievement 仅作参考；AI 会以语言、结构和表达反馈为主，仍可生成报告。
+          </p>
+        )}
       </section>
 
-      {needsTaskOneMaterial && (
-        <section className="space-y-2 border-t border-border/70 pt-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <Label htmlFor="writing-source-material" className="text-sm font-semibold">3. 图表材料</Label>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">首版请用文字写明图表类型、时间范围、单位和关键数据。</p>
-            </div>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{sourceMaterialDescription.length} / 4000</span>
-          </div>
-          <Textarea
-            id="writing-source-material"
-            value={sourceMaterialDescription}
-            onChange={(event) => setSourceMaterialDescription(event.target.value)}
-            disabled={inputLocked}
-            maxLength={4_000}
-            rows={5}
-            className="min-h-28 resize-y"
-            placeholder="例如：折线图显示 2000–2020 年三座城市公共交通使用率，纵轴单位为百分比…"
-          />
-          {!sourceMaterialDescription.trim() && (
-            <p className="flex items-start gap-1.5 text-xs leading-5 text-amber-700 dark:text-amber-300">
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-              缺少图表材料时，AI 只能给语言反馈，不会显示精确 Task Achievement 分数。
-            </p>
-          )}
-        </section>
-      )}
-
       <section className="space-y-2 border-t border-border/70 pt-4">
         <div className="flex items-end justify-between gap-3">
-          <Label htmlFor="writing-essay" className="text-sm font-semibold">{needsTaskOneMaterial ? '4' : '3'}. 作文正文</Label>
+          <Label htmlFor="writing-essay" className="text-sm font-semibold">3. 作文正文</Label>
           <span className={cn('text-xs tabular-nums', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
             {wordCount} 词
           </span>
@@ -604,9 +654,13 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
       {status === 'generating' && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-subject-writing-border bg-subject-writing-soft px-3 py-2.5" role="status" aria-live="polite">
-          <div className="flex min-w-0 items-center gap-2">
-            <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : '正在对照题目和评分标准'} />
-            <span className="truncate text-xs text-muted-foreground">作文草稿已保留</span>
+          <div className="min-w-0 space-y-0.5">
+            <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : '正在按题目引用生成参考评估'} />
+            <p className="truncate text-xs text-muted-foreground">
+              {writingTask?.status === 'stopping'
+                ? '已停止等待，最终结果状态会在同步后显示。'
+                : '请求已提交，今日次数正在同步；作文草稿已保留。'}
+            </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={writingTask?.status === 'stopping'}>
             <Square className="size-3" fill="currentColor" aria-hidden="true" />停止
@@ -614,14 +668,19 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         </div>
       )}
 
-      <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-popover/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[11px] leading-4 text-muted-foreground">
-          作文仅用于本次 Lexi AI 请求，服务端默认不保存正文。
-        </p>
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t border-border/80 bg-background px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_18px_-16px_rgba(15,23,42,0.28)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            作文仅用于本次 Lexi AI 请求，服务端默认不保存正文。
+          </p>
+          {status === 'generating' && (
+            <p className="text-[11px] leading-4 text-muted-foreground">今日 AI 次数正在同步，请以生成结束后的提示为准。</p>
+          )}
+        </div>
         <Button
           type="button"
           onClick={handleGenerate}
-          disabled={status === 'generating' || access.status === 'locked' || !promptText.trim() || !essayText.trim()}
+          disabled={status === 'generating' || access.status === 'locked' || !bookNumber.trim() || !testNumber.trim() || !essayText.trim()}
           className="shrink-0 bg-subject-writing text-white hover:bg-subject-writing/90"
         >
           {status === 'error' ? <RefreshCcw className="size-4" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}

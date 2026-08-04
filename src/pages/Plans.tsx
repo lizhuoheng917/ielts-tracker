@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { StudyPlan } from '@/lib/types'
+import type { PlanExecution, StudyPlan } from '@/lib/types'
 import { usePlanStore } from '@/stores/planStore'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { listAiArtifactsForAccess } from '@/ai/artifactRepository'
@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/select'
 import {
   AlertCircle,
+  CalendarDays,
   CheckCircle,
   Circle,
   Clock3,
@@ -47,6 +48,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Repeat2,
   RotateCcw,
   Search,
   Sparkles,
@@ -58,21 +60,28 @@ import { createCurrentLearningContext } from '@/ai/runtimeContext'
 import { useAIPrivacyStore } from '@/stores/aiPrivacyStore'
 import { PLAN_CATEGORY_OPTIONS } from '@/lib/constants'
 import { DEFAULT_DATA_PAGE_SIZE, getDataPageCount, paginateItems } from '@/lib/dataView'
-import { toLocalDate } from '@/lib/localDate'
+import { addLocalDays, isLocalDate, toLocalDate } from '@/lib/localDate'
 import {
   filterAndSortPlans,
   indexLatestPlanExecutionsForDate,
-  isPlanScheduledForDay,
-  toEditablePlanFrequency,
-  type EditablePlanFrequency,
+  isPlanScheduledForDate,
   type PlanCategoryFilter,
   type PlanFrequencyFilter,
   type PlanSortOrder,
   type PlanStatusFilter,
 } from '@/lib/planView'
 import { getSubjectVisual } from '@/lib/subjectVisuals'
+import {
+  formatPlanSchedule,
+  formatPlanTimeAndDuration,
+  formatShortDate,
+  formatWeekDays,
+  getPlanFrequency,
+  getPlanScheduleFields,
+} from './Plans.presentation'
 
 const FREQUENCY_LABELS: Record<string, string> = {
+  once: '单次任务',
   daily: '每日',
   weekly: '每周',
   custom: '自定义',
@@ -121,13 +130,7 @@ function getCategoryBadgeClass(category: string): string {
   return getSubjectVisual(category).badgeClass
 }
 
-function formatWeekDays(days?: number[]): string {
-  if (!days?.length) return '未设置星期'
-  const labels = WEEKDAY_OPTIONS
-    .filter((option) => days.includes(option.value))
-    .map((option) => option.label)
-  return `周${labels.join('、')}`
-}
+type FormPlanFrequency = 'once' | 'daily' | 'weekly' | 'custom'
 
 function getTodayStr(): string {
   return toLocalDate()
@@ -159,9 +162,13 @@ export default function Plans() {
   const [formTitle, setFormTitle] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formCategory, setFormCategory] = useState<string>('general')
-  const [formFreq, setFormFreq] = useState<EditablePlanFrequency>('daily')
+  const [formFreq, setFormFreq] = useState<FormPlanFrequency>('once')
   const [formWeekDays, setFormWeekDays] = useState<number[]>([])
+  const [formScheduledDate, setFormScheduledDate] = useState('')
+  const [formStartDate, setFormStartDate] = useState('')
+  const [formEndDate, setFormEndDate] = useState('')
   const [formTime, setFormTime] = useState('')
+  const [formDuration, setFormDuration] = useState('')
   const [formActive, setFormActive] = useState(true)
   const [editingLegacyCustomFrequency, setEditingLegacyCustomFrequency] = useState(false)
 
@@ -180,6 +187,34 @@ export default function Plans() {
   const [formSaving, setFormSaving] = useState(false)
   const [deleteSaving, setDeleteSaving] = useState(false)
   const formWeekDaysMissing = formFreq === 'weekly' && formWeekDays.length === 0
+  const formScheduleSelectionMissing = formFreq === 'custom'
+  const formScheduledDateMissing = formFreq === 'once' && !isLocalDate(formScheduledDate)
+  const formStartDateMissing =
+    (formFreq === 'daily' || formFreq === 'weekly')
+    && !isLocalDate(formStartDate)
+  const formDateRangeInvalid =
+    (formFreq === 'daily' || formFreq === 'weekly')
+    && isLocalDate(formStartDate)
+    && isLocalDate(formEndDate)
+    && formEndDate < formStartDate
+  const parsedFormDuration = formDuration.trim() === '' ? undefined : Number(formDuration)
+  const formDurationInvalid =
+    parsedFormDuration !== undefined
+    && (!Number.isInteger(parsedFormDuration) || parsedFormDuration <= 0 || parsedFormDuration > 1_440)
+  const formHasSchedulingError =
+    formScheduleSelectionMissing
+    || formScheduledDateMissing
+    || formStartDateMissing
+    || formDateRangeInvalid
+    || formWeekDaysMissing
+    || formDurationInvalid
+  const formErrorDescription = [
+    formScheduleSelectionMissing ? 'plan-form-type-error' : null,
+    formScheduledDateMissing ? 'plan-form-date-error' : null,
+    formStartDateMissing || formDateRangeInvalid ? 'plan-form-range-error' : null,
+    formWeekDaysMissing ? 'plan-form-weekdays-error' : null,
+    formDurationInvalid ? 'plan-form-duration-error' : null,
+  ].filter(Boolean).join(' ') || undefined
 
   useEffect(() => {
     if (!planDraftTaskKey || openRequestedTaskKey !== planDraftTaskKey) return
@@ -193,17 +228,17 @@ export default function Plans() {
   )
 
   const today = getTodayStr()
-  const dayOfWeek = new Date().getDay()
+  const nextWeek = addLocalDays(today, 7)
 
   const activePlanCount = useMemo(() => plans.filter((plan) => plan.isActive).length, [plans])
   const pausedPlanCount = plans.length - activePlanCount
 
-  // 今日计划（根据频率筛选）
+  // 今日待办按日历日期解析：单次任务不会被当成每日计划，重复计划也会尊重起止日期。
   const todayPlans = useMemo(() => {
     return plans
-      .filter((plan) => isPlanScheduledForDay(plan, dayOfWeek))
+      .filter((plan) => isPlanScheduledForDate(plan, today))
       .sort((a, b) => (a.targetTime || '99:99').localeCompare(b.targetTime || '99:99'))
-  }, [plans, dayOfWeek])
+  }, [plans, today])
 
   // 今日执行记录映射（状态 + ID）
   const todayExecMap = useMemo(
@@ -215,6 +250,36 @@ export default function Plans() {
     () => todayPlans.filter((plan) => todayExecMap.get(plan.id)?.isCompleted).length,
     [todayExecMap, todayPlans],
   )
+
+  const executionByPlanAndDate = useMemo(() => {
+    const indexed = new Map<string, PlanExecution>()
+    executions.forEach((execution) => {
+      const key = `${execution.planId}\u0000${execution.date}`
+      if (!indexed.has(key)) indexed.set(key, execution)
+    })
+    return indexed
+  }, [executions])
+
+  const overdueOncePlans = useMemo(() => plans
+    .filter((plan) => {
+      if (!plan.isActive || getPlanFrequency(plan) !== 'once') return false
+      const { scheduledDate } = getPlanScheduleFields(plan)
+      if (!scheduledDate || !isLocalDate(scheduledDate) || scheduledDate >= today) return false
+      return !executionByPlanAndDate.get(`${plan.id}\u0000${scheduledDate}`)?.isCompleted
+    })
+    .sort((a, b) => (
+      (getPlanScheduleFields(a).scheduledDate ?? '').localeCompare(getPlanScheduleFields(b).scheduledDate ?? '')
+    )), [executionByPlanAndDate, plans, today])
+
+  const upcomingOncePlans = useMemo(() => plans
+    .filter((plan) => {
+      if (!plan.isActive || getPlanFrequency(plan) !== 'once') return false
+      const { scheduledDate } = getPlanScheduleFields(plan)
+      return Boolean(scheduledDate && isLocalDate(scheduledDate) && scheduledDate > today && scheduledDate <= nextWeek)
+    })
+    .sort((a, b) => (
+      (getPlanScheduleFields(a).scheduledDate ?? '').localeCompare(getPlanScheduleFields(b).scheduledDate ?? '')
+    )), [nextWeek, plans, today])
 
   const filteredPlans = useMemo(
     () => filterAndSortPlans(plans, {
@@ -282,35 +347,49 @@ export default function Plans() {
     setFormTitle('')
     setFormDescription('')
     setFormCategory('general')
-    setFormFreq('daily')
+    setFormFreq('once')
     setFormWeekDays([])
+    setFormScheduledDate(today)
+    setFormStartDate(today)
+    setFormEndDate('')
     setFormTime('')
+    setFormDuration('')
     setFormActive(true)
     setFormOpen(true)
   }
 
   const openEdit = (plan: StudyPlan) => {
+    const planFrequency = getPlanFrequency(plan)
+    const { scheduledDate, startDate, endDate } = getPlanScheduleFields(plan)
     setEditingId(plan.id)
-    setEditingLegacyCustomFrequency(plan.frequency === 'custom')
+    setEditingLegacyCustomFrequency(planFrequency === 'custom')
     setFormTitle(plan.title)
     setFormDescription(plan.description || '')
     setFormCategory(plan.category)
-    setFormFreq(toEditablePlanFrequency(plan.frequency))
+    setFormFreq(planFrequency)
     setFormWeekDays(plan.weekDays || [])
+    setFormScheduledDate(scheduledDate || today)
+    setFormStartDate(startDate || today)
+    setFormEndDate(endDate || '')
     setFormTime(plan.targetTime || '')
+    setFormDuration(plan.targetDuration ? String(plan.targetDuration) : '')
     setFormActive(plan.isActive)
     setFormOpen(true)
   }
 
   const handleSave = async () => {
-    if (!formTitle.trim() || formWeekDaysMissing || formSaving) return
+    if (!formTitle.trim() || formHasSchedulingError || formSaving) return
     const data = {
       title: formTitle.trim(),
       description: formDescription.trim() || undefined,
       category: formCategory as 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general',
       frequency: formFreq,
+      scheduledDate: formFreq === 'once' ? formScheduledDate : undefined,
+      startDate: formFreq === 'daily' || formFreq === 'weekly' ? formStartDate : undefined,
+      endDate: formFreq === 'daily' || formFreq === 'weekly' ? formEndDate || undefined : undefined,
       weekDays: formFreq === 'weekly' ? formWeekDays : undefined,
       targetTime: formTime || undefined,
+      targetDuration: parsedFormDuration,
       isActive: formActive,
     }
     setFormSaving(true)
@@ -386,7 +465,7 @@ export default function Plans() {
       <PageHeader
         eyebrow="Study routine"
         title="学习计划"
-        description="统一管理每日与每周任务，今日完成后可直接打卡。"
+        description="安排单次任务与重复节奏，今天、近期和逾期事项一目了然。"
         actions={(
           <>
             <Button type="button" variant="outline" onClick={() => setAiOpen(true)}>
@@ -412,12 +491,14 @@ export default function Plans() {
         ariaLabel="学习计划概览"
         items={[
           { label: '全部计划', value: plans.length, description: '个', icon: <ListTodo /> },
-          { label: '使用中', value: activePlanCount, description: '个', icon: <Play />, tone: 'primary' },
+          { label: '进行中', value: activePlanCount, description: '个', icon: <Play />, tone: 'primary' },
           { label: '今日待办', value: todayPlans.length, description: '项', icon: <Clock3 />, tone: 'warning' },
           {
             label: '今日完成',
             value: `${completedTodayCount}/${todayPlans.length}`,
-            description: pausedPlanCount > 0 ? `${pausedPlanCount} 个计划已暂停` : '全部计划均已启用',
+            description: overdueOncePlans.length > 0
+              ? `${overdueOncePlans.length} 项单次任务待处理`
+              : pausedPlanCount > 0 ? `${pausedPlanCount} 个计划已暂停` : '没有待处理的逾期任务',
             icon: <CheckCircle />,
             tone: 'success',
           },
@@ -495,7 +576,7 @@ export default function Plans() {
                         </time>
                       )}
                       <Badge variant="outline" className="hidden shrink-0 text-xs sm:inline-flex">
-                        {FREQUENCY_LABELS[plan.frequency]}
+                        {FREQUENCY_LABELS[getPlanFrequency(plan)]}
                       </Badge>
                     </div>
                   </li>
@@ -506,11 +587,18 @@ export default function Plans() {
         </CardContent>
       </Card>
 
+      <ScheduleOverview
+        overduePlans={overdueOncePlans}
+        upcomingPlans={upcomingOncePlans}
+        onShowDetail={showPlanDetail}
+        onEdit={openEdit}
+      />
+
       <section className="space-y-4" aria-labelledby="plan-library-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id="plan-library-title" className="text-[15px] font-semibold md:text-base">计划库</h2>
-            <p className="mt-1 text-sm text-muted-foreground">查找、暂停或调整长期学习安排</p>
+            <h2 id="plan-library-title" className="text-[15px] font-semibold md:text-base">所有计划</h2>
+            <p className="mt-1 text-sm text-muted-foreground">查找、调整或暂停单次任务与重复安排</p>
           </div>
           <p className="text-sm text-muted-foreground" aria-live="polite">
             共 <span className="font-medium tabular-nums text-foreground">{filteredPlans.length}</span> 个计划
@@ -581,6 +669,7 @@ export default function Plans() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">全部频率</SelectItem>
+                    <SelectItem value="once">单次任务</SelectItem>
                     <SelectItem value="daily">每日</SelectItem>
                     <SelectItem value="weekly">每周</SelectItem>
                     <SelectItem value="custom">自定义</SelectItem>
@@ -640,31 +729,83 @@ export default function Plans() {
 
       {/* 添加/编辑弹窗 */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12">
             <DialogTitle>{editingId ? '编辑计划' : '添加计划'}</DialogTitle>
             <DialogDescription>
-              {editingId ? '修改这个学习计划的设置' : '创建一个新的学习计划'}
+              {editingId ? '调整任务的安排方式、时间与学习目标' : '先选择单次任务或重复计划，再补全安排'}
             </DialogDescription>
           </DialogHeader>
 
-          {editingLegacyCustomFrequency && (
-            <p
-              className="rounded-lg border border-warning-border bg-warning-surface px-3 py-2 text-sm leading-5 text-warning-foreground"
-              role="status"
-            >
-              此计划使用旧版“自定义”频率。编辑时已默认转为“每日”；保存后将按你当前选择的频率执行。
-            </p>
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <div className="space-y-5">
+              {editingLegacyCustomFrequency && (
+                <p
+                  className="rounded-lg border border-warning-border bg-warning-surface px-3 py-2 text-sm leading-5 text-warning-foreground"
+                  role="status"
+                >
+                  这是旧版“自定义”计划，尚无明确日程。请重新选择单次任务或重复计划后再保存。
+                </p>
+              )}
 
-          <div className="space-y-4">
+              <section className="space-y-2" aria-labelledby="plan-form-type-label">
+                <span id="plan-form-type-label" className="block text-sm font-medium">计划类型</span>
+                <div
+                  className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                  role="group"
+                  aria-labelledby="plan-form-type-label"
+                  aria-describedby={formScheduleSelectionMissing ? 'plan-form-type-error' : undefined}
+                  aria-invalid={formScheduleSelectionMissing}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFormFreq('once')}
+                    aria-pressed={formFreq === 'once'}
+                    className={cn(
+                      'flex min-h-20 items-start gap-2.5 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      formFreq === 'once'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background hover:bg-accent',
+                    )}
+                  >
+                    <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                      <span>
+                        <span className="block text-sm font-semibold">单次任务</span>
+                      <span className="mt-1 block text-xs leading-4 text-muted-foreground">在指定日期完成一次，完成后不再出现在后续待办中。</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormFreq((current) => current === 'weekly' ? 'weekly' : 'daily')}
+                    aria-pressed={formFreq === 'daily' || formFreq === 'weekly'}
+                    className={cn(
+                      'flex min-h-20 items-start gap-2.5 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      formFreq === 'daily' || formFreq === 'weekly'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background hover:bg-accent',
+                    )}
+                  >
+                    <Repeat2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    <span>
+                      <span className="block text-sm font-semibold">重复计划</span>
+                      <span className="mt-1 block text-xs leading-4 text-muted-foreground">按每天或每周节奏，持续安排学习。</span>
+                    </span>
+                  </button>
+                </div>
+                {formScheduleSelectionMissing && (
+                  <p id="plan-form-type-error" className="text-xs text-destructive" role="alert">
+                    请先重新选择这项计划的安排方式
+                  </p>
+                )}
+              </section>
+
             <div className="space-y-2">
               <Label htmlFor="plan-form-title">计划名称</Label>
               <Input
                 id="plan-form-title"
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="例如：每天背诵50个单词"
+                placeholder="例如：完成一套阅读练习"
               />
             </div>
 
@@ -698,91 +839,194 @@ export default function Plans() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="plan-form-frequency">频率</Label>
-              <Select value={formFreq} onValueChange={(v) => v && setFormFreq(v as EditablePlanFrequency)}>
-                <SelectTrigger id="plan-form-frequency" className="w-full">
-                  <SelectValue>
-                    {(value) => FREQUENCY_LABELS[String(value)] ?? '选择频率'}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">每日</SelectItem>
-                  <SelectItem value="weekly">每周</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              {formFreq === 'once' && (
+                <section className="space-y-3 rounded-xl border border-border bg-surface-subtle p-3" aria-labelledby="plan-form-once-schedule-label">
+                  <div>
+                    <h3 id="plan-form-once-schedule-label" className="text-sm font-semibold">这一次安排</h3>
+                    <p className="mt-1 text-xs leading-4 text-muted-foreground">任务只会在该日期出现在待办中。</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="plan-form-scheduled-date">执行日期</Label>
+                      <Input
+                        id="plan-form-scheduled-date"
+                        type="date"
+                        value={formScheduledDate}
+                        onChange={(event) => setFormScheduledDate(event.target.value)}
+                        aria-invalid={formScheduledDateMissing}
+                        aria-describedby={formScheduledDateMissing ? 'plan-form-date-error' : undefined}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="plan-form-time">开始时间（可选）</Label>
+                      <Input
+                        id="plan-form-time"
+                        type="time"
+                        value={formTime}
+                        onChange={(event) => setFormTime(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {formScheduledDateMissing && (
+                    <p id="plan-form-date-error" className="text-xs text-destructive" role="alert">
+                      单次任务需要选择有效的执行日期
+                    </p>
+                  )}
+                </section>
+              )}
 
-            {formFreq === 'weekly' && (
-              <div className="space-y-2">
-                <span id="plan-form-weekdays-label" className="block text-sm font-medium">星期</span>
-                <div
-                  className="flex flex-wrap gap-1.5"
-                  role="group"
-                  aria-labelledby="plan-form-weekdays-label"
-                  aria-describedby={formWeekDaysMissing ? 'plan-form-weekdays-error' : undefined}
-                  aria-invalid={formWeekDaysMissing}
-                >
-                  {WEEKDAY_OPTIONS.map((day) => (
-                    <button
-                      key={day.value}
-                      type="button"
-                      onClick={() => toggleWeekDay(day.value)}
-                      aria-pressed={formWeekDays.includes(day.value)}
-                      aria-label={`星期${day.label}`}
-                      className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-md text-xs font-medium transition-all',
-                        formWeekDays.includes(day.value)
-                          ? 'bg-primary text-primary-foreground'
-                          : 'border bg-background hover:bg-accent'
+              {(formFreq === 'daily' || formFreq === 'weekly') && (
+                <section className="space-y-3 rounded-xl border border-border bg-surface-subtle p-3" aria-labelledby="plan-form-recurring-schedule-label">
+                  <div>
+                    <h3 id="plan-form-recurring-schedule-label" className="text-sm font-semibold">重复安排</h3>
+                    <p className="mt-1 text-xs leading-4 text-muted-foreground">只保存一条计划规则，不会预先写入未来每一天的任务。</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-form-frequency">重复节奏</Label>
+                    <Select value={formFreq} onValueChange={(value) => value && setFormFreq(value as 'daily' | 'weekly')}>
+                      <SelectTrigger id="plan-form-frequency" className="w-full">
+                        <SelectValue>{FREQUENCY_LABELS[formFreq]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">每天</SelectItem>
+                        <SelectItem value="weekly">每周指定日期</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formFreq === 'weekly' && (
+                    <div className="space-y-2">
+                      <span id="plan-form-weekdays-label" className="block text-sm font-medium">执行星期</span>
+                      <div
+                        className="flex flex-wrap gap-1.5"
+                        role="group"
+                        aria-labelledby="plan-form-weekdays-label"
+                        aria-describedby={formWeekDaysMissing ? 'plan-form-weekdays-error' : undefined}
+                        aria-invalid={formWeekDaysMissing}
+                      >
+                        {WEEKDAY_OPTIONS.map((day) => (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => toggleWeekDay(day.value)}
+                            aria-pressed={formWeekDays.includes(day.value)}
+                            aria-label={`星期${day.label}`}
+                            className={cn(
+                              'flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium transition-all',
+                              formWeekDays.includes(day.value)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'border bg-background hover:bg-accent',
+                            )}
+                          >
+                            {day.label}
+                          </button>
+                        ))}
+                      </div>
+                      {formWeekDaysMissing && (
+                        <p id="plan-form-weekdays-error" className="text-xs text-destructive" role="alert">
+                          每周计划至少需要选择一天
+                        </p>
                       )}
-                    >
-                      {day.label}
-                    </button>
-                  ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="plan-form-start-date">开始日期</Label>
+                      <Input
+                        id="plan-form-start-date"
+                        type="date"
+                        value={formStartDate}
+                        onChange={(event) => setFormStartDate(event.target.value)}
+                        aria-invalid={formStartDateMissing || formDateRangeInvalid}
+                        aria-describedby={formStartDateMissing || formDateRangeInvalid ? 'plan-form-range-error' : undefined}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="plan-form-end-date">结束日期（可选）</Label>
+                      <Input
+                        id="plan-form-end-date"
+                        type="date"
+                        value={formEndDate}
+                        min={formStartDate || undefined}
+                        onChange={(event) => setFormEndDate(event.target.value)}
+                        aria-invalid={formDateRangeInvalid}
+                        aria-describedby={formDateRangeInvalid ? 'plan-form-range-error' : undefined}
+                      />
+                    </div>
+                  </div>
+                  {(formStartDateMissing || formDateRangeInvalid) && (
+                    <p id="plan-form-range-error" className="text-xs text-destructive" role="alert">
+                      {formStartDateMissing ? '重复计划需要选择开始日期' : '结束日期不能早于开始日期'}
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-form-time">开始时间（可选）</Label>
+                    <Input
+                      id="plan-form-time"
+                      type="time"
+                      value={formTime}
+                      onChange={(event) => setFormTime(event.target.value)}
+                    />
+                  </div>
+                </section>
+              )}
+
+              {formFreq !== 'custom' && (
+                <div className="space-y-2">
+                  <Label htmlFor="plan-form-duration">预计时长（可选）</Label>
+                  <div className="relative">
+                    <Input
+                      id="plan-form-duration"
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      max="1440"
+                      value={formDuration}
+                      onChange={(event) => setFormDuration(event.target.value)}
+                      placeholder="例如：45"
+                      className="pr-12"
+                      aria-invalid={formDurationInvalid}
+                      aria-describedby={formDurationInvalid ? 'plan-form-duration-error' : undefined}
+                    />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">分钟</span>
+                  </div>
+                  {formDurationInvalid && (
+                    <p id="plan-form-duration-error" className="text-xs text-destructive" role="alert">
+                      请输入 1 到 1440 之间的整数分钟数
+                    </p>
+                  )}
                 </div>
-                {formWeekDaysMissing && (
-                  <p id="plan-form-weekdays-error" className="text-xs text-destructive" role="alert">
-                    每周计划至少需要选择一天
+              )}
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface-subtle px-3 py-2.5">
+                <div>
+                  <Label htmlFor="plan-form-active" className="cursor-pointer">启用此计划</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formFreq === 'once' ? '暂停后不会在安排日期出现在待办中' : '暂停后不会继续出现在每日待办中'}
                   </p>
-                )}
+                </div>
+                <Switch
+                  id="plan-form-active"
+                  checked={formActive}
+                  onCheckedChange={setFormActive}
+                  aria-label="启用此计划"
+                />
               </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="plan-form-time">完成时间（可选）</Label>
-              <Input
-                id="plan-form-time"
-                type="time"
-                value={formTime}
-                onChange={(e) => setFormTime(e.target.value)}
-                className="w-full"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-subtle px-3 py-2.5">
-              <div>
-                <Label htmlFor="plan-form-active" className="cursor-pointer">启用此计划</Label>
-                <p className="mt-1 text-xs text-muted-foreground">暂停的计划不会出现在今日待办</p>
-              </div>
-              <Switch
-                id="plan-form-active"
-                checked={formActive}
-                onCheckedChange={setFormActive}
-                aria-label="启用此计划"
-              />
             </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_18px_-18px_rgb(15_23_42_/_0.45)] sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">
               取消
             </Button>
             <Button
               type="button"
               onClick={() => void handleSave()}
-              disabled={!formTitle.trim() || formWeekDaysMissing || formSaving}
-              aria-describedby={formWeekDaysMissing ? 'plan-form-weekdays-error' : undefined}
+              disabled={!formTitle.trim() || formHasSchedulingError || formSaving}
+              aria-describedby={formErrorDescription}
               className="w-full sm:w-auto"
             >
               {formSaving ? '正在保存…' : editingId ? '保存' : '添加'}
@@ -820,7 +1064,7 @@ export default function Plans() {
               AI 生成学习计划
             </DialogTitle>
             <DialogDescription>
-              每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；你可以核对分类、频率与目标，再逐条确认加入计划。
+              每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；请核对单次或重复安排、日期和目标后再逐条加入。
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col flex-1 min-h-0 px-4 pb-4">
@@ -873,17 +1117,29 @@ export default function Plans() {
                   {getCategoryLabel(selectedPlan.category)}
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {FREQUENCY_LABELS[selectedPlan.frequency]}
+                  {FREQUENCY_LABELS[getPlanFrequency(selectedPlan)]}
                 </Badge>
                 {selectedPlan.targetTime && (
                   <Badge variant="outline" className="border-primary/25 bg-primary/10 text-xs text-primary">
                     {selectedPlan.targetTime}
                   </Badge>
                 )}
-                {selectedPlan.frequency === 'weekly' && selectedPlan.weekDays && (
+                {selectedPlan.targetDuration && (
+                  <Badge variant="outline" className="text-xs">
+                    约 {selectedPlan.targetDuration} 分钟
+                  </Badge>
+                )}
+                {getPlanFrequency(selectedPlan) === 'weekly' && selectedPlan.weekDays && (
                   <Badge variant="outline" className="text-xs">
                     {formatWeekDays(selectedPlan.weekDays)}
                   </Badge>
+                )}
+              </div>
+              <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground">安排</span>
+                <p className="mt-1 font-medium">{formatPlanSchedule(selectedPlan)}</p>
+                {(selectedPlan.targetTime || selectedPlan.targetDuration) && (
+                  <p className="mt-1 text-xs text-muted-foreground">{formatPlanTimeAndDuration(selectedPlan)}</p>
                 )}
               </div>
             </div>
@@ -904,6 +1160,130 @@ interface PlanListProps {
   onToggleActive: (plan: StudyPlan) => void
   onEdit: (plan: StudyPlan) => void
   onDelete: (plan: StudyPlan) => void
+}
+
+interface ScheduleOverviewProps {
+  overduePlans: StudyPlan[]
+  upcomingPlans: StudyPlan[]
+  onShowDetail: (plan: StudyPlan) => void
+  onEdit: (plan: StudyPlan) => void
+}
+
+function ScheduleOverview({
+  overduePlans,
+  upcomingPlans,
+  onShowDetail,
+  onEdit,
+}: ScheduleOverviewProps) {
+  if (overduePlans.length === 0 && upcomingPlans.length === 0) return null
+
+  return (
+    <Card size="sm">
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold md:text-base">
+              <CalendarDays className="h-4 w-4 text-primary" aria-hidden="true" />
+              近期安排
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">仅显示需要改期或将在未来 7 天执行的单次任务</p>
+          </div>
+        </div>
+
+        {overduePlans.length > 0 && (
+          <section aria-labelledby="overdue-plan-title" className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="overdue-plan-title" className="text-sm font-semibold text-warning-foreground">已逾期</h3>
+              <Badge variant="outline" className="border-warning-border bg-warning-surface text-xs text-warning-foreground">
+                {overduePlans.length} 项待处理
+              </Badge>
+            </div>
+            <ul className="space-y-2" aria-label="已逾期的单次任务">
+              {overduePlans.slice(0, 3).map((plan) => (
+                <ScheduleOverviewRow
+                  key={plan.id}
+                  plan={plan}
+                  tone="overdue"
+                  onShowDetail={onShowDetail}
+                  onEdit={onEdit}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {upcomingPlans.length > 0 && (
+          <section aria-labelledby="upcoming-plan-title" className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="upcoming-plan-title" className="text-sm font-semibold">未来 7 天</h3>
+              <span className="text-xs text-muted-foreground">{upcomingPlans.length} 项单次任务</span>
+            </div>
+            <ul className="space-y-2" aria-label="未来七天的单次任务">
+              {upcomingPlans.slice(0, 4).map((plan) => (
+                <ScheduleOverviewRow
+                  key={plan.id}
+                  plan={plan}
+                  tone="upcoming"
+                  onShowDetail={onShowDetail}
+                  onEdit={onEdit}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ScheduleOverviewRow({
+  plan,
+  tone,
+  onShowDetail,
+  onEdit,
+}: {
+  plan: StudyPlan
+  tone: 'overdue' | 'upcoming'
+  onShowDetail: (plan: StudyPlan) => void
+  onEdit: (plan: StudyPlan) => void
+}) {
+  const { scheduledDate } = getPlanScheduleFields(plan)
+  return (
+    <li
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg border px-3 py-2.5',
+        tone === 'overdue'
+          ? 'border-warning-border bg-warning-surface/60'
+          : 'border-border bg-surface-subtle',
+      )}
+    >
+      <CalendarDays
+        className={cn('h-4 w-4 shrink-0', tone === 'overdue' ? 'text-warning-foreground' : 'text-primary')}
+        aria-hidden="true"
+      />
+      <button
+        type="button"
+        onClick={() => onShowDetail(plan)}
+        className="min-w-0 flex-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`查看计划详情：${plan.title}`}
+      >
+        <span className="block truncate text-sm font-medium">{plan.title}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {formatShortDate(scheduledDate)}{plan.targetTime ? ` · ${plan.targetTime}` : ''}
+        </span>
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => onEdit(plan)}
+        className="shrink-0"
+        aria-label={`调整日期：${plan.title}`}
+      >
+        改期
+      </Button>
+    </li>
+  )
 }
 
 function PlanList({
@@ -966,8 +1346,8 @@ function PlanList({
             <tr>
               <th scope="col" className="px-4 py-3 text-left font-medium">计划</th>
               <th scope="col" className="px-4 py-3 text-left font-medium">分类</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">频率</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">时间</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">安排</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">时间与时长</th>
               <th scope="col" className="px-4 py-3 text-left font-medium">状态</th>
               <th scope="col" className="px-4 py-3 text-right font-medium"><span className="sr-only">操作</span></th>
             </tr>
@@ -996,15 +1376,13 @@ function PlanList({
                   </Badge>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="font-medium">{FREQUENCY_LABELS[plan.frequency]}</p>
-                  {plan.frequency === 'weekly' && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground" title={formatWeekDays(plan.weekDays)}>
-                      {formatWeekDays(plan.weekDays)}
-                    </p>
-                  )}
+                  <p className="font-medium">{FREQUENCY_LABELS[getPlanFrequency(plan)]}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground" title={formatPlanSchedule(plan)}>
+                    {formatPlanSchedule(plan)}
+                  </p>
                 </td>
                 <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                  {plan.targetTime || '—'}
+                  {formatPlanTimeAndDuration(plan)}
                 </td>
                 <td className="px-4 py-3">
                   <Badge
@@ -1096,14 +1474,15 @@ function PlanList({
                 <Badge variant="outline" className={cn('text-xs', getCategoryBadgeClass(plan.category))}>
                   {getCategoryLabel(plan.category)}
                 </Badge>
-                <span>{FREQUENCY_LABELS[plan.frequency]}</span>
-                {plan.frequency === 'weekly' && <span>{formatWeekDays(plan.weekDays)}</span>}
+                <span>{FREQUENCY_LABELS[getPlanFrequency(plan)]}</span>
+                <span>{formatPlanSchedule(plan)}</span>
                 {plan.targetTime && (
                   <span className="inline-flex items-center gap-1 font-medium tabular-nums text-primary">
                     <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                     {plan.targetTime}
                   </span>
                 )}
+                {plan.targetDuration && <span>约 {plan.targetDuration} 分钟</span>}
               </div>
 
               <div className="flex flex-wrap justify-end gap-1 border-t border-border/60 pt-2">

@@ -16,6 +16,9 @@ const draft: PlanCreateCommandDraft = {
     description: '完成精听并记录错因。',
     category: 'listening',
     frequency: 'weekly',
+    scheduledDate: null,
+    startDate: '2026-08-03',
+    endDate: null,
     weekDays: [1, 3, 5],
     targetTime: '08:00',
     targetDuration: 25,
@@ -43,10 +46,33 @@ describe('AI plan confirmation card', () => {
     )
     expect(html).toContain('早晨听力训练')
     expect(html).toContain('完成精听并记录错因')
-    expect(html).toContain('周一、周三、周五')
+    expect(html).toContain('重复计划 · 周一、周三、周五 · 自 2026年8月3日 起')
     expect(html).toContain('08:00 · 25 分钟')
     expect(html).toContain('确认加入计划')
     expect(html).toContain('min-h-11')
+  })
+
+  it('clearly identifies a dated one-time task before confirmation', () => {
+    const html = renderToStaticMarkup(
+      <AIConfirmCard
+        draft={{
+          ...draft,
+          payload: {
+            ...draft.payload,
+            frequency: 'once',
+            scheduledDate: '2026-08-12',
+            startDate: null,
+            endDate: null,
+            weekDays: [],
+          },
+        }}
+        onConfirm={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('单次任务 · 2026年8月12日')
+    expect(html).not.toContain('重复计划')
   })
 
   it('shows duplicate receipt as final and hides the execution buttons', () => {

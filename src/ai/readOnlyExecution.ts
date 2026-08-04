@@ -6,7 +6,7 @@ import {
   parseStructuredAiOutput,
   type AiStructuredContentForPurpose,
 } from './structuredOutputs'
-import { parseWritingSubmissionV2, type WritingSubmissionV2 } from './writingFeedback'
+import { parseWritingSubmission, type WritingSubmission } from './writingFeedback'
 
 export interface ReadOnlyAiExecutionRequest<
   TPurpose extends ManagedAiPurpose = ManagedAiPurpose,
@@ -34,14 +34,14 @@ export interface ReadOnlyAiExecutionDependencies {
 
 function writingSubmissionForRequest(
   request: ReadOnlyAiExecutionRequest,
-): WritingSubmissionV2 | undefined {
+): WritingSubmission | undefined {
   if (request.purpose !== 'writing_feedback') return undefined
   const data = request.snapshot.data
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new AiGatewayError('INVALID_REQUEST', '本次写作提交格式无效，请重新填写后再试。')
   }
   try {
-    return parseWritingSubmissionV2((data as Record<string, unknown>).submission)
+    return parseWritingSubmission((data as Record<string, unknown>).submission)
   } catch {
     throw new AiGatewayError('INVALID_REQUEST', '本次写作提交格式无效，请重新填写后再试。')
   }

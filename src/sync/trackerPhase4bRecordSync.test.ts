@@ -37,6 +37,8 @@ function plan(id = 'plan-1', updatedAt = t1): StudyPlan {
     description: '完成一套阅读并复盘',
     category: 'reading',
     frequency: 'weekly',
+    startDate: '2026-08-01',
+    endDate: '2026-08-31',
     weekDays: [5, 1, 5, 3],
     targetTime: '08:30',
     targetDuration: 30,
@@ -148,6 +150,10 @@ describe('Phase 4B strict snapshot and compact payload parsing', () => {
     const timed = entity(materialized, 'timer_record')
 
     expect(parsed.studyPlans[0].weekDays).toEqual([1, 3, 5])
+    expect(parsed.studyPlans[0]).toMatchObject({
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    })
     expect(mock.payload).toMatchObject({ type: 'reading', duration: 60 })
     expect(mock.payload).not.toHaveProperty('score')
     expect(timed.payload).toMatchObject({ subject: 'listening', duration: 1_531 })
@@ -204,6 +210,60 @@ describe('Phase 4B strict snapshot and compact payload parsing', () => {
     expect(trackerPhase4bExecutionBusinessKey(execution())).toBe(
       'plan-1\u001f2026-08-03',
     )
+  })
+
+  it('round-trips compact once and recurring schedule fields while preserving legacy custom plans', () => {
+    const once: StudyPlan = {
+      ...plan('once-plan'),
+      frequency: 'once',
+      scheduledDate: '2026-08-16',
+      startDate: undefined,
+      endDate: undefined,
+      weekDays: undefined,
+    }
+    const legacyCustom: StudyPlan = {
+      ...plan('legacy-custom'),
+      frequency: 'custom',
+      startDate: undefined,
+      endDate: undefined,
+      weekDays: undefined,
+    }
+
+    const oncePayload = createTrackerPhase4bPayload('study_plan', once)
+    expect(oncePayload).toMatchObject({
+      frequency: 'once',
+      scheduledDate: '2026-08-16',
+    })
+    expect(oncePayload).not.toHaveProperty('startDate')
+    expect(oncePayload).not.toHaveProperty('endDate')
+    expect(oncePayload).not.toHaveProperty('weekDays')
+
+    const parsed = parseTrackerPhase4bLocalSnapshot(snapshot({
+      studyPlans: [once, legacyCustom],
+      planExecutions: [],
+    }))
+    expect(parsed.studyPlans).toEqual([once, legacyCustom])
+  })
+
+  it.each([
+    ['once without scheduledDate', () => parseTrackerPhase4bPayload('study_plan', {
+      ...createTrackerPhase4bPayload('study_plan', plan()),
+      frequency: 'once',
+      scheduledDate: undefined,
+      startDate: undefined,
+      endDate: undefined,
+      weekDays: undefined,
+    })],
+    ['recurring endDate without startDate', () => parseTrackerPhase4bPayload('study_plan', {
+      ...createTrackerPhase4bPayload('study_plan', plan()),
+      frequency: 'daily',
+      scheduledDate: undefined,
+      startDate: undefined,
+      endDate: '2026-08-31',
+      weekDays: undefined,
+    })],
+  ])('rejects %s', (_label, parse) => {
+    expect(parse).toThrow()
   })
 
   it('uses persisted execution updatedAt and adds an observation fallback only for legacy rows', () => {
@@ -403,6 +463,39 @@ describe('Phase 4B LWW and deletion reconciliation', () => {
       local: { entity: localNewer },
       remote: tiedRemote,
     }).action).toBe('install_remote_upsert')
+  })
+
+  it('reconciles a changed one-time scheduled date as an ordinary plan upsert', () => {
+    const once = entity(localEntities({
+      studyPlans: [{
+        ...plan(),
+        frequency: 'once',
+        scheduledDate: '2026-08-16',
+        startDate: undefined,
+        endDate: undefined,
+        weekDays: undefined,
+      }],
+      planExecutions: [],
+    }), 'study_plan')
+    const baseline = remoteFromLocal(once, { version: 5, updatedAt: t1 })
+    const moved = {
+      ...once,
+      payload: { ...once.payload, scheduledDate: '2026-08-17' },
+      updatedAt: t3,
+    } as TrackerPhase4bLocalEntity
+
+    expect(planTrackerPhase4bReconciliation({
+      baseline,
+      local: { entity: moved },
+      remote: baseline,
+    })).toMatchObject({
+      action: 'upload_upsert',
+      operation: {
+        entityKind: 'study_plan',
+        baseVersion: 5,
+        payload: { frequency: 'once', scheduledDate: '2026-08-17' },
+      },
+    })
   })
 
   it('prefers a completed execution across different random ids before timestamps', () => {

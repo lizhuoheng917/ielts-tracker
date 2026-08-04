@@ -5,6 +5,7 @@ import { DEFAULT_DATA_PAGE_SIZE, getDataPageCount, paginateItems } from './dataV
 import {
   filterAndSortPlans,
   indexLatestPlanExecutionsForDate,
+  isPlanScheduledForDate,
   isPlanScheduledForDay,
   resolveWeeklyPlanDays,
   toEditablePlanFrequency,
@@ -33,6 +34,50 @@ describe('planView', () => {
     expect(isPlanScheduledForDay(createPlan({ id: 'legacy', frequency: 'custom' }), 5)).toBe(false)
   })
 
+  it('按具体日期排入一次性任务，并尊重重复计划的起止边界', () => {
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'once',
+      frequency: 'once',
+      scheduledDate: '2026-08-07',
+    }), '2026-08-07')).toBe(true)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'once-other-day',
+      frequency: 'once',
+      scheduledDate: '2026-08-07',
+    }), '2026-08-08')).toBe(false)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'malformed-once',
+      frequency: 'once',
+      scheduledDate: 'not-a-date',
+    }), '2026-08-07')).toBe(false)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'bounded-daily',
+      startDate: '2026-08-05',
+      endDate: '2026-08-10',
+    }), '2026-08-04')).toBe(false)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'bounded-daily-active',
+      startDate: '2026-08-05',
+      endDate: '2026-08-10',
+    }), '2026-08-10')).toBe(true)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'bounded-weekly',
+      frequency: 'weekly',
+      weekDays: [5],
+      startDate: '2026-08-05',
+      endDate: '2026-08-10',
+    }), '2026-08-07')).toBe(true)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'legacy-custom',
+      frequency: 'custom',
+    }), '2026-08-07')).toBe(false)
+    expect(isPlanScheduledForDate(createPlan({
+      id: 'invalid-range',
+      startDate: '2026-08-11',
+      endDate: '2026-08-10',
+    }), '2026-08-10')).toBe(false)
+  })
+
   it('同计划同日有重复记录时保留最新一条', () => {
     const executions: PlanExecution[] = [
       { id: 'newest', planId: 'daily', date: '2026-08-01', isCompleted: true },
@@ -49,7 +94,8 @@ describe('planView', () => {
     expect(indexed).toHaveLength(2)
   })
 
-  it('将旧版自定义频率明确转换为可编辑的每日频率', () => {
+  it('保留可编辑的一次性计划，并将旧版自定义频率明确转换为每日频率', () => {
+    expect(toEditablePlanFrequency('once')).toBe('once')
     expect(toEditablePlanFrequency('daily')).toBe('daily')
     expect(toEditablePlanFrequency('weekly')).toBe('weekly')
     expect(toEditablePlanFrequency('custom')).toBe('daily')

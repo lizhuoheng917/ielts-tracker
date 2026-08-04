@@ -71,6 +71,9 @@ const planDraft = {
     description: '精听并记录错因。',
     category: 'listening' as const,
     frequency: 'weekly' as const,
+    scheduledDate: null,
+    startDate: '2026-08-03',
+    endDate: null,
     weekDays: [1, 3, 5],
     targetTime: '08:00',
     targetDuration: 25,
@@ -333,6 +336,41 @@ describe('backup v3', () => {
     ))!
     const invalidMessage = invalid.data.chatConversations[invalidContext][0]
     invalidMessage.commandDrafts![0].payload.weekDays = []
+    expect(() => parseBackupJson(JSON.stringify(invalid), emptyData()))
+      .toThrow(BackupValidationError)
+  })
+
+  it('round-trips one-time plans without rewriting legacy custom plans', () => {
+    const data = emptyData()
+    data.plans = [
+      {
+        id: 'once-mock',
+        title: '完成一次完整模考',
+        category: 'general',
+        frequency: 'once',
+        scheduledDate: '2026-08-16',
+        targetDuration: 180,
+        isActive: true,
+        createdAt: EXPORTED_AT,
+        updatedAt: EXPORTED_AT,
+      },
+      {
+        id: 'legacy-custom',
+        title: '历史自定义计划',
+        category: 'reading',
+        frequency: 'custom',
+        isActive: true,
+        createdAt: EXPORTED_AT,
+        updatedAt: EXPORTED_AT,
+      },
+    ]
+
+    const result = parseBackupJson(serializeBackupV3(adapterFor(data)), emptyData())
+
+    expect(result.backup.data.plans).toEqual(data.plans)
+
+    const invalid = createBackupV3(adapterFor(data))
+    delete (invalid.data.plans[0] as Partial<typeof invalid.data.plans[number]>).scheduledDate
     expect(() => parseBackupJson(JSON.stringify(invalid), emptyData()))
       .toThrow(BackupValidationError)
   })

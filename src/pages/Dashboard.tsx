@@ -51,8 +51,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { MetricGroup } from '@/components/ui/metric-group'
 import { SectionHeader } from '@/components/ui/section-header'
 import { BADGES, LEVELS, MOOD_OPTIONS, PLAN_CATEGORY_OPTIONS, WEEKDAY_LABELS } from '@/lib/constants'
-import { parseLocalDate, toLocalDate } from '@/lib/localDate'
-import { indexLatestPlanExecutionsForDate, isPlanScheduledForDay } from '@/lib/planView'
+import { isLocalDate, parseLocalDate, toLocalDate } from '@/lib/localDate'
+import { indexLatestPlanExecutionsForDate, isPlanScheduledForDate } from '@/lib/planView'
 import { getActivityLevel, getDateRangeSummary } from '@/lib/statsAnalytics'
 import { cn } from '@/lib/utils'
 import { useAchievementStore } from '@/stores/achievementStore'
@@ -94,6 +94,46 @@ function ReportMetric({ value, label, tone }: { value: string | number; label: s
   )
 }
 
+function formatPlanScheduleDate(value: string | undefined): string | null {
+  if (!isLocalDate(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return `${year}年${month}月${day}日`
+}
+
+function planScheduleLabel(plan: {
+  frequency?: string
+  scheduledDate?: string
+  startDate?: string
+  endDate?: string
+  weekDays?: number[]
+}): string {
+  if (plan.frequency === 'once') {
+    const scheduledDate = formatPlanScheduleDate(plan.scheduledDate)
+    return scheduledDate ? `单次 · ${scheduledDate}` : '单次任务'
+  }
+
+  if (plan.frequency === 'daily' || plan.frequency === 'weekly') {
+    const cadence = plan.frequency === 'daily'
+      ? '每日'
+      : [
+          '每周',
+          plan.weekDays
+            ?.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+            .map((day) => `周${WEEKDAY_LABELS[day]}`)
+            .join('、'),
+        ].filter(Boolean).join(' · ')
+    const startDate = formatPlanScheduleDate(plan.startDate)
+    const endDate = formatPlanScheduleDate(plan.endDate)
+    const dateRange = [
+      startDate ? `自 ${startDate} 起` : null,
+      endDate ? `至 ${endDate}` : null,
+    ].filter(Boolean).join('，')
+    return `${cadence}${dateRange ? ` · ${dateRange}` : ''}`
+  }
+
+  return '旧版计划'
+}
+
 export default function Dashboard() {
   const artifactAccess = useAiArtifactAccess()
   const scopeKey = learnerAiTaskScopeKey(artifactAccess)
@@ -131,6 +171,10 @@ export default function Dashboard() {
     description?: string
     category?: string
     frequency?: string
+    scheduledDate?: string
+    startDate?: string
+    endDate?: string
+    weekDays?: number[]
     targetTime?: string
   } | null>(null)
 
@@ -199,11 +243,10 @@ export default function Dashboard() {
   }, [analyticsInput, today])
 
   const todayPlans = useMemo(() => {
-    const dayOfWeek = new Date().getDay()
     const todayExecutionMap = indexLatestPlanExecutionsForDate(executions, today)
 
     return plans
-      .filter((plan) => isPlanScheduledForDay(plan, dayOfWeek))
+      .filter((plan) => isPlanScheduledForDate(plan, today))
       .map((plan) => {
         const execution = todayExecutionMap.get(plan.id)
         return {
@@ -212,6 +255,10 @@ export default function Dashboard() {
           description: plan.description,
           category: plan.category,
           frequency: plan.frequency,
+          scheduledDate: plan.scheduledDate,
+          startDate: plan.startDate,
+          endDate: plan.endDate,
+          weekDays: plan.weekDays,
           targetTime: plan.targetTime,
           completed: execution?.isCompleted ?? false,
           execId: execution?.id,
@@ -757,7 +804,7 @@ export default function Dashboard() {
                 )}
                 {selectedPlan.frequency && (
                   <Badge variant="outline">
-                    {selectedPlan.frequency === 'daily' ? '每日' : selectedPlan.frequency === 'weekly' ? '每周' : '自定义'}
+                    {planScheduleLabel(selectedPlan)}
                   </Badge>
                 )}
                 {selectedPlan.targetTime && <Badge variant="outline" className="text-primary">{selectedPlan.targetTime}</Badge>}

@@ -1,6 +1,7 @@
 import type { AiContextSnapshotV1 } from './contracts'
 
 export const WRITING_FEEDBACK_SCHEMA_VERSION = 2 as const
+export const WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION = 3 as const
 export const WRITING_RUBRIC_VERSION = 'ielts-writing-public-descriptors-v1' as const
 
 export type WritingModule = 'academic' | 'general_training'
@@ -32,6 +33,36 @@ export interface CreateWritingSubmissionV2Input {
   essayText: string
 }
 
+/**
+ * A lightweight reference supplied by the learner instead of a copied question.
+ * It is deliberately an inference hint, not a verified question-bank identifier.
+ */
+export interface WritingSourceReferenceV3 {
+  collection: 'cambridge_ielts'
+  bookNumber: number
+  testNumber: number
+}
+
+export interface WritingSubmissionV3 {
+  schemaVersion: typeof WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION
+  module: WritingModule
+  task: WritingTask
+  sourceReference: WritingSourceReferenceV3
+  essayText: string
+  /** Host-computed English word count. Provider output can never override it. */
+  wordCount: number
+}
+
+export interface CreateWritingSubmissionV3Input {
+  module: WritingModule
+  task: WritingTask
+  sourceReference: WritingSourceReferenceV3
+  essayText: string
+}
+
+/** V2 remains readable for historical drafts and saved reports. */
+export type WritingSubmission = WritingSubmissionV2 | WritingSubmissionV3
+
 export interface WritingCriterionFeedbackV2 {
   band: WritingBand | null
   summary: string
@@ -60,9 +91,12 @@ export interface WritingFeedbackV2 {
   limitations: string[]
 }
 
-export interface WritingContextDataV2 extends Record<string, unknown> {
-  submission: WritingSubmissionV2
+export interface WritingContextData extends Record<string, unknown> {
+  submission: WritingSubmission
 }
+
+/** @deprecated Use WritingContextData. Kept for downstream V2-only callers. */
+export type WritingContextDataV2 = WritingContextData
 
 export interface BuildWritingContextSnapshotOptions {
   now?: Date
@@ -257,8 +291,133 @@ export function createWritingSubmissionV2(
   })
 }
 
+function boundedInteger(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number,
+): number {
+  if (!Number.isInteger(value) || typeof value !== 'number' || value < min || value > max) {
+    fail(`${label} must be an integer between ${min} and ${max}`)
+  }
+  return value
+}
+
+function parseSourceReferenceV3(value: unknown): WritingSourceReferenceV3 {
+  const reference = record(value, 'writing submission.sourceReference')
+  exactKeys(reference, ['collection', 'bookNumber', 'testNumber'], 'writing submission.sourceReference')
+  if (reference.collection !== 'cambridge_ielts') {
+    fail('writing submission.sourceReference.collection has an unsupported value')
+  }
+  const bookNumber = boundedInteger(
+    reference.bookNumber,
+    'writing submission.sourceReference.bookNumber',
+    1,
+    99,
+  )
+  const testNumber = boundedInteger(
+    reference.testNumber,
+    'writing submission.sourceReference.testNumber',
+    1,
+    4,
+  )
+  return {
+    collection: 'cambridge_ielts',
+    bookNumber,
+    testNumber,
+  }
+}
+
+export function parseWritingSubmissionV3(value: unknown): WritingSubmissionV3 {
+  assertSerializedSize(value, 40_000, 'writing submission')
+  const submission = record(value, 'writing submission')
+  exactKeys(submission, [
+    'schemaVersion',
+    'module',
+    'task',
+    'sourceReference',
+    'essayText',
+    'wordCount',
+  ], 'writing submission')
+  if (submission.schemaVersion !== WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION) {
+    fail('writing submission.schemaVersion must be 3')
+  }
+
+  const module = writingModule(submission.module)
+  const task = writingTask(submission.task)
+  const sourceReference = parseSourceReferenceV3(submission.sourceReference)
+  const essayText = boundedString(
+    submission.essayText,
+    'writing submission.essayText',
+    MAX_ESSAY_LENGTH,
+  )
+  const wordCount = countWritingWords(essayText)
+  if (!Number.isInteger(submission.wordCount) || submission.wordCount !== wordCount) {
+    fail('writing submission.wordCount must match the host-computed essay word count')
+  }
+
+  return {
+    schemaVersion: WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION,
+    module,
+    task,
+    sourceReference,
+    essayText,
+    wordCount,
+  }
+}
+
+export function createWritingSubmissionV3(
+  input: CreateWritingSubmissionV3Input,
+): WritingSubmissionV3 {
+  const essayText = typeof input.essayText === 'string'
+    ? input.essayText.replace(/\r\n?/g, '\n').trim()
+    : input.essayText
+  return parseWritingSubmissionV3({
+    schemaVersion: WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION,
+    module: input.module,
+    task: input.task,
+    sourceReference: input.sourceReference,
+    essayText,
+    wordCount: countWritingWords(essayText),
+  })
+}
+
+export function parseWritingSubmission(value: unknown): WritingSubmission {
+  const submission = record(value, 'writing submission')
+  if (submission.schemaVersion === WRITING_FEEDBACK_SCHEMA_VERSION) {
+    return parseWritingSubmissionV2(value)
+  }
+  if (submission.schemaVersion === WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION) {
+    return parseWritingSubmissionV3(value)
+  }
+  fail('writing submission.schemaVersion is unsupported')
+}
+
+export function isAutomaticWritingReference(
+  submission: WritingSubmission,
+): submission is WritingSubmissionV3 {
+  return submission.schemaVersion === WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION
+}
+
+export function formatWritingSourceReference(submissionValue: WritingSubmission): string | null {
+  const submission = submissionValue
+  if (!isAutomaticWritingReference(submission)) return null
+  const moduleLabel = submission.module === 'academic' ? 'Academic' : 'General Training'
+  const taskLabel = submission.task === 'task1' ? 'Task 1' : 'Task 2'
+  return [
+    `剑雅 ${submission.sourceReference.bookNumber}`,
+    `Test ${submission.sourceReference.testNumber}`,
+    moduleLabel,
+    taskLabel,
+  ].join(' · ')
+}
+
 export function hasSufficientWritingTaskEvidence(submissionValue: unknown): boolean {
-  const submission = parseWritingSubmissionV2(submissionValue)
+  const submission = parseWritingSubmission(submissionValue)
+  // Reference-mode reports are intentionally labelled as a reference assessment,
+  // but they remain eligible for a scored response. The provider is instructed to
+  // state uncertainty rather than pretend the question was exact-matched.
+  if (isAutomaticWritingReference(submission)) return true
   if (!submission.promptText) return false
   if (submission.module === 'academic' && submission.task === 'task1') {
     return submission.sourceMaterial.kind === 'text_description'
@@ -280,31 +439,40 @@ function stableHash(value: unknown): string {
 export function buildWritingContextSnapshot(
   submissionValue: unknown,
   options: BuildWritingContextSnapshotOptions = {},
-): AiContextSnapshotV1<WritingContextDataV2> {
-  const submission = parseWritingSubmissionV2(submissionValue)
+): AiContextSnapshotV1<WritingContextData> {
+  const submission = parseWritingSubmission(submissionValue)
   const now = options.now ?? new Date()
   if (!Number.isFinite(now.getTime())) fail('writing snapshot timestamp is invalid')
   const createdAt = now.toISOString()
   const warnings: string[] = []
   const hasTaskEvidence = hasSufficientWritingTaskEvidence(submission)
 
-  if (!submission.promptText) warnings.push('缺少写作题目，只能提供语言反馈，不能给出可靠分数。')
-  if (
-    submission.module === 'academic'
-    && submission.task === 'task1'
-    && submission.sourceMaterial.kind === 'none'
-  ) {
-    warnings.push('缺少图表、地图、流程或示意图的文字描述，不能可靠评估任务完成度。')
+  if (isAutomaticWritingReference(submission)) {
+    warnings.push('题目自动识别仅作参考评估；AI 会根据剑雅书号、Test 和 Task 尝试识别，可能与原题不完全一致。')
+    if (submission.module === 'academic' && submission.task === 'task1') {
+      warnings.push('未提供原图，Task Achievement 仅作参考；报告将以语言、结构和表达反馈为主。')
+    }
+  } else {
+    if (!submission.promptText) warnings.push('缺少写作题目，只能提供语言反馈，不能给出可靠分数。')
+    if (
+      submission.module === 'academic'
+      && submission.task === 'task1'
+      && submission.sourceMaterial.kind === 'none'
+    ) {
+      warnings.push('缺少图表、地图、流程或示意图的文字描述，不能可靠评估任务完成度。')
+    }
   }
   const recommendedMinimum = submission.task === 'task1' ? 150 : 250
   if (submission.wordCount < recommendedMinimum) {
     warnings.push(`作文少于 ${recommendedMinimum} 词，评分证据有限。`)
   }
 
-  const data: WritingContextDataV2 = { submission }
+  const data: WritingContextData = { submission }
   const sourceRevision = `writing-src-${stableHash(data)}`
   const contextHash = `writing-ctx-${stableHash({ purpose: 'writing_feedback', data })}`
-  const qualityLimited = !hasTaskEvidence || submission.wordCount < recommendedMinimum
+  const qualityLimited = isAutomaticWritingReference(submission)
+    || !hasTaskEvidence
+    || submission.wordCount < recommendedMinimum
 
   return {
     schemaVersion: 1,
@@ -536,6 +704,13 @@ export function parseWritingFeedbackV2(
     limitations,
   }
 
+  if (submissionValue !== undefined) {
+    const submission = parseWritingSubmission(submissionValue)
+    if (isAutomaticWritingReference(submission) && parsed.limitations.length < 1) {
+      fail('automatic-reference feedback must include at least one limitation')
+    }
+  }
+
   if (assessmentStatus === 'insufficient_evidence') {
     const bands = Object.values(criteria).map((criterion) => criterion.band)
     if (bands.some((band) => band !== null)) {
@@ -544,7 +719,7 @@ export function parseWritingFeedbackV2(
   }
 
   if (submissionValue !== undefined) {
-    const submission = parseWritingSubmissionV2(submissionValue)
+    const submission = parseWritingSubmission(submissionValue)
     if (parsed.taskCriterion !== expectedTaskCriterion(submission.task)) {
       fail('writing feedback.taskCriterion does not match the submitted task')
     }
@@ -552,7 +727,11 @@ export function parseWritingFeedbackV2(
     if (assessmentStatus === 'scored' && !hasSufficientEvidence) {
       fail('a submission without complete task evidence cannot receive precise band scores')
     }
-    if (assessmentStatus === 'insufficient_evidence' && hasSufficientEvidence) {
+    if (
+      assessmentStatus === 'insufficient_evidence'
+      && hasSufficientEvidence
+      && !isAutomaticWritingReference(submission)
+    ) {
       fail('a submission with complete task evidence cannot receive insufficient-evidence feedback')
     }
     Object.entries(parsed.criteria).forEach(([key, criterion]) => {
@@ -610,7 +789,7 @@ export function formatWritingFeedbackAsMarkdown(
   feedbackValue: unknown,
   overallBand: WritingBand | null,
 ): string {
-  const submission = parseWritingSubmissionV2(submissionValue)
+  const submission = parseWritingSubmission(submissionValue)
   const feedback = parseWritingFeedbackV2(feedbackValue, submission)
   const calculatedBand = calculateWritingOverallBand(feedback)
   if (overallBand !== calculatedBand) fail('overallBand does not match the four criterion bands')
@@ -624,6 +803,15 @@ export function formatWritingFeedbackAsMarkdown(
     '# IELTS 写作反馈',
     '',
     `- 类型：${moduleLabel} ${taskLabel}`,
+    ...(isAutomaticWritingReference(submission)
+      ? [
+          `- 题目引用：${formatWritingSourceReference(submission)}`,
+          '- 评估方式：题目自动识别 · 参考评估（可能与原题不完全一致）',
+          ...(submission.module === 'academic' && submission.task === 'task1'
+            ? ['- Task 1 提示：未提供原图，任务完成度仅作参考。']
+            : []),
+        ]
+      : []),
     `- 词数：${submission.wordCount}`,
     `- 总分：${overallBand === null ? '证据不足，未评分' : overallBand}`,
     `- 评分标准：${feedback.rubricVersion}`,

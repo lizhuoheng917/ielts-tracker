@@ -17,7 +17,7 @@ import {
   parseStructuredAiOutput,
   type AiStructuredContentV2,
 } from './structuredOutputs'
-import { parseWritingSubmissionV2 } from './writingFeedback'
+import { parseWritingSubmission } from './writingFeedback'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -285,9 +285,9 @@ function assertWritingContextData(snapshot: AiContextSnapshotV1): void {
   const data = record(snapshot.data, 'snapshot.data')
   exactKeys(data, ['submission'], 'snapshot.data')
   try {
-    parseWritingSubmissionV2(data.submission)
+    parseWritingSubmission(data.submission)
   } catch {
-    fail('snapshot.data.submission does not match WritingSubmissionV2')
+    fail('snapshot.data.submission does not match a supported WritingSubmission')
   }
 }
 
@@ -480,7 +480,7 @@ export function parseAiGatewayResponse(
     let content: AiStructuredContentV2
     try {
       const writingSubmission = request.purpose === 'writing_feedback'
-        ? parseWritingSubmissionV2((request.snapshot.data as UnknownRecord).submission)
+        ? parseWritingSubmission((request.snapshot.data as UnknownRecord).submission)
         : undefined
       content = parseStructuredAiOutput(artifact.content, request.purpose, writingSubmission)
     } catch {
