@@ -18,6 +18,7 @@ import { DataToolbar } from '@/components/ui/data-toolbar'
 import { Input } from '@/components/ui/input'
 import { MetricGroup } from '@/components/ui/metric-group'
 import { PageHeader } from '@/components/ui/page-header'
+import { ContentCloudLocationField } from '@/components/sync/ContentCloudLocationField'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -79,6 +80,11 @@ import {
   getPlanFrequency,
   getPlanScheduleFields,
 } from './Plans.presentation'
+import {
+  setTrackerContentCloudLocation,
+  trackerContentCloudMode,
+  type TrackerContentCloudMode,
+} from '@/sync/trackerContentCloudPolicy'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   once: '单次任务',
@@ -170,6 +176,7 @@ export default function Plans() {
   const [formTime, setFormTime] = useState('')
   const [formDuration, setFormDuration] = useState('')
   const [formActive, setFormActive] = useState(true)
+  const [formCloudMode, setFormCloudMode] = useState<TrackerContentCloudMode>('local')
   const [editingLegacyCustomFrequency, setEditingLegacyCustomFrequency] = useState(false)
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -186,6 +193,12 @@ export default function Plans() {
   const [mutatingPlanIds, setMutatingPlanIds] = useState<Set<string>>(new Set())
   const [formSaving, setFormSaving] = useState(false)
   const [deleteSaving, setDeleteSaving] = useState(false)
+  const formPlanExecutionIds = useMemo(
+    () => editingId
+      ? executions.filter((execution) => execution.planId === editingId).map((execution) => execution.id)
+      : [],
+    [editingId, executions],
+  )
   const formWeekDaysMissing = formFreq === 'weekly' && formWeekDays.length === 0
   const formScheduleSelectionMissing = formFreq === 'custom'
   const formScheduledDateMissing = formFreq === 'once' && !isLocalDate(formScheduledDate)
@@ -355,6 +368,7 @@ export default function Plans() {
     setFormTime('')
     setFormDuration('')
     setFormActive(true)
+    setFormCloudMode('local')
     setFormOpen(true)
   }
 
@@ -374,6 +388,7 @@ export default function Plans() {
     setFormTime(plan.targetTime || '')
     setFormDuration(plan.targetDuration ? String(plan.targetDuration) : '')
     setFormActive(plan.isActive)
+    setFormCloudMode(trackerContentCloudMode({ entityKind: 'study_plan', entityId: plan.id }))
     setFormOpen(true)
   }
 
@@ -399,6 +414,14 @@ export default function Plans() {
         ? await updatePlan(editingId, data)
         : await addPlan(data)
       if (result.status === 'applied' || result.status === 'duplicate') {
+        const targetId = result.targetId ?? editingId
+        if (targetId) {
+          setTrackerContentCloudLocation({
+            entityKind: 'study_plan',
+            entityId: targetId,
+            mode: formCloudMode,
+          })
+        }
         setFormOpen(false)
       } else {
         setPlanMutationError(result.error?.message || '计划暂时无法保存，请重试。')
@@ -1015,6 +1038,21 @@ export default function Plans() {
                   aria-label="启用此计划"
                 />
               </div>
+
+              <ContentCloudLocationField
+                entityKind="study_plan"
+                entityId={editingId}
+                value={formCloudMode}
+                onValueChange={setFormCloudMode}
+                disabled={formSaving}
+                relatedContent={{
+                  entityKind: 'plan_execution',
+                  label: '执行记录',
+                  unit: '条',
+                  count: formPlanExecutionIds.length,
+                  entityIds: formPlanExecutionIds,
+                }}
+              />
             </div>
           </div>
 

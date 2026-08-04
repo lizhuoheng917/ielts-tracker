@@ -62,6 +62,7 @@ import { DataToolbar } from '@/components/ui/data-toolbar'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { MetricGroup } from '@/components/ui/metric-group'
 import { PageHeader } from '@/components/ui/page-header'
+import { ContentCloudLocationField } from '@/components/sync/ContentCloudLocationField'
 import { DEFAULT_DATA_PAGE_SIZE, getDataPageCount, paginateItems } from '@/lib/dataView'
 import {
   IELTS_SCORE_SLIDER_MAX,
@@ -71,6 +72,11 @@ import {
   sliderIndexToScore,
   type PracticeRecordSortOrder,
 } from '@/lib/practiceRecordView'
+import {
+  setTrackerContentCloudLocation,
+  trackerContentCloudMode,
+  type TrackerContentCloudMode,
+} from '@/sync/trackerContentCloudPolicy'
 
 // ===== 雅思分数滑轴组件（方案 B：极简 + 端点提示） =====
 function IeltsScoreSlider({
@@ -273,6 +279,7 @@ function PracticeFormDialog({
   const [duration, setDuration] = useState('')
   const [score, setScore] = useState<number>(0)
   const [note, setNote] = useState('')
+  const [cloudMode, setCloudMode] = useState<TrackerContentCloudMode>('local')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const formId = `practice-${isEdit ? `edit-${editRecord?.id ?? defaultType}` : `add-${defaultType}`}`
@@ -287,6 +294,7 @@ function PracticeFormDialog({
         setDuration(String(editRecord.duration))
         setScore(editRecord.score ?? 0)
         setNote(editRecord.note ?? '')
+        setCloudMode(trackerContentCloudMode({ entityKind: 'practice_record', entityId: editRecord.id }))
       } else {
         setType(defaultType)
         setDate(format(new Date(), 'yyyy-MM-dd'))
@@ -294,6 +302,7 @@ function PracticeFormDialog({
         setDuration('')
         setScore(0)
         setNote('')
+        setCloudMode('local')
       }
     }
   }, [open, isEdit, editRecord, defaultType])
@@ -322,6 +331,15 @@ function PracticeFormDialog({
       if (result.status !== 'applied') {
         window.alert(result.error?.message ?? '模考记录暂时无法保存，请稍后重试。')
         return
+      }
+
+      const targetId = result.targetId ?? editRecord?.id
+      if (targetId) {
+        setTrackerContentCloudLocation({
+          entityKind: 'practice_record',
+          entityId: targetId,
+          mode: cloudMode,
+        })
       }
 
       onOpenChange(false)
@@ -445,6 +463,14 @@ function PracticeFormDialog({
               rows={3}
             />
           </div>
+
+          <ContentCloudLocationField
+            entityKind="practice_record"
+            entityId={editRecord?.id}
+            value={cloudMode}
+            onValueChange={setCloudMode}
+            disabled={isSubmitting}
+          />
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">

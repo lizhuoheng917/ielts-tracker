@@ -1,28 +1,35 @@
 # Tracker production connection and release
 
-Date: 2026-08-02
+Date: 2026-08-04
 
 ## Release boundary
 
-This release connects Tracker to the shared Lexi production platform for:
+Tracker connects to the shared Lexi production platform for:
 
 1. Supabase Auth, so the same Lexi account can sign in on both products.
 2. `lexi-ai-gateway`, so Managed AI requests use the server-side provider configuration.
+3. Optional, per-item Tracker content cloud storage for plans, plan executions,
+   practice records, timer records, and word records.
 
-It does **not** add Tracker cloud sync. Words, practice records, timers, plans,
-diaries, achievements, and saved AI artifacts remain local-first in the current
-browser. Tracker does not read or write Lexi Words business tables.
+New Tracker learning content remains local by default. A signed-in learner who
+has confirmed the current browser's data ownership can explicitly choose
+“同步云端” for an eligible item. AI-generated plan drafts remain local until the
+learner confirms an individual plan and chooses its storage location. A plan
+and its execution records transfer as one cloud package. Diaries, achievements,
+saved AI artifacts, and chat drafts remain local-only. Tracker does not read or
+write Lexi Words business tables.
 
-Signing in never uploads, downloads, merges, clears, or replaces ordinary
+Signing in alone never uploads, downloads, merges, clears, or replaces ordinary
 Tracker records. A user must explicitly confirm that the current device records
 belong to the signed-in account before Managed AI may send a purpose-limited
-snapshot.
+snapshot or optional content-cloud storage becomes available.
 
 ## Where data is stored
 
 | Data | Storage | Account boundary |
 | --- | --- | --- |
-| Words, practice, timers, plans, diary, achievements | Tracker browser `localStorage` | One device/browser dataset; not yet separated by account |
+| Tracker plans, practice, timers and word records | Browser first; only explicitly chosen records receive a compact cloud copy | Local data remains usable if the cloud is unavailable; cloud rows are scoped to the signed-in account |
+| Diary, achievements, chat drafts and saved AI artifacts | Tracker browser `localStorage` | Local-only, subject to the current device/account access boundary |
 | Supabase Auth session | Tracker browser, key isolated by environment and project ref | Shared Lexi identity, but Tracker requires its own sign-in because browser origins differ |
 | Managed AI data-binding confirmation | Tracker browser | Blocks sending the device dataset from the wrong account |
 | Saved AI suggestion/report/plan/writing artifact | Tracker browser | Managed artifacts are hidden or locked after an account mismatch |
@@ -30,9 +37,10 @@ snapshot.
 | Quota, request receipt, outcome metadata | Private production Supabase tables | Bound to verified `auth.uid`; no prompt or report body |
 | Agnes/provider key and routing | Supabase Edge Function secrets and Lexi Control | Never included in the Tracker browser bundle |
 
-Cross-device sync or per-account ordinary learning datasets require a separate
-full-stack phase with Tracker tables, RLS, an outbox/receipt sync contract, and
-conflict handling. Empty tables are not a sync implementation.
+Only the five eligible content types participate in the current optional sync
+contract. The user controls each item, and administrators control the global
+switch, five independent limits, and per-account overrides. Existing cloud
+records remain available and are not deleted by a new limit.
 
 ## Production build contract
 
@@ -73,24 +81,23 @@ npx wrangler pages deploy dist \
 
 ## Production smoke
 
-Keep all four Managed AI policies closed during the initial upload.
+Keep optional content-cloud storage disabled until the compatible Supabase
+migrations, matching Tracker build, and Lexi Control build are online.
 
 1. Export a JSON Backup V3 before testing on a browser with valuable local data.
 2. Record counts for words, practice, timers, plans, diaries, and AI artifacts.
 3. Sign in to Tracker with an existing Lexi account; confirm counts are unchanged.
 4. Confirm the device-data ownership prompt and select Managed AI.
-5. Temporarily enable only `daily_suggestion` in Lexi Control.
-6. Generate one real suggestion and verify a strict structured result is saved
-   locally, while Supabase gains only one successful receipt/usage record.
-7. Confirm no Tracker business tables or rows appeared.
-8. Close the temporary policy again unless product owners explicitly choose to
-   keep it open.
-9. Verify closed purposes explain “此 AI 功能当前未开放” instead of reporting a
-   provider outage.
+5. Generate a plan draft, choose “仅本机”, and confirm that it remains local.
+6. Generate another plan draft, choose “同步云端”, and confirm that the plan
+   appears on a second signed-in device after the paired cloud transfer.
+7. Lower that account's plan allowance to zero in Lexi Control and verify the
+   next cloud selection stays local with an honest quota message.
+8. Check a second account cannot read or change the first account's quota or
+   cloud content.
 
-Do not call this release “Tracker cloud sync.” The acceptance claim is
-“production Auth and Managed AI connected while existing local data remained
-available.”
+The acceptance claim is “Tracker remains local-first while explicitly chosen
+content can safely sync through the shared Lexi account.”
 
 ## Production acceptance result
 

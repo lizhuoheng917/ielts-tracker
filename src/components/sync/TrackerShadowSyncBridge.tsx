@@ -7,6 +7,7 @@ import {
   TrackerPhase4bSyncRuntime,
   type TrackerPhase4bSyncStatusEvent,
 } from '@/sync/trackerPhase4bSyncRuntime'
+import { readTrackerPhase4bStoreSnapshot } from '@/sync/trackerPhase4bStoreAdapter'
 import { installTrackerPhase4bSyncTriggers } from '@/sync/trackerPhase4bSyncTriggers'
 import { TrackerShadowSyncRuntime } from '@/sync/trackerShadowSyncRuntime'
 import { installTrackerShadowSyncTriggers } from '@/sync/trackerShadowSyncTriggers'
@@ -20,6 +21,14 @@ import { usePracticeStore } from '@/stores/practiceStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useTimerStore } from '@/stores/timerStore'
 import { useWordStore } from '@/stores/wordStore'
+import {
+  identitiesFromTrackerContentSnapshot,
+  TRACKER_CONTENT_CLOUD_DEVICE_SCOPE,
+  TRACKER_CONTENT_CLOUD_POLICY_STORAGE_KEY,
+  TRACKER_CONTENT_CLOUD_SYNC_EVENT,
+  trackerContentCloudPolicyRevision,
+  useTrackerContentCloudPolicyStore,
+} from '@/sync/trackerContentCloudPolicy'
 
 const SETTINGS_STORAGE_KEY = `${STORAGE_PREFIX}:settings`
 
@@ -57,6 +66,20 @@ export function TrackerShadowSyncBridge() {
     : null
 
   useEffect(() => {
+    const contentPolicy = useTrackerContentCloudPolicyStore.getState()
+    contentPolicy.activateScope(accountUserId ?? TRACKER_CONTENT_CLOUD_DEVICE_SCOPE, {
+      // The current device data can only be claimed after the existing managed
+      // account-binding guard has confirmed this exact account.
+      adoptDeviceScope: Boolean(accountUserId),
+    })
+    try {
+      contentPolicy.ensureLegacyContent(
+        identitiesFromTrackerContentSnapshot(readTrackerPhase4bStoreSnapshot()),
+      )
+    } catch {
+      // Phase 4B's normal quarantine path will keep malformed legacy rows
+      // local. Do not create a cloud policy from an untrusted partial shape.
+    }
     const statusStore = useTrackerSyncStatusStore.getState()
     statusStore.reset(accountUserId)
     if (!accountUserId) return
@@ -138,6 +161,22 @@ export function TrackerShadowSyncBridge() {
     })
     const learningRuntime = new TrackerPhase4bSyncRuntime({
       accountUserId,
+      onCapabilities: (capabilities) => {
+        const contentPolicy = useTrackerContentCloudPolicyStore.getState()
+        contentPolicy.setSelectiveCloudAvailable(capabilities.selectiveContentCloudEnabled)
+        contentPolicy.setQuota(capabilities.contentQuota)
+      },
+      onOperationRejected: ({ entityKind, entityId, reason }) => {
+        useTrackerContentCloudPolicyStore.getState().markRejected(entityKind, entityId, reason)
+      },
+      onOperationApplied: ({ entityKind, entityId, action, restoreDeleted }) => {
+        const policy = useTrackerContentCloudPolicyStore.getState()
+        policy.clearFailure(entityKind, entityId)
+        if (entityKind !== 'plan_execution') {
+          policy.completeContentTransfer(entityKind, entityId, action === 'upsert' ? 'cloud' : 'local')
+        }
+        if (restoreDeleted) policy.acknowledgeRestore(entityKind, entityId)
+      },
       onStatusChange: (event: TrackerPhase4bSyncStatusEvent) => {
         if (!active) return
         // Record restore decisions are intentionally not exposed through the
@@ -194,11 +233,18 @@ export function TrackerShadowSyncBridge() {
         const unsubscribeWords = useWordStore.subscribe((state, previous) => {
           if (state.mutationRevision !== previous.mutationRevision) listener()
         })
+        const unsubscribeContentPolicy = useTrackerContentCloudPolicyStore.subscribe((state, previous) => {
+          if (
+            state.activeScope === previous.activeScope
+            && trackerContentCloudPolicyRevision(state) !== trackerContentCloudPolicyRevision(previous)
+          ) listener()
+        })
         return () => {
           unsubscribePlan()
           unsubscribePractice()
           unsubscribeTimer()
           unsubscribeWords()
+          unsubscribeContentPolicy()
         }
       },
       windowTarget: window,
@@ -214,9 +260,50 @@ export function TrackerShadowSyncBridge() {
     }
     const onStorage = (event: StorageEvent) => {
       if (event.key === SETTINGS_STORAGE_KEY) void useSettingsStore.persist.rehydrate()
+      if (event.key === TRACKER_CONTENT_CLOUD_POLICY_STORAGE_KEY) {
+        void useTrackerContentCloudPolicyStore.persist.rehydrate()
+      }
+    }
+    const onContentCloudSyncRequest = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail
+      if (
+        typeof detail !== 'object'
+        || detail === null
+        || Array.isArray(detail)
+        || typeof (detail as { entityKind?: unknown }).entityKind !== 'string'
+        || typeof (detail as { entityId?: unknown }).entityId !== 'string'
+      ) return
+      const request = detail as {
+        entityKind: Parameters<typeof learningRuntime.retryEntity>[0]
+        entityId: string
+        retry?: boolean
+        planTransfer?: 'uploading' | 'removing'
+      }
+      if (
+        request.entityKind === 'study_plan'
+        && (request.planTransfer === 'uploading' || request.planTransfer === 'removing')
+      ) {
+        void learningRuntime.transferPlan(request.entityId, request.planTransfer).catch((error) => {
+          reportSyncFailure('learning-records', error)
+          updateFailureStatus('learning', error)
+        })
+        return
+      }
+      if (request.retry) {
+        void learningRuntime.retryEntity(request.entityKind, request.entityId).catch((error) => {
+          reportSyncFailure('learning-records', error)
+          updateFailureStatus('learning', error)
+        })
+        return
+      }
+      void learningRuntime.flush().catch((error) => {
+        reportSyncFailure('learning-records', error)
+        updateFailureStatus('learning', error)
+      })
     }
     window.addEventListener('offline', onOffline)
     window.addEventListener('storage', onStorage)
+    window.addEventListener(TRACKER_CONTENT_CLOUD_SYNC_EVENT, onContentCloudSyncRequest)
     if (!navigator.onLine) onOffline()
 
     return () => {
@@ -227,6 +314,7 @@ export function TrackerShadowSyncBridge() {
       learningRuntime.dispose()
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('storage', onStorage)
+      window.removeEventListener(TRACKER_CONTENT_CLOUD_SYNC_EVENT, onContentCloudSyncRequest)
     }
   }, [accountUserId])
 

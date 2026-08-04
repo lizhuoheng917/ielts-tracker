@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-04-tracker-word-sync-and-shared-account-center-v1",
+  "release": "2026-08-04-tracker-selective-content-cloud-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Word records now join the canonical Phase 4B source-data snapshot and use the existing local-first transaction, cross-tab pulse, revision trigger, byte-capped batch and conflict path. The word entry dialog now waits for the local transaction result before closing, so a lock or storage failure is visible rather than silently losing the edit. Dashboard totals, XP, badges and activity projections remain local derivations and are never sent as word-record payload fields. Tracker also upgrades its account dialog into a personal center: it shows the shared Lexi login, recent account devices, local sign-out, and a two-step permanent-account-deletion flow. After a server-confirmed deletion, only this browser origin's Tracker records, session marker and durable Phase 4B outbox are cleared; other devices and the separate Words browser origin are accurately disclosed as outside this page's local-storage reach."
+    "reason": "Tracker keeps learning content local by default and lets a signed-in learner choose cloud storage for a new or edited plan, including each AI-confirmed plan, practice record, timer record, or word record. The plan editor and AI confirmation show the plan allowance before a paired transfer. Cloud failures, offline retry and switching back to local keep the local content intact and state the real pending outcome instead of claiming a completed upload or deletion. The existing word-record sync and shared account-center work remain part of the same coordinated Tracker release."
   },
   "Backend": {
     "status": "changed",
-    "reason": "A paired Formal release is required before enablement: add word_record to Tracker capabilities and the private sync validator with the same exact raw fields and byte/count/date/timestamp bounds, while preserving ownership, optimistic versions, tombstone cleanup and aggregate byte accounting. The Tracker client will remain paused rather than send a partially compatible record set until that capability is present. The permanent shared-account deletion endpoint must authenticate the bearer identity server-side, require the fixed confirmation payload, delete only that Auth user using a server-only credential, revoke sessions through Auth deletion, and never expose a service-role credential or another user's identity to the browser. Existing user_devices RLS is reused for recent-device display."
+    "reason": "A paired Formal release adds optional per-kind Tracker cloud quotas, caller-only aggregate quota capabilities, a backward-compatible batch marker, and atomic upload/detach endpoints for a plan together with its executions. Existing cloud data is kept and grandfathered; data the learner removes and later uploads again uses the current allowance. The shared word-record validator and permanent-account-deletion endpoint remain required counterparts, with all ownership and server-secret boundaries preserved."
   },
   "Admin": {
     "status": "changed",
-    "reason": "The paired Lexi Control release must include word_record in Tracker sync aggregate capacity/reporting and contract coverage, without exposing learner notes or content. It must also expose only aggregate account-deletion health if the new deletion audit is measured. No per-record administrator browsing or editing surface is required."
+    "reason": "The paired Lexi Control release adds a simple global switch, five content-type allowances, aggregate per-user use counts and sparse per-user overrides. It continues to expose only aggregate sync and account information, never individual plans, notes, execution details, or word-record payloads."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. First apply and verify the backward-compatible Formal word_record validator/RPC and protected lexi-account-delete function; then use protected Lexi Control authority to enable the new kind (the old four-kind client safely ignores it); only then deploy this strict five-kind Tracker client. Finally smoke-test word create/update/delete, second-device pull, restart/offline retry, byte-limit rejection, cross-account isolation, aggregate byte metrics, account device list, local sign-out, and permanent deletion with a disposable account only."
+    "reason": "Not deployed. First apply and verify the compatible Formal database migrations and protected shared-account endpoints; then deploy the matching Tracker client and Lexi Control build; finally enable optional content-cloud storage in Lexi Control. The vocabulary product and its already deployed cloud-wordbook behavior are not changed by this Tracker release."
   },
   "Verification": {
-    "status": "required",
-    "reason": "Focused word payload, Phase 4B runtime, canonical store, cross-tab, IndexedDB-clear, account-deletion request and local-cleanup tests must pass with Tracker typecheck/lint. Before a release, run both full release gates, verify the shared validator/RLS/RPC, protected function CORS/auth behavior and Lexi Control aggregate output, then perform the paired signed-in production smoke checks."
+    "status": "passed",
+    "reason": "Tracker impact/typecheck/lint/test/build gates passed locally, including 66 test files and 424 tests. The Formal full release gate also passed, including the new Tracker quota migrations and Lexi Control checks. Production still needs authenticated RPC, normal second-device and cross-account smoke tests after the compatible migrations and matching Pages builds are deployed."
   }
 }

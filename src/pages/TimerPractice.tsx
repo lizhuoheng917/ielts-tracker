@@ -37,6 +37,7 @@ import {
   ListChecks,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ContentCloudLocationField } from '@/components/sync/ContentCloudLocationField'
 import { SUBJECT_VISUALS } from '@/lib/subjectVisuals'
 import { PageHeader } from '@/components/ui/page-header'
 import { MetricGroup } from '@/components/ui/metric-group'
@@ -59,6 +60,11 @@ import {
   resolveTimerRecordDuration,
   type TimerRecordSortOrder,
 } from '@/lib/timerRecordView'
+import {
+  setTrackerContentCloudLocation,
+  trackerContentCloudMode,
+  type TrackerContentCloudMode,
+} from '@/sync/trackerContentCloudPolicy'
 
 // ===== 科目配置：标签、图标、颜色 =====
 const SUBJECT_CONFIG: Record<TimerSubject, { label: string; icon: ReactNode; badgeClass: string; gradientFrom: string; gradientTo: string }> = {
@@ -625,6 +631,7 @@ function RecordFormDialog({
   const [durationMinutes, setDurationMinutes] = useState('')
   const [durationEdited, setDurationEdited] = useState(false)
   const [note, setNote] = useState('')
+  const [cloudMode, setCloudMode] = useState<TrackerContentCloudMode>('local')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
 
@@ -636,6 +643,7 @@ function RecordFormDialog({
       setDurationMinutes(String(mins))
       setDurationEdited(false)
       setNote('')
+      setCloudMode('local')
     }
   }, [open, defaultSubject, defaultDuration])
 
@@ -661,6 +669,14 @@ function RecordFormDialog({
       if (result.status !== 'applied') {
         window.alert(result.error?.message ?? '练习记录暂时无法保存，请稍后重试。')
         return
+      }
+
+      if (result.targetId) {
+        setTrackerContentCloudLocation({
+          entityKind: 'timer_record',
+          entityId: result.targetId,
+          mode: cloudMode,
+        })
       }
 
       onSaved?.()
@@ -753,6 +769,13 @@ function RecordFormDialog({
               rows={3}
             />
           </div>
+
+          <ContentCloudLocationField
+            entityKind="timer_record"
+            value={cloudMode}
+            onValueChange={setCloudMode}
+            disabled={isSubmitting}
+          />
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -795,6 +818,7 @@ function EditRecordDialog({
   const [durationMinutes, setDurationMinutes] = useState('')
   const [durationEdited, setDurationEdited] = useState(false)
   const [note, setNote] = useState('')
+  const [cloudMode, setCloudMode] = useState<TrackerContentCloudMode>('local')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
 
@@ -805,6 +829,7 @@ function EditRecordDialog({
       setDurationMinutes(String(Math.max(1, Math.round(record.duration / 60))))
       setDurationEdited(false)
       setNote(record.note ?? '')
+      setCloudMode(trackerContentCloudMode({ entityKind: 'timer_record', entityId: record.id }))
     }
   }, [open, record])
 
@@ -830,6 +855,13 @@ function EditRecordDialog({
         window.alert(result.error?.message ?? '练习记录暂时无法保存，请稍后重试。')
         return
       }
+
+      const targetId = result.targetId ?? record.id
+      setTrackerContentCloudLocation({
+        entityKind: 'timer_record',
+        entityId: targetId,
+        mode: cloudMode,
+      })
 
       onOpenChange(false)
     } finally {
@@ -926,6 +958,14 @@ function EditRecordDialog({
               rows={3}
             />
           </div>
+
+          <ContentCloudLocationField
+            entityKind="timer_record"
+            entityId={record?.id}
+            value={cloudMode}
+            onValueChange={setCloudMode}
+            disabled={isSubmitting}
+          />
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">

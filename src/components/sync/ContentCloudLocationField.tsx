@@ -1,0 +1,195 @@
+import { Cloud, HardDrive, LoaderCircle, RefreshCw } from 'lucide-react'
+
+import { useAuth } from '@/auth/authContext'
+import { cn } from '@/lib/utils'
+import type { TrackerPhase4bEntityKind } from '@/sync/trackerPhase4bRecordSync'
+import {
+  readableTrackerContentCloudFailure,
+  requestTrackerContentCloudSync,
+  trackerContentCloudFailure,
+  trackerContentCloudFirstFailureId,
+  trackerContentCloudQuotaHasCapacity,
+  trackerContentCloudTransferState,
+  type TrackerContentCloudMode,
+  type TrackerContentCloudSelectableKind,
+  useTrackerContentCloudPolicyStore,
+} from '@/sync/trackerContentCloudPolicy'
+
+interface ContentCloudLocationFieldProps {
+  entityKind: TrackerContentCloudSelectableKind
+  entityId?: string | null
+  value: TrackerContentCloudMode
+  onValueChange: (value: TrackerContentCloudMode) => void
+  disabled?: boolean
+  /** Plans use this for their dependent execution-record quota and failures. */
+  relatedContent?: {
+    entityKind: TrackerPhase4bEntityKind
+    label: string
+    unit: string
+    count: number
+    entityIds?: readonly string[]
+  }
+}
+
+function quotaText(
+  label: string,
+  unit: string,
+  quota: { remaining: number | null } | null,
+): string | null {
+  if (!quota) return null
+  if (quota.remaining === null) return `${label}不设上限`
+  return quota.remaining > 0
+    ? `${label}还可上传 ${quota.remaining}${unit}`
+    : `${label}额度已用完`
+}
+
+function quotaDescription(input: {
+  entityKind: TrackerContentCloudSelectableKind
+  quota: { remaining: number | null } | null
+  relatedContent?: ContentCloudLocationFieldProps['relatedContent']
+  relatedQuota: { remaining: number | null } | null
+}): string | null {
+  const own = quotaText(input.entityKind === 'study_plan' ? '计划' : '云端内容', '项', input.quota)
+  const related = input.relatedContent
+    ? quotaText(input.relatedContent.label, input.relatedContent.unit, input.relatedQuota)
+    : null
+  const planned = input.relatedContent && input.relatedContent.count > 0
+    ? `本计划将同步 ${input.relatedContent.count}${input.relatedContent.unit}`
+    : null
+  return [own, related, planned].filter(Boolean).join('；') || null
+}
+
+/**
+ * A compact, shared editor field. It only changes the form selection; the
+ * parent saves the learner record first and then commits the cloud choice so
+ * a failed local write never creates a phantom cloud operation.
+ */
+export function ContentCloudLocationField({
+  entityKind,
+  entityId,
+  value,
+  onValueChange,
+  disabled = false,
+  relatedContent,
+}: ContentCloudLocationFieldProps) {
+  const { status, managedAiDataBinding } = useAuth()
+  const cloudReady = status === 'signed-in' && managedAiDataBinding.status === 'bound'
+  const quota = useTrackerContentCloudPolicyStore((state) => (
+    state.quotaByScope[state.activeScope]?.[entityKind] ?? null
+  ))
+  const selectiveCloudAvailable = useTrackerContentCloudPolicyStore((state) => (
+    state.selectiveCloudAvailableByScope[state.activeScope] === true
+  ))
+  const relatedQuota = useTrackerContentCloudPolicyStore((state) => (
+    relatedContent ? state.quotaByScope[state.activeScope]?.[relatedContent.entityKind] ?? null : null
+  ))
+  const failure = useTrackerContentCloudPolicyStore((state) => (
+    entityId ? trackerContentCloudFailure(entityKind, entityId, state) : null
+  ))
+  const relatedFailureEntityId = useTrackerContentCloudPolicyStore((state) => (
+    relatedContent
+      ? trackerContentCloudFirstFailureId(relatedContent.entityKind, relatedContent.entityIds ?? [], state)
+      : null
+  ))
+  const relatedFailure = useTrackerContentCloudPolicyStore((state) => (
+    relatedContent && relatedFailureEntityId
+      ? trackerContentCloudFailure(relatedContent.entityKind, relatedFailureEntityId, state)
+      : null
+  ))
+  const transferState = useTrackerContentCloudPolicyStore((state) => (
+    entityId
+      ? trackerContentCloudTransferState(entityKind, entityId, state)
+      : null
+  ))
+  const visibleFailure = failure ?? relatedFailure
+  const failureTarget = failure
+    ? { entityKind, entityId }
+    : relatedFailure && relatedContent && relatedFailureEntityId
+      ? { entityKind: relatedContent.entityKind, entityId: relatedFailureEntityId }
+      : null
+  const retryEntityId = failureTarget?.entityId ?? null
+  const quotaExhausted = value !== 'cloud' && !trackerContentCloudQuotaHasCapacity(quota)
+  const relatedQuotaExhausted = value !== 'cloud'
+    && Boolean(relatedContent)
+    && !trackerContentCloudQuotaHasCapacity(relatedQuota, relatedContent?.count ?? 0)
+  const cloudDisabled = disabled || !cloudReady || !selectiveCloudAvailable || quotaExhausted || relatedQuotaExhausted
+
+  return (
+    <section
+      className="space-y-2 rounded-xl border border-border bg-surface-subtle p-3"
+      aria-labelledby={`content-location-${entityKind}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 id={`content-location-${entityKind}`} className="text-sm font-semibold">保存位置</h3>
+          <p className="mt-0.5 text-xs leading-4 text-muted-foreground">新内容默认只保存在这台设备。</p>
+        </div>
+        {transferState && !visibleFailure && (
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground" role="status">
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            {transferState === 'uploading' ? '等待上传' : '等待移除'}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label="选择保存位置">
+        <button
+          type="button"
+          aria-pressed={value === 'local'}
+          disabled={disabled}
+          onClick={() => onValueChange('local')}
+          className={cn(
+            'flex min-h-12 items-center gap-2 rounded-lg border px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+            value === 'local' ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent',
+          )}
+        >
+          <HardDrive className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          仅本机
+        </button>
+        <button
+          type="button"
+          aria-pressed={value === 'cloud'}
+          disabled={cloudDisabled}
+          onClick={() => onValueChange('cloud')}
+          className={cn(
+            'flex min-h-12 items-center gap-2 rounded-lg border px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+            value === 'cloud' ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent',
+          )}
+        >
+          <Cloud className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          同步云端
+        </button>
+      </div>
+
+      <p className={cn('text-xs leading-4', visibleFailure ? 'text-destructive' : 'text-muted-foreground')} role={visibleFailure ? 'alert' : undefined}>
+        {visibleFailure
+          ? readableTrackerContentCloudFailure(visibleFailure.reason)
+          : !cloudReady
+            ? '登录并确认本机数据归属后，可选择同步云端。'
+            : !selectiveCloudAvailable
+              ? '当前暂未开放内容上云，本机内容已保存。'
+            : quotaDescription({ entityKind, quota, relatedContent, relatedQuota })
+              ?? (value === 'cloud'
+                ? '会同步到已登录设备。'
+                : '改为仅本机后，会立即请求移除云端副本。')}
+      </p>
+
+      {visibleFailure && retryEntityId && failureTarget && (
+        <button
+          type="button"
+          onClick={() => requestTrackerContentCloudSync({
+            entityKind: failureTarget.entityKind,
+            entityId: retryEntityId,
+            immediate: true,
+            retry: true,
+            ...(failureTarget.entityKind === 'study_plan' && transferState ? { planTransfer: transferState } : {}),
+          })}
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
+        >
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+          重新尝试
+        </button>
+      )}
+    </section>
+  )
+}

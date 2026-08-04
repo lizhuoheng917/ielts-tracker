@@ -34,6 +34,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useChatStore, type ChatMessageRecord } from '@/stores/chatStore'
 import { usePlanStore } from '@/stores/planStore'
+import {
+  setTrackerContentCloudLocation,
+  type TrackerContentCloudMode,
+} from '@/sync/trackerContentCloudPolicy'
 
 import { AIConfirmCard } from './AIConfirmCard'
 import { AILoadingState } from './AILoadingState'
@@ -158,6 +162,7 @@ export function AIChatPanel({
   const [input, setInput] = useState('')
   const [error, setError] = useState('')
   const [applyingIds, setApplyingIds] = useState<Set<string>>(new Set())
+  const [draftCloudModes, setDraftCloudModes] = useState<Record<string, TrackerContentCloudMode>>({})
   const [transientReceipts, setTransientReceipts] = useState<Record<string, AiCommandReceipt>>({})
   const [hydratedKey, setHydratedKey] = useState('')
 
@@ -367,16 +372,26 @@ export function AIChatPanel({
     applyingRef.current.add(draft.draftId)
     setApplyingIds(new Set(applyingRef.current))
     try {
+      const cloudMode = draftCloudModes[draft.draftId] ?? 'local'
       const receipt = await applyConfirmedAiPlanDraft(draft, {
         routeMode: 'managed',
         accountScopeId: currentScopeId,
       })
+      // Only the first successful confirmation creates a new plan. A duplicate
+      // confirmation must never overwrite an existing plan's storage choice.
+      if (receipt.status === 'applied' && receipt.targetId) {
+        setTrackerContentCloudLocation({
+          entityKind: 'study_plan',
+          entityId: receipt.targetId,
+          mode: cloudMode,
+        })
+      }
       setTransientReceipts((current) => ({ ...current, [draft.draftId]: receipt }))
     } finally {
       applyingRef.current.delete(draft.draftId)
       setApplyingIds(new Set(applyingRef.current))
     }
-  }, [applyConfirmedAiPlanDraft, currentScopeId])
+  }, [applyConfirmedAiPlanDraft, currentScopeId, draftCloudModes])
 
   const rejectDraft = useCallback(async (draft: NonNullable<ChatMessageRecord['commandDrafts']>[number]) => {
     if (applyingRef.current.has(draft.draftId)) return
@@ -418,6 +433,7 @@ export function AIChatPanel({
                 chatClearMessages(chatKey)
                 setMessages([])
                 messagesRef.current = []
+                setDraftCloudModes({})
               }}
               className="flex min-h-8 items-center gap-1 rounded-md px-2 text-[10px] text-muted-foreground hover:bg-muted hover:text-destructive"
             >
@@ -492,12 +508,17 @@ export function AIChatPanel({
                   {message.commandDrafts.map((draft) => {
                     const receipt = transientReceipts[draft.draftId]
                       ?? receiptByKey.get(draft.idempotencyKey)
+                    const cloudMode = draftCloudModes[draft.draftId] ?? 'local'
                     return (
                       <AIConfirmCard
                         key={draft.draftId}
                         draft={draft}
                         receipt={receipt}
                         applying={applyingIds.has(draft.draftId)}
+                        cloudMode={cloudMode}
+                        onCloudModeChange={(mode) => {
+                          setDraftCloudModes((current) => ({ ...current, [draft.draftId]: mode }))
+                        }}
                         onConfirm={() => confirmDraft(draft)}
                         onReject={() => rejectDraft(draft)}
                       />

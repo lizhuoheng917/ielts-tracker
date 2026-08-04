@@ -1,4 +1,5 @@
 import { authConfiguration } from '@/auth/runtimeConfiguration'
+import type { TrackerPlanCloudTransferBundle } from '@/sync/trackerPlanCloudTransfer'
 import type { TrackerShadowSyncOperation } from '@/sync/trackerShadowSyncProtocol'
 
 export interface TrackerShadowSyncIdentity {
@@ -35,6 +36,8 @@ export interface TrackerShadowSyncRpc {
     requestHash: string
     accountEpoch: number
     operations: readonly TrackerShadowSyncOperation[]
+    /** Sent only after the server advertises the backward-compatible feature. */
+    selectiveContentCloudV1?: true
   }): Promise<unknown>
   pull(accessToken: string, input: {
     deviceId: string
@@ -42,6 +45,21 @@ export interface TrackerShadowSyncRpc {
     limit: number
   }): Promise<unknown>
   getSnapshot(accessToken: string, input: { deviceId: string }): Promise<unknown>
+  uploadPlanToCloud?(accessToken: string, input: {
+    operationId: string
+    deviceId: string
+    accountEpoch: number
+    expectedUserId: string
+    bundle: TrackerPlanCloudTransferBundle
+  }): Promise<unknown>
+  detachPlanFromCloud?(accessToken: string, input: {
+    operationId: string
+    deviceId: string
+    accountEpoch: number
+    expectedUserId: string
+    planId: string
+    expectedPlanVersion: number
+  }): Promise<unknown>
 }
 
 const TRACKER_RPC_TIMEOUT_MS = 20_000
@@ -174,6 +192,7 @@ export const browserTrackerShadowSyncRpc: TrackerShadowSyncRpc = {
       p_request_hash: input.requestHash,
       p_account_epoch: input.accountEpoch,
       p_operations: input.operations,
+      ...(input.selectiveContentCloudV1 ? { p_selective_content_cloud_v1: true } : {}),
     },
   ),
   pull: (accessToken, input) => invokePinnedRpc(
@@ -189,6 +208,29 @@ export const browserTrackerShadowSyncRpc: TrackerShadowSyncRpc = {
     'tracker_get_sync_snapshot',
     accessToken,
     { p_device_id: input.deviceId },
+  ),
+  uploadPlanToCloud: (accessToken, input) => invokePinnedRpc(
+    'tracker_upload_plan_to_cloud',
+    accessToken,
+    {
+      p_operation_id: input.operationId,
+      p_device_id: input.deviceId,
+      p_expected_account_epoch: input.accountEpoch,
+      p_expected_user_id: input.expectedUserId,
+      p_bundle: input.bundle,
+    },
+  ),
+  detachPlanFromCloud: (accessToken, input) => invokePinnedRpc(
+    'tracker_detach_plan_from_cloud',
+    accessToken,
+    {
+      p_operation_id: input.operationId,
+      p_device_id: input.deviceId,
+      p_expected_account_epoch: input.accountEpoch,
+      p_expected_user_id: input.expectedUserId,
+      p_plan_id: input.planId,
+      p_expected_plan_version: input.expectedPlanVersion,
+    },
   ),
 }
 

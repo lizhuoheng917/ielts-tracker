@@ -29,6 +29,7 @@ export interface TrackerPhase4bSyncOperation {
   baseVersion: number
   occurredAt: string
   payload?: AnyTrackerPhase4bPayload
+  restoreDeleted?: true
 }
 
 export interface TrackerPhase4bSyncBatch {
@@ -168,6 +169,7 @@ export function parseTrackerPhase4bSyncOperation(value: unknown): TrackerPhase4b
     'baseVersion',
     'occurredAt',
     'payload',
+    'restoreDeleted',
   ], 'Phase 4B operation')
   const kind = entityKind(operation.entityKind, 'Phase 4B operation.entityKind')
   if (operation.action !== 'upsert' && operation.action !== 'delete') {
@@ -178,6 +180,12 @@ export function parseTrackerPhase4bSyncOperation(value: unknown): TrackerPhase4b
   }
   if (operation.action === 'delete' && operation.payload !== undefined) {
     throw new Error('Phase 4B delete must not include payload.')
+  }
+  if (operation.restoreDeleted !== undefined && operation.restoreDeleted !== true) {
+    throw new Error('Phase 4B operation.restoreDeleted must be true when present.')
+  }
+  if (operation.action === 'delete' && operation.restoreDeleted !== undefined) {
+    throw new Error('Phase 4B delete must not restore a tombstone.')
   }
   return {
     operationId: uuid(operation.operationId, 'Phase 4B operation.operationId'),
@@ -190,6 +198,7 @@ export function parseTrackerPhase4bSyncOperation(value: unknown): TrackerPhase4b
     ...(operation.action === 'upsert'
       ? { payload: parseTrackerPhase4bPayload(kind, operation.payload) }
       : {}),
+    ...(operation.restoreDeleted === true ? { restoreDeleted: true as const } : {}),
   }
 }
 

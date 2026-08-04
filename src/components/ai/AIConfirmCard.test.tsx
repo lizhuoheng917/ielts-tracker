@@ -5,6 +5,12 @@ import type { AiCommandReceipt } from '@/ai/contracts'
 import type { PlanCreateCommandDraft } from '@/ai/planCommands'
 import { AIConfirmCard } from './AIConfirmCard'
 
+vi.mock('@/components/sync/ContentCloudLocationField', () => ({
+  ContentCloudLocationField: ({ value }: { value: 'local' | 'cloud' }) => (
+    <p>保存位置：{value === 'cloud' ? '同步云端' : '仅本机'}</p>
+  ),
+}))
+
 const draft: PlanCreateCommandDraft = {
   schemaVersion: 1,
   draftId: '123e4567-e89b-42d3-a456-426614174411',
@@ -73,6 +79,21 @@ describe('AI plan confirmation card', () => {
 
     expect(html).toContain('单次任务 · 2026年8月12日')
     expect(html).not.toContain('重复计划')
+  })
+
+  it('shows a storage choice before the learner confirms an AI plan', () => {
+    const html = renderToStaticMarkup(
+      <AIConfirmCard
+        draft={draft}
+        cloudMode="cloud"
+        onCloudModeChange={vi.fn()}
+        onConfirm={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('保存位置：同步云端')
+    expect(html).toContain('确认加入计划')
   })
 
   it('shows duplicate receipt as final and hides the execution buttons', () => {

@@ -2,6 +2,7 @@ import { inspectManagedAiDataBinding } from '@/auth/managedAiDataBinding'
 import { readCanonicalMutationEpoch } from '@/data/canonicalMutationCoordinator'
 import {
   diffTrackerPhase4bLocalEntities,
+  createTrackerPhase4bPayload,
   inspectTrackerPhase4bLocalSnapshot,
   materializeTrackerPhase4bLocalEntities,
   mergeTrackerPhase4bRemoteEntityChanges,
@@ -9,6 +10,7 @@ import {
   planTrackerPhase4bReconciliation,
   sortTrackerPhase4bOperationIntents,
   TRACKER_PHASE4B_ENTITY_KINDS,
+  type TrackerPhase4bEntityKind,
   type TrackerPhase4bLocalEntity,
   type TrackerPhase4bLocalSnapshot,
   type TrackerPhase4bOperationIntent,
@@ -41,6 +43,21 @@ import {
   browserTrackerShadowSyncRpc,
   TrackerShadowSyncRpcError,
 } from '@/sync/trackerShadowSyncRpc'
+import {
+  parseTrackerPlanCloudTransferReceipt,
+  type TrackerPlanCloudTransferBundle,
+  type TrackerPlanCloudTransferDirection,
+} from '@/sync/trackerPlanCloudTransfer'
+import {
+  identitiesFromRemoteTrackerContent,
+  localOnlyRemoteDeleteIntents,
+  mergeTrackerContentCloudSnapshot,
+  trackerContentCloudMode,
+  projectTrackerContentCloudSnapshot,
+  trackerContentCloudRestoreRequested,
+  trackerContentCloudPolicyRevision,
+  useTrackerContentCloudPolicyStore,
+} from '@/sync/trackerContentCloudPolicy'
 import { usePlanStore } from '@/stores/planStore'
 import { usePracticeStore } from '@/stores/practiceStore'
 import { useTimerStore } from '@/stores/timerStore'
@@ -64,9 +81,25 @@ export interface TrackerPhase4bSyncRpc {
     requestHash: string
     accountEpoch: number
     operations: readonly TrackerPhase4bSyncOperation[]
+    selectiveContentCloudV1?: true
   }): Promise<unknown>
   pull(accessToken: string, input: { deviceId: string; cursor: number; limit: number }): Promise<unknown>
   getSnapshot(accessToken: string, input: { deviceId: string }): Promise<unknown>
+  uploadPlanToCloud?(accessToken: string, input: {
+    operationId: string
+    deviceId: string
+    accountEpoch: number
+    expectedUserId: string
+    bundle: TrackerPlanCloudTransferBundle
+  }): Promise<unknown>
+  detachPlanFromCloud?(accessToken: string, input: {
+    operationId: string
+    deviceId: string
+    accountEpoch: number
+    expectedUserId: string
+    planId: string
+    expectedPlanVersion: number
+  }): Promise<unknown>
 }
 
 export interface TrackerPhase4bSyncStatusEvent {
@@ -86,6 +119,18 @@ export interface TrackerPhase4bSyncRuntimeOptions {
   readLocalSnapshot?: () => unknown
   installLocalSnapshot?: typeof installTrackerPhase4bStoreSnapshot
   onStatusChange?: (event: TrackerPhase4bSyncStatusEvent) => void
+  onCapabilities?: (capabilities: TrackerSyncCapabilities) => void
+  onOperationRejected?: (input: {
+    entityKind: TrackerPhase4bEntityKind
+    entityId: string
+    reason: string
+  }) => void
+  onOperationApplied?: (input: {
+    entityKind: TrackerPhase4bEntityKind
+    entityId: string
+    action: 'upsert' | 'delete'
+    restoreDeleted?: true
+  }) => void
   now?: () => Date
   createId?: () => string
   setTimer?: (task: () => void, delay: number) => ReturnType<typeof setTimeout>
@@ -319,6 +364,40 @@ export class TrackerPhase4bSyncRuntime {
     }
   }
 
+  /** A learner's explicit retry clears only this record's remembered server
+   * rejection. It never replays a whole failed batch or another record. */
+  async retryEntity(entityKind: TrackerPhase4bEntityKind, entityId: string): Promise<void> {
+    if (this.disposed) return
+    await this.withLock(async () => {
+      const state = await this.loadState()
+      this.assertActive()
+      const before = state.blockedOperations.length
+      state.blockedOperations = state.blockedOperations.filter((blocked) => !(
+        blocked.entityKind === entityKind && blocked.entityId === entityId
+      ))
+      if (state.blockedOperations.length !== before) {
+        state.updatedAt = this.now()
+        await this.persistence.save(state)
+      }
+    })
+    if (!this.disposed) await this.flush()
+  }
+
+  /**
+   * Plans are not normal independent Phase 4B rows: a parent and all live
+   * executions must move together. This method is deliberately separate from
+   * the batch diff so an upload or detach cannot leave an orphan execution on
+   * another device.
+   */
+  async transferPlan(planId: string, direction: TrackerPlanCloudTransferDirection): Promise<void> {
+    if (this.disposed) return
+    let shouldRefresh = false
+    await this.withLock(async () => {
+      shouldRefresh = await this.transferPlanOnce(planId, direction)
+    })
+    if (shouldRefresh && !this.disposed) await this.flush()
+  }
+
   flush(): Promise<void> {
     if (this.disposed) return Promise.resolve()
     this.queued = true
@@ -388,10 +467,223 @@ export class TrackerPhase4bSyncRuntime {
   private readLocal() {
     const raw = (this.options.readLocalSnapshot ?? readRawTrackerPhase4bStoreSnapshot)()
     const inspection = inspectTrackerPhase4bLocalSnapshot(raw)
+    const policy = useTrackerContentCloudPolicyStore.getState()
+    const cloudSnapshot = projectTrackerContentCloudSnapshot(inspection.snapshot, policy)
+    const cloudInspection = inspectTrackerPhase4bLocalSnapshot(cloudSnapshot)
     return {
-      ...inspection,
-      fingerprint: trackerPhase4bSnapshotFingerprint(inspection.snapshot),
-      entities: materializeTrackerPhase4bLocalEntities(inspection.snapshot, this.now()),
+      snapshot: inspection.snapshot,
+      cloudSnapshot: cloudInspection.snapshot,
+      /** Protect the full local store install, including local-only records. */
+      installFingerprint: trackerPhase4bSnapshotFingerprint(inspection.snapshot),
+      /** Only selected data plus a policy revision should create cloud work. */
+      fingerprint: `${trackerContentCloudPolicyRevision(policy)}:${trackerPhase4bSnapshotFingerprint(cloudInspection.snapshot)}`,
+      // Keep the full quarantine fence: an unparseable local row must never
+      // trick a later install into silently deleting user data.
+      quarantined: inspection.quarantined,
+      entities: materializeTrackerPhase4bLocalEntities(cloudInspection.snapshot, this.now()),
+    }
+  }
+
+  private rejectPlanTransfer(planId: string, reason: string): false {
+    this.options.onOperationRejected?.({
+      entityKind: 'study_plan',
+      entityId: planId,
+      reason,
+    })
+    this.report({
+      phase: 'partial',
+      detail: reason === 'cloud_quota_reached'
+        ? '计划云端额度已用完，本机计划已保留'
+        : '计划云端操作未完成，本机计划已保留，可稍后重试',
+    })
+    return false
+  }
+
+  /**
+   * A learner can cancel an upload before it has ever reached the server. Once
+   * an authoritative snapshot proves that the parent is absent, there is no
+   * cloud row to detach. Finish the local choice instead of leaving a retrying
+   * `removing` state or issuing a delete against an unknown version.
+   */
+  private async completeAbsentPlanDetach(
+    state: TrackerPhase4bSyncAccountState,
+    planId: string,
+  ): Promise<true> {
+    const policy = useTrackerContentCloudPolicyStore.getState()
+    if (trackerContentCloudMode({ entityKind: 'study_plan', entityId: planId }) === 'local') {
+      policy.completePlanTransfer(planId, 'local')
+      policy.clearFailure('study_plan', planId)
+    }
+    const syncedAt = this.now()
+    state.lastSyncedAt = syncedAt
+    state.updatedAt = syncedAt
+    await this.persistence.save(state)
+    this.report({
+      phase: 'synced',
+      lastSyncedAt: syncedAt,
+      detail: '云端没有这项计划，已保留本机计划',
+    })
+    // Re-run ordinary sync after releasing the lock. Reconciliation may have
+    // discovered other selected records, but the local-only plan is excluded
+    // from that batch and will never produce a parent/child delete.
+    return true
+  }
+
+  private planTransferBundle(
+    state: TrackerPhase4bSyncAccountState,
+    snapshot: TrackerPhase4bLocalSnapshot,
+    planId: string,
+  ): TrackerPlanCloudTransferBundle | null {
+    const plan = snapshot.studyPlans.find((item) => item.id === planId)
+    if (!plan) return null
+    const baselineById = new Map(state.baseline.map((entity) => [
+      `${entity.entityKind}\u0000${entity.entityId}`,
+      entity,
+    ]))
+    const baseVersion = baselineById.get(`study_plan\u0000${plan.id}`)?.version ?? 0
+    return {
+      plan: {
+        entityId: plan.id,
+        payload: createTrackerPhase4bPayload('study_plan', plan),
+        baseVersion,
+      },
+      executions: snapshot.planExecutions
+        .filter((execution) => execution.planId === plan.id)
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((execution) => ({
+          entityId: execution.id,
+          payload: createTrackerPhase4bPayload('plan_execution', execution),
+          baseVersion: baselineById.get(`plan_execution\u0000${execution.id}`)?.version ?? 0,
+        })),
+    }
+  }
+
+  private async transferPlanOnce(
+    planId: string,
+    direction: TrackerPlanCloudTransferDirection,
+  ): Promise<boolean> {
+    const token = await this.accessToken()
+    if (!token) return this.rejectPlanTransfer(planId, 'account_binding_required')
+    const capabilities = parseTrackerSyncCapabilities(await this.rpc.getCapabilities(token))
+    this.assertActive()
+    this.options.onCapabilities?.(capabilities)
+    if (!capabilities.selectiveContentCloudV1 || !capabilities.selectiveContentCloudEnabled) {
+      return this.rejectPlanTransfer(planId, 'content_cloud_not_available')
+    }
+    const state = await this.loadState()
+    this.assertActive()
+    if (state.accountEpoch !== null && state.accountEpoch !== capabilities.accountEpoch) {
+      this.resetForEpoch(state, capabilities.accountEpoch)
+    }
+    state.accountEpoch = capabilities.accountEpoch
+    let transferAcknowledged = false
+
+    try {
+      const raw = (this.options.readLocalSnapshot ?? readRawTrackerPhase4bStoreSnapshot)()
+      const inspection = inspectTrackerPhase4bLocalSnapshot(raw)
+      if (inspection.quarantined.some((item) => item.entityKind === 'study_plan' || item.entityKind === 'plan_execution')) {
+        return this.rejectPlanTransfer(planId, 'local_plan_data_invalid')
+      }
+      const operationId = this.createId()
+      let receipt: ReturnType<typeof parseTrackerPlanCloudTransferReceipt>
+      if (direction === 'uploading') {
+        const bundle = this.planTransferBundle(state, inspection.snapshot, planId)
+        if (!bundle) return this.rejectPlanTransfer(planId, 'local_plan_missing')
+        if (!this.rpc.uploadPlanToCloud) return this.rejectPlanTransfer(planId, 'content_cloud_not_available')
+        receipt = parseTrackerPlanCloudTransferReceipt(await this.rpc.uploadPlanToCloud(token, {
+          operationId,
+          deviceId: state.deviceId,
+          accountEpoch: capabilities.accountEpoch,
+          expectedUserId: this.options.accountUserId,
+          bundle,
+        }))
+      } else {
+        let remotePlan = state.baseline.find((entity) => (
+          entity.entityKind === 'study_plan' && entity.entityId === planId && entity.deletedAt === null
+        ))
+        if (!remotePlan) {
+          const remote = await this.snapshot(state, token, capabilities.accountEpoch)
+          remotePlan = remote.entities.find((entity) => (
+            entity.entityKind === 'study_plan' && entity.entityId === planId && entity.deletedAt === null
+          ))
+          if (!remotePlan) {
+            // Clear the pending paired transfer *before* reconciliation. That
+            // makes the plan local-only in the projection, so reconciliation
+            // cannot queue a fresh ordinary parent/execution upload while we
+            // are resolving this no-op detach.
+            const policy = useTrackerContentCloudPolicyStore.getState()
+            if (trackerContentCloudMode({ entityKind: 'study_plan', entityId: planId }) === 'local') {
+              policy.completePlanTransfer(planId, 'local')
+              policy.clearFailure('study_plan', planId)
+            }
+            await this.reconcileAndInstall({
+              state,
+              local: this.readLocal(),
+              remote,
+              authoritative: true,
+            })
+            state.baselineEstablished = true
+            return this.completeAbsentPlanDetach(state, planId)
+          }
+          await this.reconcileAndInstall({
+            state,
+            local: this.readLocal(),
+            remote,
+            authoritative: true,
+          })
+          state.baselineEstablished = true
+        }
+        if (!remotePlan) return this.rejectPlanTransfer(planId, 'cloud_plan_not_found')
+        if (!this.rpc.detachPlanFromCloud) return this.rejectPlanTransfer(planId, 'content_cloud_not_available')
+        receipt = parseTrackerPlanCloudTransferReceipt(await this.rpc.detachPlanFromCloud(token, {
+          operationId,
+          deviceId: state.deviceId,
+          accountEpoch: capabilities.accountEpoch,
+          expectedUserId: this.options.accountUserId,
+          planId,
+          expectedPlanVersion: remotePlan.version,
+        }))
+      }
+      this.assertActive()
+      if (receipt.operationId !== operationId) {
+        throw new Error('Plan cloud transfer receipt does not match the request.')
+      }
+      if (receipt.status === 'epoch_mismatch') {
+        this.resetForEpoch(state, receipt.accountEpoch)
+        await this.persistence.save(state)
+        return this.rejectPlanTransfer(planId, 'account_epoch_changed')
+      }
+      if (receipt.status === 'disabled') return this.rejectPlanTransfer(planId, 'content_cloud_not_available')
+      if (receipt.status === 'rejected') return this.rejectPlanTransfer(planId, receipt.reason ?? 'cloud_transfer_rejected')
+
+      const mode = direction === 'uploading' ? 'cloud' : 'local'
+      const policy = useTrackerContentCloudPolicyStore.getState()
+      policy.completePlanTransfer(planId, mode)
+      policy.clearFailure('study_plan', planId)
+      transferAcknowledged = true
+
+      // Refresh from the server rather than making the ordinary diff rediscover
+      // a just-transferred plan and submit the parent/executions again.
+      const remote = await this.snapshot(state, token, capabilities.accountEpoch)
+      await this.reconcileAndInstall({
+        state,
+        local: this.readLocal(),
+        remote,
+        authoritative: true,
+      })
+      state.baselineEstablished = true
+      state.updatedAt = this.now()
+      await this.persistence.save(state)
+      return true
+    } catch (error) {
+      if (!transferAcknowledged) {
+        this.options.onOperationRejected?.({
+          entityKind: 'study_plan',
+          entityId: planId,
+          reason: 'cloud_transfer_failed',
+        })
+      }
+      throw error
     }
   }
 
@@ -492,6 +784,7 @@ export class TrackerPhase4bSyncRuntime {
       action: operation.action,
       baseVersion: operation.baseVersion,
       payload: operation.payload ?? null,
+      restoreDeleted: operation.restoreDeleted === true,
     })
   }
 
@@ -521,9 +814,58 @@ export class TrackerPhase4bSyncRuntime {
         baseVersion: previous ? Math.min(previous.baseVersion, intent.baseVersion) : intent.baseVersion,
         occurredAt: intent.occurredAt,
         ...(intent.action === 'upsert' ? { payload: intent.payload } : {}),
+        ...(intent.restoreDeleted === true ? { restoreDeleted: true as const } : {}),
       })
     }
     state.pendingOperations = [...pending.values()]
+  }
+
+  /**
+   * Normal sync deliberately refuses to resurrect tombstones. Selecting
+   * “上传至云端” again is the one explicit learner action that supplies the
+   * restore flag, and only for independent records. Plans use the paired
+   * atomic transfer path so their executions can never become orphans.
+   */
+  private explicitContentRestores(input: {
+    state: TrackerPhase4bSyncAccountState
+    local: ReturnType<TrackerPhase4bSyncRuntime['readLocal']>
+    restoreRequired: readonly TrackerPhase4bRestoreRequired[]
+  }): {
+    operations: TrackerPhase4bOperationIntent[]
+    restoreRequired: TrackerPhase4bRestoreRequired[]
+  } {
+    const operations: TrackerPhase4bOperationIntent[] = []
+    const remaining: TrackerPhase4bRestoreRequired[] = []
+    for (const restore of input.restoreRequired) {
+      if (restore.entityKind === 'study_plan' || restore.entityKind === 'plan_execution') {
+        remaining.push(restore)
+        continue
+      }
+      if (!trackerContentCloudRestoreRequested(restore.entityKind, restore.entityId)) {
+        remaining.push(restore)
+        continue
+      }
+      const local = input.local.entities.find((entity) => (
+        entity.entityKind === restore.entityKind && entity.entityId === restore.entityId
+      ))
+      const baseline = input.state.baseline.find((entity) => (
+        entity.entityKind === restore.entityKind && entity.entityId === restore.entityId
+      ))
+      if (!local || !baseline || baseline.deletedAt === null) {
+        remaining.push(restore)
+        continue
+      }
+      operations.push({
+        entityKind: local.entityKind,
+        entityId: baseline.entityId,
+        action: 'upsert',
+        baseVersion: baseline.version,
+        occurredAt: local.updatedAt,
+        payload: local.payload,
+        restoreDeleted: true,
+      })
+    }
+    return { operations, restoreRequired: remaining }
   }
 
   private async sealBatch(
@@ -575,6 +917,9 @@ export class TrackerPhase4bSyncRuntime {
     remote: ReturnType<typeof mergeTrackerPhase4bRemoteEntityChanges>
     authoritative?: boolean
   }): Promise<void> {
+    const policyStore = useTrackerContentCloudPolicyStore.getState()
+    policyStore.markRemoteContent(identitiesFromRemoteTrackerContent(input.remote.entities))
+    const policy = useTrackerContentCloudPolicyStore.getState()
     const result = reconcileTrackerPhase4bState({
       baseline: input.state.baseline,
       current: input.local.entities,
@@ -583,15 +928,24 @@ export class TrackerPhase4bSyncRuntime {
       occurredAt: this.now(),
       cleanupOperations: input.remote.cleanupOperations,
     })
+    const restores = this.explicitContentRestores({
+      state: input.state,
+      local: input.local,
+      restoreRequired: result.restoreRequired,
+    })
     input.state.baseline = clone(input.remote.entities)
-    input.state.restoreRequired = result.restoreRequired
-    const operations = filterQuarantinedDeletes(result.operations, input.local.quarantined)
+    input.state.restoreRequired = restores.restoreRequired
+    const operations = filterQuarantinedDeletes([
+      ...result.operations,
+      ...restores.operations,
+      ...localOnlyRemoteDeleteIntents(input.remote.entities, this.now(), policy),
+    ], input.local.quarantined)
     if (input.local.quarantined.length === 0) {
       this.assertActive()
       const install = this.options.installLocalSnapshot ?? installTrackerPhase4bStoreSnapshot
       const installed = await install({
-        expectedFingerprint: input.local.fingerprint,
-        snapshot: result.snapshot,
+        expectedFingerprint: input.local.installFingerprint,
+        snapshot: mergeTrackerContentCloudSnapshot(result.snapshot, input.local.snapshot, policy),
         occurredAt: this.now(),
         isCurrent: () => !this.disposed,
       })
@@ -601,7 +955,10 @@ export class TrackerPhase4bSyncRuntime {
         this.queued = true
         return
       }
-      input.state.observedFingerprint = trackerPhase4bSnapshotFingerprint(result.snapshot)
+      // Remote content may have acquired a local cloud-policy marker during
+      // this merge. Re-read once rather than comparing an old projection.
+      input.state.observedFingerprint = null
+      this.queued = true
     } else {
       input.state.observedFingerprint = input.local.fingerprint
     }
@@ -638,6 +995,7 @@ export class TrackerPhase4bSyncRuntime {
     }
     const capabilities = parseTrackerSyncCapabilities(await this.rpc.getCapabilities(token))
     this.assertActive()
+    this.options.onCapabilities?.(capabilities)
     const allKindsAllowed = TRACKER_PHASE4B_ENTITY_KINDS.every((kind) => (
       capabilities.allowedEntityKinds.includes(kind)
     ))
@@ -673,8 +1031,21 @@ export class TrackerPhase4bSyncRuntime {
       await this.reconcileAndInstall({ state, local, remote })
     } else if (!state.sealedBatch && state.observedFingerprint !== local.fingerprint) {
       const diff = diffTrackerPhase4bLocalEntities(state.baseline, local.entities, this.now())
-      state.restoreRequired = diff.restoreRequired
-      await this.queueIntents(state, filterQuarantinedDeletes(diff.operations, local.quarantined))
+      const restores = this.explicitContentRestores({
+        state,
+        local,
+        restoreRequired: diff.restoreRequired,
+      })
+      state.restoreRequired = restores.restoreRequired
+      await this.queueIntents(state, filterQuarantinedDeletes([
+        ...diff.operations,
+        ...restores.operations,
+        ...localOnlyRemoteDeleteIntents(
+          state.baseline,
+          this.now(),
+          useTrackerContentCloudPolicyStore.getState(),
+        ),
+      ], local.quarantined))
       state.observedFingerprint = local.fingerprint
     }
 
@@ -707,6 +1078,7 @@ export class TrackerPhase4bSyncRuntime {
       requestHash: batch.requestHash,
       accountEpoch: batch.accountEpoch,
       operations: batch.operations,
+      ...(capabilities.selectiveContentCloudV1 ? { selectiveContentCloudV1: true as const } : {}),
     }))
     this.assertActive()
     if (apply.requestId !== batch.requestId || apply.requestHash !== batch.requestHash) {
@@ -745,12 +1117,25 @@ export class TrackerPhase4bSyncRuntime {
     for (const operation of batch.operations) {
       const result = byId.get(operation.operationId)!
       if (result.status === 'rejected') {
+        const reason = result.reason ?? 'server rejected the operation'
         rejected.push({
           entityKind: operation.entityKind,
           entityId: operation.entityId,
           signature: await this.operationSignature(operation),
-          reason: result.reason ?? 'server rejected the operation',
+          reason,
           blockedAt: this.now(),
+        })
+        this.options.onOperationRejected?.({
+          entityKind: operation.entityKind,
+          entityId: operation.entityId,
+          reason,
+        })
+      } else if (result.status === 'applied' || result.status === 'duplicate') {
+        this.options.onOperationApplied?.({
+          entityKind: operation.entityKind,
+          entityId: operation.entityId,
+          action: operation.action,
+          ...(operation.restoreDeleted === true ? { restoreDeleted: true as const } : {}),
         })
       }
     }

@@ -32,6 +32,19 @@ export interface TrackerSyncCapabilities {
   allowedEntityKinds: string[]
   maxBatchSize: number
   maxPayloadBytes: number
+  /** Absent on the pre-selective server; false keeps backward compatibility. */
+  selectiveContentCloudV1: boolean
+  /** The administrator may support the protocol while pausing new uploads. */
+  selectiveContentCloudEnabled: boolean
+  /** Optional live quota view. Missing data must never be guessed client-side. */
+  contentQuota: Partial<Record<string, TrackerSyncContentQuota>> | null
+}
+
+export interface TrackerSyncContentQuota {
+  limit: number | null
+  used: number
+  remaining: number | null
+  legacyExemptCount?: number
 }
 
 export interface TrackerSyncApplyResult {
@@ -119,6 +132,39 @@ function timestamp(value: unknown, label: string): string {
   return parsed
 }
 
+function nullableInteger(value: unknown, label: string): number | null {
+  if (value === null) return null
+  return integer(value, label)
+}
+
+function parseContentQuota(value: unknown): Partial<Record<string, TrackerSyncContentQuota>> | null {
+  if (value === undefined || value === null) return null
+  if (!isRecord(value)) return null
+  const output: Partial<Record<string, TrackerSyncContentQuota>> = {}
+  for (const [kind, raw] of Object.entries(value)) {
+    if (!isRecord(raw)) return null
+    try {
+      const limit = nullableInteger(raw.limit, `capabilities.contentQuota.${kind}.limit`)
+      const used = integer(raw.used, `capabilities.contentQuota.${kind}.used`)
+      const remaining = nullableInteger(raw.remaining, `capabilities.contentQuota.${kind}.remaining`)
+      const legacyExemptCount = raw.legacyExemptCount === undefined
+        ? undefined
+        : integer(raw.legacyExemptCount, `capabilities.contentQuota.${kind}.legacyExemptCount`)
+      output[kind] = {
+        limit,
+        used,
+        remaining,
+        ...(legacyExemptCount === undefined ? {} : { legacyExemptCount }),
+      }
+    } catch {
+      // Capacity is informational. A malformed optional view must not make
+      // otherwise valid local-first learning records unsyncable.
+      return null
+    }
+  }
+  return output
+}
+
 export function parseTrackerShadowSyncOperation(value: unknown): TrackerShadowSyncOperation {
   const operation = record(value, 'shadow operation')
   const allowedKeys = new Set([
@@ -195,6 +241,13 @@ export function parseTrackerSyncCapabilities(value: unknown): TrackerSyncCapabil
     allowedEntityKinds: [...allowedEntityKinds] as string[],
     maxBatchSize: integer(result.maxBatchSize, 'capabilities.maxBatchSize'),
     maxPayloadBytes: integer(result.maxPayloadBytes, 'capabilities.maxPayloadBytes'),
+    selectiveContentCloudV1: result.selectiveContentCloudV1 === undefined
+      ? false
+      : booleanValue(result.selectiveContentCloudV1, 'capabilities.selectiveContentCloudV1'),
+    selectiveContentCloudEnabled: result.selectiveContentCloudEnabled === undefined
+      ? false
+      : booleanValue(result.selectiveContentCloudEnabled, 'capabilities.selectiveContentCloudEnabled'),
+    contentQuota: parseContentQuota(result.contentQuota),
   }
 }
 

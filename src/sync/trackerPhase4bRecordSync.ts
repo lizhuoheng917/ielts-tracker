@@ -124,6 +124,8 @@ export interface TrackerPhase4bOperationIntent {
   baseVersion: number
   occurredAt: string
   payload?: AnyTrackerPhase4bPayload
+  /** Only an explicit learner cloud re-upload may resurrect a tombstone. */
+  restoreDeleted?: true
 }
 
 export interface TrackerPhase4bRestoreRequired {

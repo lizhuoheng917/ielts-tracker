@@ -9,15 +9,20 @@ import {
 
 import type { AiCommandReceipt } from '@/ai/contracts'
 import type { PlanCreateCommandDraft } from '@/ai/planCommands'
+import { ContentCloudLocationField } from '@/components/sync/ContentCloudLocationField'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { isLocalDate } from '@/lib/localDate'
 import { cn } from '@/lib/utils'
+import type { TrackerContentCloudMode } from '@/sync/trackerContentCloudPolicy'
 
 interface AIConfirmCardProps {
   draft: PlanCreateCommandDraft
   receipt?: AiCommandReceipt
   applying?: boolean
+  /** The learner chooses storage before this proposed plan is created. */
+  cloudMode?: TrackerContentCloudMode
+  onCloudModeChange?: (mode: TrackerContentCloudMode) => void
   onConfirm: () => void
   onReject: () => void
 }
@@ -77,6 +82,8 @@ export function AIConfirmCard({
   draft,
   receipt,
   applying = false,
+  cloudMode,
+  onCloudModeChange,
   onConfirm,
   onReject,
 }: AIConfirmCardProps) {
@@ -130,6 +137,18 @@ export function AIConfirmCard({
           </dd>
         </div>
       </dl>
+
+      {cloudMode && onCloudModeChange && (
+        <div className="mt-3">
+          <ContentCloudLocationField
+            entityKind="study_plan"
+            entityId={draft.draftId}
+            value={cloudMode}
+            onValueChange={onCloudModeChange}
+            disabled={applying || isFinal}
+          />
+        </div>
+      )}
 
       {receipt && (
         <div className={cn(

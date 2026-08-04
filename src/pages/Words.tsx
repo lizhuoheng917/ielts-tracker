@@ -40,6 +40,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { DataToolbar } from '@/components/ui/data-toolbar'
 import { MetricGroup } from '@/components/ui/metric-group'
 import { PageHeader } from '@/components/ui/page-header'
+import { ContentCloudLocationField } from '@/components/sync/ContentCloudLocationField'
 import { DataPagination } from '@/components/ui/data-pagination'
 import {
   filterAndSortWordRecords,
@@ -48,6 +49,11 @@ import {
   WORD_RECORD_PAGE_SIZE,
   type WordRecordSortOrder,
 } from '@/lib/wordRecordView'
+import {
+  setTrackerContentCloudLocation,
+  trackerContentCloudMode,
+  type TrackerContentCloudMode,
+} from '@/sync/trackerContentCloudPolicy'
 
 // ===== Helper Functions =====
 
@@ -156,6 +162,7 @@ export default function Words() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [formCloudMode, setFormCloudMode] = useState<TrackerContentCloudMode>('local')
   const [form, setForm] = useState<FormData>({
     date: getTodayStr(),
     category: DEFAULT_WORD_CATEGORIES[0].name,
@@ -261,6 +268,7 @@ export default function Words() {
 
   const openAddForm = () => {
     setEditingId(null)
+    setFormCloudMode('local')
     setForm({
       date: getTodayStr(),
       category: DEFAULT_WORD_CATEGORIES[0].name,
@@ -274,6 +282,7 @@ export default function Words() {
 
   const openEditForm = (record: WordRecord) => {
     setEditingId(record.id)
+    setFormCloudMode(trackerContentCloudMode({ entityKind: 'word_record', entityId: record.id }))
     const isCustom = !DEFAULT_WORD_CATEGORIES.some((c) => c.name === record.category)
     setForm({
       date: record.date,
@@ -308,6 +317,14 @@ export default function Words() {
     if (result.status !== 'applied') {
       window.alert(result.error?.message ?? '单词记录暂时无法保存，请稍后重试。')
       return
+    }
+    const targetId = result.targetId ?? editingId
+    if (targetId) {
+      setTrackerContentCloudLocation({
+        entityKind: 'word_record',
+        entityId: targetId,
+        mode: formCloudMode,
+      })
     }
     setFormOpen(false)
   }
@@ -661,6 +678,13 @@ export default function Words() {
                 rows={3}
               />
             </div>
+
+            <ContentCloudLocationField
+              entityKind="word_record"
+              entityId={editingId}
+              value={formCloudMode}
+              onValueChange={setFormCloudMode}
+            />
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
