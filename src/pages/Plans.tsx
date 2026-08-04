@@ -828,6 +828,7 @@ export default function Plans() {
               createSnapshot={createPlanSnapshot}
               placeholder="让 AI 根据你的学习数据生成计划..."
               chatContext="plans"
+              quotaActive={aiOpen}
               suggestions={
                 learningAnalysisCount > 0 && includePriorAIArtifacts
                   ? [

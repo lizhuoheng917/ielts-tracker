@@ -37,6 +37,7 @@ import { usePlanStore } from '@/stores/planStore'
 
 import { AIConfirmCard } from './AIConfirmCard'
 import { AILoadingState } from './AILoadingState'
+import { AiQuotaNotice } from './AiQuotaNotice'
 import { SafeAIContent } from './SafeAIContent'
 
 interface AIChatPanelProps {
@@ -47,6 +48,7 @@ interface AIChatPanelProps {
   initialQuery?: string
   suggestions?: string[]
   chatContext?: string
+  quotaActive?: boolean
 }
 
 const MAX_USER_MESSAGE_LENGTH = 1_200
@@ -141,6 +143,7 @@ export function AIChatPanel({
   initialQuery,
   suggestions,
   chatContext = 'plans',
+  quotaActive = true,
 }: AIChatPanelProps) {
   const { user } = useAuth()
   const artifactAccess = useAiArtifactAccess()
@@ -398,6 +401,7 @@ export function AIChatPanel({
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+      <AiQuotaNotice purpose="plan_draft" active={quotaActive} className="mb-2" />
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}

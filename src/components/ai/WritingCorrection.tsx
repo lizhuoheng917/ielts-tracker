@@ -35,6 +35,7 @@ import {
 } from '@/ai/writingFeedback'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { AILoadingState } from '@/components/ai/AILoadingState'
+import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 import { WritingFeedbackContent } from '@/components/ai/StructuredAIContent'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -84,6 +85,7 @@ export interface WritingWorkspaceState {
 
 interface WritingCorrectionProps {
   onWorkspaceStateChange?: (state: WritingWorkspaceState) => void
+  quotaActive?: boolean
 }
 
 function isWritingModule(value: unknown): value is WritingModule {
@@ -129,7 +131,7 @@ function safeFilePart(value: string): string {
   return value.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'report'
 }
 
-export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionProps = {}) {
+export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }: WritingCorrectionProps = {}) {
   const access = useAiArtifactAccess()
   const scopeKey = learnerAiTaskScopeKey(access)
   const taskKey = scopeKey
@@ -415,6 +417,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
   if (preview && (status === 'preview' || status === 'saving' || status === 'saved')) {
     return (
       <div className="space-y-4" aria-live="polite">
+        <AiQuotaNotice purpose="writing_feedback" active={quotaActive} />
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
           <Button type="button" variant="ghost" size="sm" onClick={returnToEditor} disabled={status === 'saving'}>
             <ArrowLeft className="size-4" aria-hidden="true" />
@@ -465,6 +468,7 @@ export function WritingCorrection({ onWorkspaceStateChange }: WritingCorrectionP
 
   return (
     <div className="space-y-5" aria-busy={status === 'generating'}>
+      <AiQuotaNotice purpose="writing_feedback" active={quotaActive} />
       {access.status === 'locked' && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

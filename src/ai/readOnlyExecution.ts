@@ -78,7 +78,7 @@ function errorFromEnvelope(
     UNAUTHORIZED: '请先登录 Lexi 账号，再使用 AI。',
     FORBIDDEN: '当前账号暂时无法使用 AI。',
     RATE_LIMITED: retryAfterSeconds
-      ? `AI 使用较频繁，请在 ${retryAfterSeconds} 秒后重试。`
+      ? '今日 AI 使用次数已用完，请在配额提示的重置时间后重试。'
       : 'AI 使用较频繁，请稍后再试。',
     INVALID_REQUEST: '本次 AI 请求无效，请刷新学习数据后重试。',
     PAYLOAD_TOO_LARGE: '本次分析数据过大，请缩短分析范围后重试。',

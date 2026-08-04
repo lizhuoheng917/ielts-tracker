@@ -19,13 +19,14 @@ import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { latestAiArtifactForAccess } from '@/ai/artifactRepository'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { useAIPrivacyStore } from '@/stores/aiPrivacyStore'
+import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 
 interface AiSuggestionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }: AiSuggestionDialogProps) {
+export function AiSuggestionDialog({ open, onOpenChange }: AiSuggestionDialogProps) {
   const [localError, setLocalError] = useState('')
   const [localErrorCode, setLocalErrorCode] = useState<AiGatewayErrorCode | null>(null)
   const { openAccountDialog } = useAccountDialog()
@@ -103,12 +104,14 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
     || errorCode === 'LOCAL_DATA_BINDING_UNAVAILABLE'
 
   const openAccountRecovery = () => {
-    _onOpenChange(false)
+    onOpenChange(false)
     window.setTimeout(() => openAccountDialog(null), 0)
   }
 
   return (
     <div className="space-y-4">
+      <AiQuotaNotice purpose="daily_suggestion" active={open} />
+
       {/* 加载状态 */}
       {isLoading && (
         <Card size="sm" className="border-indigo-200 dark:border-indigo-800">
@@ -165,7 +168,7 @@ export function AiSuggestionDialog({ open: _open, onOpenChange: _onOpenChange }:
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    _onOpenChange(false)
+                    onOpenChange(false)
                     navigate('/stats#ai-content-library')
                   }}
                   className="h-7 px-2 text-xs text-muted-foreground"

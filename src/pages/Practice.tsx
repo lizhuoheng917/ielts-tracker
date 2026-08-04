@@ -1015,7 +1015,10 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               </DialogTitle>
             </DialogHeader>
             <div className="min-h-0 overflow-y-auto px-4 pb-4 pt-3 sm:px-5">
-              <WritingCorrection onWorkspaceStateChange={setWritingWorkspaceState} />
+              <WritingCorrection
+                onWorkspaceStateChange={setWritingWorkspaceState}
+                quotaActive={aiOpen}
+              />
             </div>
           </DialogContent>
         </Dialog>

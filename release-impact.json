@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-03-tracker-ai-format-reliability",
+  "release": "2026-08-04-tracker-ai-quota-and-regeneration",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker now recognizes the shared gateway's definitive generation_failed response and tells the learner that no usable AI result was generated or saved, with a retry action, instead of incorrectly reporting that the provider did not respond. Route-independent task state, cancellation and unknown-outcome behavior are unchanged."
+    "reason": "All four managed AI dialogs now show their own remaining daily calls and local reset time while open, refresh after a managed request or tab focus, and never guess a stale count after a failed read. The learning-analysis success state also exposes a real 重新生成 action that starts a fresh task and current learning snapshot."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The coordinated Formal lexi-ai-gateway release adds one bounded in-reservation format-repair attempt for Agnes default prompt-only non-writing requests after a completed response fails strict validation. It preserves one daily request reservation, cumulative token receipts, existing RLS and privacy boundaries; no Tracker browser secret or direct provider call is introduced."
+    "reason": "The coordinated Formal release adds the authenticated ai_gateway_get_quota preview RPC for exactly one caller and one Tracker purpose. It keeps ai_gateway_reserve as the atomic admission authority and returns no request body, user usage row, provider route, model or secret."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "The shared admin AI controls retain the same policy, alias, daily-count and token metrics surfaces. No Tracker-specific administrator control or database schema update is needed for an internal, already-metered retry."
+    "reason": "Lexi Control already owns each purpose's enabled switch and daily limit. The new learner-only preview neither creates an administrator action nor exposes new account, provider or secret data."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "The coordinated Formal Edge Function and Tracker Pages build still need local release gates, commit, production deployment and signed-in browser verification before this status can become deployed."
+    "reason": "Not deployed. The compatible Supabase migration must be applied with the paired Tracker Pages build, followed by signed-in checks of all four dialogs, a fresh report regeneration, quota exhaustion and cross-account isolation."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker verify:release passed: release-impact validation, TypeScript, oxlint, all 59 Vitest files with 369 tests, the production build and production bundle guard. Formal verify:release, the shared AI gateway function scenarios and cross-repository Writing contract parity also passed; production deployment and signed-in browser verification remain required."
+    "reason": "Tracker verify:release passed with TypeScript, oxlint, 60 Vitest files and 375 tests, production build and bundle secret guard. Formal verify:release and the PGlite quota RPC isolation/grant scenarios also passed; production deployment and signed-in browser smoke remain required."
   }
 }

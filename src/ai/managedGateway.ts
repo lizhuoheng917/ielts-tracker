@@ -1,5 +1,6 @@
 import type { AiResultEnvelope } from './contracts'
 import type { AiStructuredContentV2 } from './structuredOutputs'
+import { notifyManagedAiQuotaChanged } from './managedAiQuota'
 import {
   inspectManagedAiDataBinding,
   type ManagedAiDataBindingState,
@@ -101,7 +102,7 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
     return new AiGatewayError(
       'RATE_LIMITED',
       retryAfterSeconds
-        ? `AI 使用较频繁，请在 ${retryAfterSeconds} 秒后重试。`
+        ? '今日 AI 使用次数已用完，请在配额提示的重置时间后重试。'
         : 'AI 使用较频繁，请稍后再试。',
       true,
       status,
@@ -259,6 +260,10 @@ export class ManagedAiGateway implements AiGateway {
     } catch (error) {
       if (error instanceof AiGatewayError) throw error
       throw await mapInvokeError(error, undefined, request.signal)
+    } finally {
+      // A reservation can be consumed even if a provider call later fails or
+      // the browser times out. Open dialogs refresh their own small preview.
+      notifyManagedAiQuotaChanged(request.purpose)
     }
     if (result.error) throw await mapInvokeError(result.error, result.response, request.signal)
     return parseAiGatewayResponse(result.data, wire)

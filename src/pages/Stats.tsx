@@ -29,6 +29,7 @@ import {
   FileText,
   Flame,
   ListChecks,
+  RefreshCw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -73,6 +74,7 @@ import { createPortal } from 'react-dom'
 import { SafeAIContent } from '@/components/ai/SafeAIContent'
 import { LearningAnalysisContent } from '@/components/ai/StructuredAIContent'
 import { AiArtifactLibrary } from '@/components/ai/AiArtifactLibrary'
+import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { SUBJECT_VISUALS } from '@/lib/subjectVisuals'
@@ -1051,6 +1053,7 @@ export default function Stats() {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 px-5 pb-5 pt-2">
+                <AiQuotaNotice purpose="learning_analysis" active={aiOpen} />
                 <div className="rounded-xl border border-primary/15 bg-primary/5 p-4">
                   <div className="flex items-start gap-2.5">
                     <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -1089,6 +1092,7 @@ export default function Stats() {
                   AI 智能分析
                 </DialogTitle>
               </DialogHeader>
+              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="mx-5 mt-2" />
               <div className="flex flex-col items-center justify-center px-5 py-16 gap-5">
                 {/* 简约加载动画：渐变圆环 + 中心图标 */}
                 <div className="relative">
@@ -1137,6 +1141,7 @@ export default function Stats() {
                 </DialogTitle>
               </DialogHeader>
               <div className="flex flex-col items-center justify-center px-5 py-12 gap-4">
+                <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="w-full" />
                 <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{reportError}</span>
@@ -1166,6 +1171,7 @@ export default function Stats() {
                   学习分析报告
                 </DialogTitle>
               </DialogHeader>
+              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="mx-5 mt-2" />
               <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                 {/* 报告内容 */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-3 bg-white dark:bg-background">
@@ -1199,6 +1205,15 @@ export default function Stats() {
                       {reportSaveError}
                     </p>
                   ) : <div className="flex-1" />}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={generateReport}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    重新生成
+                  </Button>
                   <Button
                     size="sm"
                     onClick={handleSaveReport}

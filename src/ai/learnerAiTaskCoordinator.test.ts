@@ -116,6 +116,24 @@ describe('learner AI task coordinator', () => {
     expect(onSuccess).toHaveBeenCalledTimes(1)
   })
 
+  it('allows a fresh run after a successful terminal task for report regeneration', async () => {
+    const execute = vi.fn(async (taskRequest) => result(taskRequest.purpose)) as LearnerAiTaskCoordinatorDependencies['execute']
+    const coordinator = coordinatorWith(execute)
+    const key = learnerAiTaskKey('learning_analysis', 'account:learner', 'stats')
+    const options = {
+      key,
+      purpose: 'learning_analysis' as const,
+      scopeKey: 'account:learner',
+      label: '学习分析',
+      returnPath: '/stats',
+      request: request('learning_analysis'),
+    }
+
+    await expect(coordinator.start(options)).resolves.toMatchObject({ status: 'succeeded' })
+    await expect(coordinator.start(options)).resolves.toMatchObject({ status: 'succeeded' })
+    expect(execute).toHaveBeenCalledTimes(2)
+  })
+
   it('reports an explicit stop as an unconfirmed server outcome instead of a false failure', async () => {
     const execute = vi.fn((taskRequest) => new Promise<ReadOnlyAiExecutionResult<'writing_feedback'>>((_, reject) => {
       taskRequest.signal?.addEventListener('abort', () => {

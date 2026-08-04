@@ -434,13 +434,14 @@ describe('managed AI gateway HTTP error mapping', () => {
     expect(error).toMatchObject({ code, retryable, status })
   })
 
-  it('uses only a bounded retry value and never returns the provider error body', () => {
+  it('keeps the bounded retry metadata without exposing raw countdown seconds or provider details', () => {
     const error = mapAiGatewayHttpStatus(429, {
       retryAfterSeconds: 12,
       message: 'secret upstream body',
     })
     expect(error.retryAfterSeconds).toBe(12)
-    expect(error.message).toContain('12 秒')
+    expect(error.message).toContain('重置时间')
+    expect(error.message).not.toContain('12 秒')
     expect(error.message).not.toContain('secret upstream body')
   })
 })
