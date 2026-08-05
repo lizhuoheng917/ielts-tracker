@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-05-tracker-writing-quick-feedback-reliability-v1",
+  "release": "2026-08-05-tracker-writing-reference-reliability-v2",
   "Frontend": {
     "status": "changed",
     "reason": "Tracker's IELTS writing dialog now groups the form into the current task and essay body, enlarges supporting text, and uses a visually integrated sticky action bar. Reference-mode unscored results render as a compact quick-improvement report with a summary and at most two actions instead of an empty four-score report. Failed generations preserve the draft and state plainly that the learner can retry. Existing scored V2 reports remain available in their detailed layout."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The paired Formal Edge gateway changes the current V3 book/Test writing route to an existing unscored WritingFeedbackV2 contract. Agnes receives a shorter prompt and compact reference template, has two bounded 10-second attempts within one 20-second reservation window, and may retry only malformed output, transient upstream unavailability, or transport failure. Authentication, balance, permission and provider-rate-limit failures remain final; no raw essay or provider response is logged or persisted. No database schema, RLS, quota, retention, or sync contract changes are required."
+    "reason": "The paired Formal Edge gateway changes the current V3 book/Test writing route to an existing unscored WritingFeedbackV2 contract. Agnes receives a shorter prompt and compact reference template within one shared 26-second budget below the learner's 30-second request window. A fast malformed or transient result may use the remaining time for one repair, while a slow first response receives the full budget. Authentication, balance, permission and provider-rate-limit failures remain final; no raw essay or provider response is logged or persisted. No database schema, RLS, quota, retention, or sync contract changes are required."
   },
   "Admin": {
     "status": "reviewed-not-needed",
