@@ -34,6 +34,7 @@ function scoredFeedback(): WritingFeedbackV2 {
     kind: 'writing_feedback',
     rubricVersion: WRITING_RUBRIC_VERSION,
     assessmentStatus: 'scored',
+    estimatedOverallBand: 6.5,
     taskCriterion: 'task_response',
     summary: '立场清晰，但论证仍需展开。',
     criteria: {
@@ -90,6 +91,7 @@ function insufficientFeedback(): WritingFeedbackV2 {
     kind: 'writing_feedback',
     rubricVersion: WRITING_RUBRIC_VERSION,
     assessmentStatus: 'insufficient_evidence',
+    estimatedOverallBand: null,
     taskCriterion: 'task_response',
     summary: '缺少题目，无法判断任务回应。',
     criteria: {
@@ -452,7 +454,27 @@ describe('WritingFeedbackV2', () => {
   it('accepts half-band scored feedback, binds evidence to the essay and derives overall band', () => {
     const parsed = parseWritingFeedbackV2(scoredFeedback(), submission())
     expect(parsed).toEqual(scoredFeedback())
+    expect(parsed.estimatedOverallBand).toBe(6.5)
     expect(calculateWritingOverallBand(parsed)).toBe(6.5)
+  })
+
+  it('accepts one nullable AI total estimate while materializing legacy reports without it to null', () => {
+    const legacy = scoredFeedback()
+    delete (legacy as Partial<WritingFeedbackV2>).estimatedOverallBand
+
+    const parsedLegacy = parseWritingFeedbackV2(legacy, submission())
+    expect(parsedLegacy.estimatedOverallBand).toBeNull()
+    expect(formatWritingFeedbackAsMarkdown(submission(), parsedLegacy, 6.5)).toContain('总分：6.5')
+    expect(formatWritingFeedbackAsMarkdown(submission(), parsedLegacy, 6.5)).not.toContain('AI 预估总分')
+
+    expect(parseWritingFeedbackV2({
+      ...scoredFeedback(),
+      estimatedOverallBand: 7,
+    }, submission()).estimatedOverallBand).toBe(7)
+    expect(() => parseWritingFeedbackV2({
+      ...scoredFeedback(),
+      estimatedOverallBand: 6.3,
+    }, submission())).toThrow(/estimatedOverallBand.*half-band/)
   })
 
   it('rejects non-half bands, task mismatches, unsupported fields and invented evidence', () => {
@@ -472,7 +494,7 @@ describe('WritingFeedbackV2', () => {
     expect(() => parseWritingFeedbackV2(inventedEvidence, submission())).toThrow(/exact excerpt/)
   })
 
-  it('never permits a precise score when task evidence is incomplete', () => {
+  it('never permits criterion-level scores when task evidence is incomplete', () => {
     const noPrompt = submission({ promptText: '' })
     expect(() => parseWritingFeedbackV2(scoredFeedback(), noPrompt)).toThrow(/cannot receive precise/)
     expect(parseWritingFeedbackV2(insufficientFeedback(), noPrompt).assessmentStatus).toBe('insufficient_evidence')
@@ -481,6 +503,10 @@ describe('WritingFeedbackV2', () => {
     const invalid = insufficientFeedback()
     invalid.criteria.lexicalResource.band = 6
     expect(() => parseWritingFeedbackV2(invalid, noPrompt)).toThrow(/cannot contain precise/)
+
+    const invalidEstimate = insufficientFeedback()
+    invalidEstimate.estimatedOverallBand = 6
+    expect(parseWritingFeedbackV2(invalidEstimate, noPrompt).estimatedOverallBand).toBe(6)
   })
 
   it('never permits insufficient-evidence feedback when task evidence is complete', () => {
@@ -517,8 +543,18 @@ describe('WritingFeedbackV2', () => {
     const markdown = formatWritingFeedbackAsMarkdown(submission(), scoredFeedback(), 6.5)
     expect(markdown).toContain('# IELTS 写作反馈')
     expect(markdown).toContain('Task Response')
-    expect(markdown).toContain('总分：6.5')
+    expect(markdown).toContain('AI 预估总分：6.5')
+    expect(markdown).toContain('四维参考总分：6.5')
     expect(() => formatWritingFeedbackAsMarkdown(submission(), scoredFeedback(), 7)).toThrow(/does not match/)
+  })
+
+  it('exports a text-only estimate without inventing a four-criterion total', () => {
+    const quickFeedback = insufficientFeedback()
+    quickFeedback.estimatedOverallBand = 6
+    const markdown = formatWritingFeedbackAsMarkdown(submission({ promptText: '' }), quickFeedback, null)
+
+    expect(markdown).toContain('AI 预估总分：6')
+    expect(markdown).not.toContain('四维参考总分')
   })
 
   it('enforces the 12000-character serialized feedback boundary exactly', () => {

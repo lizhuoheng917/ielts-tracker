@@ -13,6 +13,7 @@ import {
   resolveAiArtifactAccess,
   serializePortableAiArtifacts,
   upsertAiArtifact,
+  type WritingFeedbackArtifactV2,
 } from './artifactRepository'
 import type { DailySuggestionV2, LearningAnalysisV2 } from './structuredOutputs'
 import {
@@ -61,6 +62,7 @@ function writingFeedback(summary = '立场清晰，但论证需要展开。'): W
     kind: 'writing_feedback',
     rubricVersion: WRITING_RUBRIC_VERSION,
     assessmentStatus: 'scored',
+    estimatedOverallBand: 6.5,
     taskCriterion: 'task_response',
     summary,
     criteria: {
@@ -192,7 +194,9 @@ describe('AI artifact repository V2', () => {
       },
       owner: { scope: 'account', accountUserId: ACCOUNT_A },
     })
-    expect(artifact.markdownProjection).toContain('总分：6.5')
+    expect(artifact.title).toContain('AI 预估 6.5')
+    expect(artifact.content.feedback.estimatedOverallBand).toBe(6.5)
+    expect(artifact.markdownProjection).toContain('AI 预估总分：6.5')
     expect(aiArtifactToMarkdown(artifact)).toContain('类型：写作批改')
     expect(parseAiArtifactRecordV2(JSON.parse(JSON.stringify(artifact)))).toEqual(artifact)
   })
@@ -220,6 +224,31 @@ describe('AI artifact repository V2', () => {
       ...artifact,
       content: { ...artifact.content, overallBand: 9 },
     })).toThrow(/overall band/)
+  })
+
+  it('materializes a legacy writing report without an AI estimate to null without changing its projection', () => {
+    const legacyFeedback = writingFeedback()
+    legacyFeedback.estimatedOverallBand = null
+    const artifact = createWritingFeedbackArtifactV2({
+      submission: writingSubmission,
+      feedback: legacyFeedback,
+      recordId: 'writing-legacy-estimate',
+      dataAsOf: CREATED_AT,
+      createdAt: CREATED_AT,
+      savedAt: CREATED_AT,
+      source: 'custom',
+    }, { status: 'ready', mode: 'device' })
+    const legacyContent = { ...artifact.content.feedback } as Partial<WritingFeedbackV2>
+    delete legacyContent.estimatedOverallBand
+
+    const parsed = parseAiArtifactRecordV2({
+      ...artifact,
+      content: { ...artifact.content, feedback: legacyContent },
+    }) as WritingFeedbackArtifactV2
+
+    expect(parsed.content.feedback.estimatedOverallBand).toBeNull()
+    expect(parsed.markdownProjection).toBe(artifact.markdownProjection)
+    expect(parsed.title).toBe(artifact.title)
   })
 
   it('deduplicates an exact writing retry but rejects changed content or ownership', () => {

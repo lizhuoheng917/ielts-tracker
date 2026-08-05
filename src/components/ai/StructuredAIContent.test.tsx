@@ -63,6 +63,7 @@ const writingFeedback: WritingFeedbackV2 = {
   kind: 'writing_feedback',
   rubricVersion: 'ielts-writing-public-descriptors-v1',
   assessmentStatus: 'scored',
+  estimatedOverallBand: 7,
   taskCriterion: 'task_response',
   summary: '观点清晰，但论证还需要更具体的因果链。',
   criteria: {
@@ -152,7 +153,8 @@ describe('StructuredAIContent', () => {
     )
 
     expect(html).toContain('Academic · Task 2')
-    expect(html).toContain('总体分')
+    expect(html).toContain('AI 预估总分')
+    expect(html).toContain('>7</strong>')
     expect(html).toContain('6.5')
     expect(html).not.toContain('>9</span>')
     expect(html).toContain('任务回应')
@@ -170,6 +172,7 @@ describe('StructuredAIContent', () => {
     const insufficientFeedback: WritingFeedbackV2 = {
       ...writingFeedback,
       assessmentStatus: 'insufficient_evidence',
+      estimatedOverallBand: null,
       summary: '缺少完整题目信息，本次只提供语言反馈。',
       criteria: {
         task: { ...writingFeedback.criteria.task, band: null, evidence: [] },
@@ -196,6 +199,40 @@ describe('StructuredAIContent', () => {
     expect(html).not.toContain('评分维度反馈')
     expect(html).not.toContain('连贯与衔接')
     expect(html).not.toContain('评分局限')
+  })
+
+  it('shows a single text-only AI estimate for automatic-reference quick feedback', () => {
+    const referenceSubmission: WritingSubmissionV3 = {
+      schemaVersion: 3,
+      module: 'academic',
+      task: 'task2',
+      sourceReference: { collection: 'cambridge_ielts', bookNumber: 19, testNumber: 2 },
+      essayText: writingSubmission.essayText,
+      wordCount: writingSubmission.wordCount,
+    }
+    const quickFeedback: WritingFeedbackV2 = {
+      ...writingFeedback,
+      assessmentStatus: 'insufficient_evidence',
+      estimatedOverallBand: 6.5,
+      criteria: {
+        task: { ...writingFeedback.criteria.task, band: null, evidence: [] },
+        coherenceCohesion: { ...writingFeedback.criteria.coherenceCohesion, band: null, evidence: [] },
+        lexicalResource: { ...writingFeedback.criteria.lexicalResource, band: null, evidence: [] },
+        grammaticalRangeAccuracy: { ...writingFeedback.criteria.grammaticalRangeAccuracy, band: null, evidence: [] },
+      },
+      strengths: [],
+      limitations: ['书号和 Test 仅作题目线索，整体预估仅基于作文文本。'],
+    }
+
+    const html = renderToStaticMarkup(
+      <WritingFeedbackContent feedback={quickFeedback} submission={referenceSubmission} overallBand={null} />,
+    )
+
+    expect(html).toContain('AI 预估总分')
+    expect(html).toContain('>6.5</strong>')
+    expect(html).toContain('仅供参考')
+    expect(html).not.toContain('评分维度反馈')
+    expect(html).not.toContain('总体分')
   })
 
   it('shows the supplied Academic Task 1 material beside the original prompt', () => {
@@ -240,5 +277,20 @@ describe('StructuredAIContent', () => {
     expect(html).toContain('剑雅 19 · Test 2 · Academic · Task 1')
     expect(html).toContain('未提供原图')
     expect(html).not.toContain('作文题目')
+  })
+
+  it('keeps a legacy report without an AI estimate readable with its existing overall-band label', () => {
+    const legacyFeedback = { ...writingFeedback } as Partial<WritingFeedbackV2>
+    delete legacyFeedback.estimatedOverallBand
+    const html = renderToStaticMarkup(
+      <WritingFeedbackContent
+        feedback={legacyFeedback as WritingFeedbackV2}
+        submission={writingSubmission}
+        overallBand={6.5}
+      />,
+    )
+
+    expect(html).toContain('总体分')
+    expect(html).not.toContain('AI 预估总分')
   })
 })

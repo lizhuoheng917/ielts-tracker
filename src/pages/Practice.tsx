@@ -1033,7 +1033,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
             setWritingWorkspaceState({ generating: false, hasUnsavedResult: false })
           }}
         >
-          <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-auto sm:!max-h-[92dvh] sm:!max-w-4xl sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
+          <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-[min(94dvh,60rem)] sm:!max-h-[94dvh] sm:!w-[min(94vw,72rem)] sm:!max-w-none sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
             <DialogHeader className="shrink-0 border-b bg-background/95 px-4 pb-3.5 pt-4 backdrop-blur sm:px-6 sm:pt-5">
               <DialogTitle className="flex items-center gap-2 pr-10 text-lg">
                 <Sparkles className="h-5 w-5 text-amber-500" />
@@ -1041,7 +1041,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               </DialogTitle>
               <DialogDescription className="pr-8 text-sm leading-6">输入剑雅题号与作文，AI 会给出可执行的反馈。</DialogDescription>
             </DialogHeader>
-            <div className="min-h-0 overflow-y-auto px-4 pb-0 pt-4 sm:px-6">
+            <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-0 pt-4 sm:px-6 sm:pt-5">
               <WritingCorrection
                 onWorkspaceStateChange={setWritingWorkspaceState}
                 quotaActive={aiOpen}

@@ -58,6 +58,7 @@ function writingFeedback(summary = '立场明确，但论证需要展开。'): W
     kind: 'writing_feedback',
     rubricVersion: WRITING_RUBRIC_VERSION,
     assessmentStatus: 'scored',
+    estimatedOverallBand: 6.5,
     taskCriterion: 'task_response',
     summary,
     criteria: {
@@ -157,7 +158,11 @@ describe('AI artifact Zustand repository', () => {
     )
     expect(first).toMatchObject({
       kind: 'writing_feedback',
-      content: { overallBand: 6.5, submission: { essayText: writingSubmission.essayText } },
+      content: {
+        overallBand: 6.5,
+        feedback: { estimatedOverallBand: 6.5 },
+        submission: { essayText: writingSubmission.essayText },
+      },
     })
     expect(storage.getItem('ielts-tracker:aiArtifactsV2')).toContain(writingSubmission.essayText)
 

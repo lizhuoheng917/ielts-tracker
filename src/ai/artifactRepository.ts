@@ -305,7 +305,11 @@ export function createWritingFeedbackArtifactV2(
   const overallBand = calculateWritingOverallBand(feedback)
   const taskLabel = submission.task === 'task1' ? 'Task 1' : 'Task 2'
   const moduleLabel = submission.module === 'academic' ? 'Academic' : 'General Training'
-  const scoreLabel = overallBand === null ? '语言反馈' : `Band ${overallBand}`
+  const scoreLabel = feedback.estimatedOverallBand !== null
+    ? `AI 预估 ${feedback.estimatedOverallBand}`
+    : overallBand === null
+      ? '语言反馈'
+      : `Band ${overallBand}`
   const content: WritingFeedbackArtifactContentV2 = { submission, feedback, overallBand }
   return parseAiArtifactRecordV2({
     ...buildBase(

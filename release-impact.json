@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-05-tracker-writing-reference-reliability-v3",
+  "release": "2026-08-05-tracker-writing-overall-estimate-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker's IELTS writing dialog groups the form into the current task and essay body, enlarges supporting text, and uses a visually integrated sticky action bar. Reference-mode unscored results render as a compact quick-improvement report with a summary and at most two actions instead of an empty four-score report. Failed generations preserve the draft and state plainly that the learner can retry. The dialog now truthfully tells learners that writing feedback can take close to a minute, while keeping a purpose-specific 55-second client transport window and a visible stop action. Existing scored V2 reports remain available in their detailed layout."
+    "reason": "Tracker's writing dialog is larger on desktop (up to 72rem wide and 94dvh high) while retaining its mobile full-screen layout and stable action bar. New writing feedback can show one clearly labeled AI overall estimate, keeps the existing analysis, and saves the estimate through report titles and Markdown export. Legacy V2 reports without it remain unchanged and readable."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The paired Formal Edge gateway changes the current V3 book/Test writing route to an existing unscored WritingFeedbackV2 contract. Agnes receives a shorter prompt and compact reference template within one shared 45-second budget below the learner's 55-second request window. A fast malformed or transient result may use the remaining time for one repair, while a slow first response receives the full budget. Authentication, balance, permission and provider-rate-limit failures remain final; no raw essay or provider response is logged or persisted. No database schema, RLS, quota, retention, or sync contract changes are required."
+    "reason": "The paired Formal Edge gateway adds the nullable estimatedOverallBand contract field. The current book/Test reference path requires one 0-to-9 half-band estimate based only on the essay text, keeps all four criterion bands null, and retains the compact 45-second generation budget. No database schema, RLS, quota, retention, sync, or raw-writing persistence contract changes are required."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "The existing Lexi Control AI policy and aggregate outcome receipts already expose the relevant availability and failure state. Quick feedback adds no administrator setting, report field, user-content exposure, quota rule, or override field, so the control site was reviewed and needs no code change."
+    "reason": "Lexi Control's existing AI policy and aggregate outcome receipts continue to cover the relevant availability state. This release adds no administrator setting, report field, quota rule, override, or learner-writing exposure."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. The paired Formal Edge function and this Tracker client must be released from their verified matching commits, then a synthetic authenticated V3 writing submission must confirm a successful receipt and compact report before calling the change production-ready. No database migration is required."
+    "reason": "Not deployed. The paired Formal Edge gateway and Tracker client must be released from their verified matching commits, then an authenticated V3 writing submission must render the AI estimate and produce a succeeded receipt. No database migration is required."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker verify:release passed: release impact, typecheck, lint, 67 test files / 435 tests and production bundle checks. Formal verify:release, focused AI gateway scenarios, cross-repository writing-contract parity and the staging harness also passed. A synthetic authenticated gateway call and paired production smoke test remain required after deployment."
+    "reason": "Tracker release verification passed: impact validation, typecheck, lint, 67 test files / 440 tests, and the production bundle. Formal release verification, focused gateway scenarios, staging harness, and cross-repository writing-contract parity also passed. An authenticated V3 production smoke test remains required after the paired deployment."
   }
 }

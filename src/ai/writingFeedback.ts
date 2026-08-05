@@ -76,6 +76,11 @@ export interface WritingFeedbackV2 {
   kind: 'writing_feedback'
   rubricVersion: typeof WRITING_RUBRIC_VERSION
   assessmentStatus: 'scored' | 'insufficient_evidence'
+  /**
+   * A single learning-oriented total estimate from the AI. Historical reports
+   * did not include it, so parsing materializes those records as null.
+   */
+  estimatedOverallBand: WritingBand | null
   taskCriterion: 'task_achievement' | 'task_response'
   summary: string
   criteria: {
@@ -133,9 +138,10 @@ function exactKeys(
   value: UnknownRecord,
   required: readonly string[],
   label: string,
+  optional: readonly string[] = [],
 ): void {
-  const requiredKeys = new Set(required)
-  if (Object.keys(value).some((key) => !requiredKeys.has(key))) {
+  const allowedKeys = new Set([...required, ...optional])
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
     fail(`${label} contains unsupported fields`)
   }
   if (required.some((key) => !(key in value))) {
@@ -618,7 +624,7 @@ export function parseWritingFeedbackV2(
     'paragraphFeedback',
     'corrections',
     'limitations',
-  ], 'writing feedback')
+  ], 'writing feedback', ['estimatedOverallBand'])
   if (feedback.schemaVersion !== WRITING_FEEDBACK_SCHEMA_VERSION) {
     fail('writing feedback.schemaVersion must be 2')
   }
@@ -630,6 +636,9 @@ export function parseWritingFeedbackV2(
     fail('writing feedback.assessmentStatus is invalid')
   }
   const assessmentStatus = feedback.assessmentStatus
+  const estimatedOverallBand = Object.hasOwn(feedback, 'estimatedOverallBand')
+    ? parseBand(feedback.estimatedOverallBand, 'writing feedback.estimatedOverallBand', true)
+    : null
   if (feedback.taskCriterion !== 'task_achievement' && feedback.taskCriterion !== 'task_response') {
     fail('writing feedback.taskCriterion is invalid')
   }
@@ -738,6 +747,7 @@ export function parseWritingFeedbackV2(
     kind: 'writing_feedback',
     rubricVersion: WRITING_RUBRIC_VERSION,
     assessmentStatus,
+    estimatedOverallBand,
     taskCriterion: feedback.taskCriterion,
     summary: boundedString(feedback.summary, 'writing feedback.summary', 800),
     criteria,
@@ -756,6 +766,9 @@ export function parseWritingFeedbackV2(
   }
 
   if (assessmentStatus === 'insufficient_evidence') {
+    // A text-only overall estimate is intentionally independent from the
+    // four rubric bands. The automatic-reference flow uses it while keeping
+    // every criterion band null because the original task cannot be verified.
     const bands = Object.values(criteria).map((criterion) => criterion.band)
     if (bands.some((band) => band !== null)) {
       fail('insufficient-evidence feedback cannot contain precise band scores')
@@ -857,7 +870,12 @@ export function formatWritingFeedbackAsMarkdown(
         ]
       : []),
     `- 英文词数：${submission.wordCount}`,
-    `- 总分：${overallBand === null ? '证据不足，未评分' : overallBand}`,
+    ...(feedback.estimatedOverallBand === null
+      ? [`- 总分：${overallBand === null ? '证据不足，未评分' : overallBand}`]
+      : [
+          `- AI 预估总分：${feedback.estimatedOverallBand}`,
+          ...(overallBand === null ? [] : [`- 四维参考总分：${overallBand}`]),
+        ]),
     `- 评分标准：${feedback.rubricVersion}`,
     '',
     '## 总结',

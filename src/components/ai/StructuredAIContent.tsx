@@ -283,26 +283,48 @@ export function WritingFeedbackContent({
   const overallBand = suppliedOverallBand === calculatedOverallBand
     ? suppliedOverallBand
     : calculatedOverallBand
+  // Artifact parsing materializes legacy records to null. Keep this fallback
+  // here too so an older in-memory report never renders a misleading label.
+  const estimatedOverallBand = value.estimatedOverallBand ?? null
+  const displayedOverallBand = estimatedOverallBand ?? overallBand
+  const displayedOverallLabel = estimatedOverallBand !== null
+    ? 'AI 预估总分'
+    : '总体分'
   const taskLabel = submission.task === 'task1' ? 'Task 1' : 'Task 2'
   const moduleLabel = submission.module === 'academic' ? 'Academic' : 'General Training'
   const taskCriterionLabel = WRITING_CRITERION_LABELS.task[value.taskCriterion]
   const automaticReference = submission.schemaVersion === 3
 
-  // The reference-only writing flow deliberately avoids a speculative band,
-  // paragraph-by-paragraph claims, and a long evidence report. It should feel
-  // like a useful fallback, not a failed version of the full scoring view.
+  // The reference-only writing flow deliberately avoids criterion-level
+  // scoring, paragraph-by-paragraph claims, and a long evidence report. Its
+  // single text-only estimate is explicitly labeled, so it remains a useful
+  // fallback rather than looking like a full verified scoring report.
   if (!isScored) {
     return (
       <article className="space-y-4" aria-label="AI 写作快速改进建议">
         <section className="rounded-xl border border-primary/15 bg-primary/[0.045] p-4 sm:p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Sparkles className="size-5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">快速改进建议</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">本次不提供分数或逐段判断，先聚焦最值得立刻修改的地方。</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold tracking-tight text-foreground">快速改进建议</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">本次不提供分维度评分或逐段判断，先聚焦最值得立刻修改的地方。</p>
+              </div>
             </div>
+            {estimatedOverallBand !== null && (
+              <div className="shrink-0 rounded-xl bg-background/85 px-3 py-2 text-right shadow-sm">
+                <span className="block text-xs font-medium text-muted-foreground">AI 预估总分</span>
+                <strong
+                  className="block text-2xl font-semibold tabular-nums text-primary"
+                  aria-label={`AI 预估总分 ${formatWritingBand(estimatedOverallBand)} 分`}
+                >
+                  {formatWritingBand(estimatedOverallBand)}
+                </strong>
+                <span className="block text-[11px] text-muted-foreground">仅供参考</span>
+              </div>
+            )}
           </div>
           <p className="mt-4 text-base leading-7 text-foreground">{value.summary}</p>
         </section>
@@ -354,10 +376,15 @@ export function WritingFeedbackContent({
             </div>
             <p className="mt-3 text-base leading-7 text-foreground">{value.summary}</p>
           </div>
-          {isScored && overallBand !== null ? (
+          {isScored && displayedOverallBand !== null ? (
             <div className="flex min-w-24 items-center gap-2 rounded-xl bg-background/80 px-3 py-2.5 shadow-sm sm:flex-col sm:items-end sm:gap-0.5">
-              <span className="text-sm font-medium text-muted-foreground">总体分</span>
-              <strong className="text-3xl font-semibold tabular-nums text-primary">{formatWritingBand(overallBand)}</strong>
+              <span className="text-sm font-medium text-muted-foreground">{displayedOverallLabel}</span>
+              <strong
+                className="text-3xl font-semibold tabular-nums text-primary"
+                aria-label={`${displayedOverallLabel} ${formatWritingBand(displayedOverallBand)} 分`}
+              >
+                {formatWritingBand(displayedOverallBand)}
+              </strong>
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-200">
