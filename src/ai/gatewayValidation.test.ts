@@ -558,6 +558,27 @@ describe('managed AI account and local data boundary', () => {
     expect(JSON.stringify(invokeOptions.body)).not.toContain(verifiedAccessToken)
   })
 
+  it('keeps the ordinary 30-second transport window but gives writing feedback up to 55 seconds', async () => {
+    const gatewayTransport = transport()
+    const gateway = new ManagedAiGateway({
+      transport: gatewayTransport,
+      inspectDataBinding: () => ({ status: 'bound', confirmedAt: NOW.toISOString() }),
+      now: () => NOW,
+    })
+
+    await expect(gateway.execute(createRequest())).resolves.toMatchObject({ ok: true })
+    const ordinaryOptions = vi.mocked(gatewayTransport.invoke).mock.calls[0][1]
+    expect(ordinaryOptions.timeout).toBe(30_000)
+
+    const writingRequest = createWritingRequest()
+    const writingResponse = createSuccessResponse(writingRequest)
+    writingResponse.artifact.content = writingFeedbackContent() as never
+    vi.mocked(gatewayTransport.invoke).mockResolvedValueOnce({ data: writingResponse, error: null })
+    await expect(gateway.execute(writingRequest)).resolves.toMatchObject({ ok: true })
+    const writingOptions = vi.mocked(gatewayTransport.invoke).mock.calls[1][1]
+    expect(writingOptions.timeout).toBe(55_000)
+  })
+
   it('does not inspect or invoke when Auth cannot verify a current user', async () => {
     const gatewayTransport = transport(null)
     const inspectDataBinding = vi.fn(() => ({ status: 'bound' as const, confirmedAt: NOW.toISOString() }))

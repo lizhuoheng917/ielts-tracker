@@ -15,6 +15,16 @@ import {
 import { createAiGatewayWireRequest, parseAiGatewayResponse } from './gatewayValidation'
 
 const DEFAULT_GATEWAY_TIMEOUT_MS = 30_000
+// Writing feedback calls Agnes and can legitimately take longer than the
+// short, snapshot-based assistant features. Keep this purpose-specific so a
+// slow essay request does not make every AI interaction wait for a minute.
+const DEFAULT_WRITING_GATEWAY_TIMEOUT_MS = 55_000
+
+function timeoutForPurpose(purpose: AiGatewayRequest['purpose'], baseTimeoutMs: number): number {
+  return purpose === 'writing_feedback'
+    ? Math.max(baseTimeoutMs, DEFAULT_WRITING_GATEWAY_TIMEOUT_MS)
+    : baseTimeoutMs
+}
 
 interface InvokeOptions {
   body: AiGatewayWireRequestV1
@@ -255,7 +265,7 @@ export class ManagedAiGateway implements AiGateway {
       result = await this.transport.invoke(AI_GATEWAY_FUNCTION_NAME, {
         body: wire,
         signal: request.signal,
-        timeout: this.timeoutMs,
+        timeout: timeoutForPurpose(request.purpose, this.timeoutMs),
       }, identity.accessToken)
     } catch (error) {
       if (error instanceof AiGatewayError) throw error

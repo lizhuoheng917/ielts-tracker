@@ -668,7 +668,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
               <p className="text-sm leading-5 text-muted-foreground">
                 {writingTask?.status === 'stopping'
                   ? '已停止等待，最终结果状态会在同步后显示。'
-                  : '作文草稿已保留。完成后会在这里显示结果。'}
+                  : '这次请求可能需要接近一分钟；作文草稿已保留。完成后会在这里显示结果。'}
               </p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={writingTask?.status === 'stopping'}>
