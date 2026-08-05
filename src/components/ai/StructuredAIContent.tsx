@@ -242,29 +242,28 @@ function WritingCriterionRow({
   showBand: boolean
 }) {
   return (
-    <div className="space-y-2 px-3 py-3">
+    <div className="px-3.5 py-3.5">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-semibold text-foreground">{label}</p>
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-foreground">{label}</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">{criterion.summary}</p>
+        </div>
         {showBand && criterion.band !== null && (
-          <span className="shrink-0 text-sm font-semibold tabular-nums text-primary" aria-label={`${label} ${formatWritingBand(criterion.band)} 分`}>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/[0.08] text-lg font-semibold tabular-nums text-primary" aria-label={`${label} ${formatWritingBand(criterion.band)} 分`}>
             {formatWritingBand(criterion.band)}
           </span>
         )}
       </div>
-      <p className="text-xs leading-5 text-muted-foreground">{criterion.summary}</p>
-      {criterion.evidence.length > 0 && (
-        <ul className="space-y-1 text-xs leading-5 text-muted-foreground">
-          {criterion.evidence.map((item, index) => (
-            <li key={`${item}-${index}`} className="flex gap-1.5">
-              <span className="text-primary" aria-hidden="true">·</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="border-l-2 border-primary/25 pl-2.5 text-xs leading-5 text-foreground/85">
-        <span className="font-medium text-primary">改进：</span>{criterion.improvement}
-      </p>
+      <div className="mt-3 grid gap-2 text-sm leading-6 sm:grid-cols-2">
+        {criterion.evidence.length > 0 && (
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">依据：</span>{criterion.evidence.join(' · ')}
+          </p>
+        )}
+        <p className="text-foreground/85">
+          <span className="font-medium text-primary">下一步：</span>{criterion.improvement}
+        </p>
+      </div>
     </div>
   )
 }
@@ -289,6 +288,51 @@ export function WritingFeedbackContent({
   const taskCriterionLabel = WRITING_CRITERION_LABELS.task[value.taskCriterion]
   const automaticReference = submission.schemaVersion === 3
 
+  // The reference-only writing flow deliberately avoids a speculative band,
+  // paragraph-by-paragraph claims, and a long evidence report. It should feel
+  // like a useful fallback, not a failed version of the full scoring view.
+  if (!isScored) {
+    return (
+      <article className="space-y-4" aria-label="AI 写作快速改进建议">
+        <section className="rounded-xl border border-primary/15 bg-primary/[0.045] p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Sparkles className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">快速改进建议</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">本次不提供分数或逐段判断，先聚焦最值得立刻修改的地方。</p>
+            </div>
+          </div>
+          <p className="mt-4 text-base leading-7 text-foreground">{value.summary}</p>
+        </section>
+
+        {value.priorities.length > 0 && (
+          <section className="rounded-xl border border-border/70 bg-card p-4" aria-label="优先行动">
+            <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+              <ListChecks className="size-5 text-primary" aria-hidden="true" />
+              现在这样修改
+            </h3>
+            <ol className="space-y-3">
+              {value.priorities.slice(0, 2).map((priority, index) => (
+                <li key={`${priority.title}-${index}`} className="flex gap-3">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-base font-medium text-foreground">{priority.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{priority.reason}</p>
+                    <p className="mt-2 text-sm leading-6 text-foreground/85"><span className="font-medium text-primary">例如：</span>{priority.example}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+      </article>
+    )
+  }
+
   const criteria = [
     { key: 'task', label: taskCriterionLabel, value: value.criteria.task },
     { key: 'coherence', label: WRITING_CRITERION_LABELS.coherenceCohesion, value: value.criteria.coherenceCohesion },
@@ -298,74 +342,66 @@ export function WritingFeedbackContent({
 
   return (
     <article className="space-y-5" aria-label="AI 写作反馈报告">
-      <header className="border-b border-border/70 pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <Badge variant="secondary" className="font-medium">{moduleLabel} · {taskLabel}</Badge>
-            {automaticReference && (
-              <Badge variant="outline" className="border-primary/25 bg-primary/5 font-medium text-primary">
-                题目自动识别 · 参考评估
-              </Badge>
-            )}
-            <span>英文 {submission.wordCount} 词</span>
+      <header className="rounded-xl border border-primary/15 bg-primary/[0.035] p-4 sm:p-5">
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{moduleLabel} · {taskLabel}</span>
+              <span>英文 {submission.wordCount} 词</span>
+              {automaticReference && (
+                <span className="font-medium text-primary">题目自动识别 · 参考评估</span>
+              )}
+            </div>
+            <p className="mt-3 text-base leading-7 text-foreground">{value.summary}</p>
           </div>
           {isScored && overallBand !== null ? (
-            <p className="flex items-baseline gap-1.5 text-sm text-muted-foreground">
-              总体分
-              <span className="text-2xl font-semibold tabular-nums text-primary">{formatWritingBand(overallBand)}</span>
-            </p>
+            <div className="flex min-w-24 items-center gap-2 rounded-xl bg-background/80 px-3 py-2.5 shadow-sm sm:flex-col sm:items-end sm:gap-0.5">
+              <span className="text-sm font-medium text-muted-foreground">总体分</span>
+              <strong className="text-3xl font-semibold tabular-nums text-primary">{formatWritingBand(overallBand)}</strong>
+            </div>
           ) : (
-            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300">
-              <AlertTriangle className="size-3" aria-hidden="true" />
+            <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="size-4" aria-hidden="true" />
               证据不足
-            </Badge>
+            </div>
           )}
         </div>
-        <p className="mt-3 text-sm leading-6 text-foreground">{value.summary}</p>
-        <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
-          基于公开评分标准的学习估分，不是 IELTS 官方成绩。
-        </p>
-        <div className="mt-3 border-l-2 border-border pl-3">
-          {automaticReference ? (
-            <>
-              <p className="text-[11px] font-medium text-muted-foreground">题目引用</p>
-              <p className="mt-1 text-xs leading-5 text-foreground/85">
-                {formatWritingSourceReference(submission)}
-              </p>
-              <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
-                AI 会按此引用尝试识别题目，结果可能与原题不完全一致。
-              </p>
-              {submission.module === 'academic' && submission.task === 'task1' && (
-                <p className="mt-1.5 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
-                  未提供原图，Task Achievement 仅作参考；本报告以语言、结构和表达反馈为主。
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="text-[11px] font-medium text-muted-foreground">作文题目</p>
-              <p className="mt-1 text-xs leading-5 text-foreground/85">
-                {submission.promptText || '未提供题目'}
-              </p>
-              {submission.sourceMaterial.kind === 'text_description' && (
-                <>
-                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">图表材料描述</p>
-                  <p className="mt-1 text-xs leading-5 text-foreground/85">
-                    {submission.sourceMaterial.description}
-                  </p>
-                </>
-              )}
-            </>
-          )}
-        </div>
+
+        <details className="mt-4 border-t border-primary/15 pt-3">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">查看评分说明与题目参考</summary>
+          <div className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
+            <p>基于公开评分标准的学习估分，不是 IELTS 官方成绩。</p>
+            {automaticReference ? (
+              <div>
+                <p className="font-medium text-foreground">题目引用</p>
+                <p className="mt-1 text-foreground/85">{formatWritingSourceReference(submission)}</p>
+                <p className="mt-1">AI 会按此引用尝试识别题目，结果可能与原题不完全一致。</p>
+                {submission.module === 'academic' && submission.task === 'task1' && (
+                  <p className="mt-2 text-amber-800 dark:text-amber-200">未提供原图，Task Achievement 仅作参考；本报告以语言、结构和表达反馈为主。</p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="font-medium text-foreground">作文题目</p>
+                <p className="mt-1 text-foreground/85">{submission.promptText || '未提供题目'}</p>
+                {submission.sourceMaterial.kind === 'text_description' && (
+                  <>
+                    <p className="mt-3 font-medium text-foreground">图表材料描述</p>
+                    <p className="mt-1 text-foreground/85">{submission.sourceMaterial.description}</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </details>
       </header>
 
       <section aria-label={isScored ? '四项评分' : '评分维度反馈'}>
-        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-          <BarChart3 className="size-4 text-primary" aria-hidden="true" />
+        <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+          <BarChart3 className="size-5 text-primary" aria-hidden="true" />
           {isScored ? '四项评分' : '评分维度反馈'}
         </h3>
-        <div className="divide-y divide-border/70 rounded-lg border border-border/70">
+        <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card">
           {criteria.map((criterion) => (
             <WritingCriterionRow
               key={criterion.key}
@@ -378,16 +414,16 @@ export function WritingFeedbackContent({
       </section>
 
       {value.strengths.length > 0 && (
-        <section className="border-t border-border/70 pt-4" aria-label="写作优势">
-          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
+        <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.035] p-4" aria-label="写作优势">
+          <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+            <CheckCircle2 className="size-5 text-emerald-600" aria-hidden="true" />
             写作优势
           </h3>
-          <ul className="divide-y divide-border/60">
+          <ul className="space-y-3">
             {value.strengths.map((strength, index) => (
-              <li key={`${strength.title}-${index}`} className="py-2 first:pt-0 last:pb-0">
-                <p className="text-sm font-medium text-foreground">{strength.title}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{strength.evidence}</p>
+              <li key={`${strength.title}-${index}`}>
+                <p className="text-base font-medium text-foreground">{strength.title}</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">{strength.evidence}</p>
               </li>
             ))}
           </ul>
@@ -395,21 +431,21 @@ export function WritingFeedbackContent({
       )}
 
       {value.priorities.length > 0 && (
-        <section className="border-t border-border/70 pt-4" aria-label="优先行动">
-          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <ListChecks className="size-4 text-primary" aria-hidden="true" />
+        <section className="rounded-xl border border-primary/15 bg-primary/[0.045] p-4" aria-label="优先行动">
+          <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+            <ListChecks className="size-5 text-primary" aria-hidden="true" />
             优先行动
           </h3>
           <ol className="space-y-3">
             {value.priorities.map((priority, index) => (
-              <li key={`${priority.title}-${index}`} className="flex gap-2.5">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              <li key={`${priority.title}-${index}`} className="flex gap-3">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                   {index + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{priority.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{priority.reason}</p>
-                  <p className="mt-1 text-xs leading-5 text-foreground/85">
+                  <p className="text-base font-medium text-foreground">{priority.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{priority.reason}</p>
+                  <p className="mt-2 text-sm leading-6 text-foreground/85">
                     <span className="font-medium text-primary">例如：</span>{priority.example}
                   </p>
                 </div>
@@ -419,54 +455,58 @@ export function WritingFeedbackContent({
         </section>
       )}
 
-      {value.paragraphFeedback.length > 0 && (
-        <section className="border-t border-border/70 pt-4" aria-label="段落点评">
-          <h3 className="mb-2 text-sm font-semibold text-foreground">段落点评</h3>
-          <ol className="divide-y divide-border/60">
-            {value.paragraphFeedback.map((paragraph) => (
-              <li key={paragraph.paragraphIndex} className="grid gap-1 py-2.5 first:pt-0 sm:grid-cols-[5.5rem_1fr] sm:gap-3">
-                <p className="text-xs font-medium text-primary">第 {paragraph.paragraphIndex} 段</p>
-                <div>
-                  <p className="text-sm leading-6 text-foreground">{paragraph.summary}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">依据：{paragraph.evidence}</p>
+      {(value.paragraphFeedback.length > 0 || value.corrections.length > 0 || value.limitations.length > 0) && (
+        <details className="overflow-hidden rounded-xl border border-border/70">
+          <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3.5 text-base font-semibold text-foreground">
+            <span>查看逐段点评与修订</span>
+            <span className="text-sm font-normal text-muted-foreground">展开</span>
+          </summary>
+          <div className="space-y-5 border-t border-border/70 px-4 py-4">
+            {value.paragraphFeedback.length > 0 && (
+              <section aria-label="段落点评">
+                <h3 className="mb-3 text-base font-semibold text-foreground">段落点评</h3>
+                <ol className="space-y-3">
+                  {value.paragraphFeedback.map((paragraph) => (
+                    <li key={paragraph.paragraphIndex} className="rounded-lg bg-muted/40 px-3 py-3">
+                      <p className="text-sm font-semibold text-primary">第 {paragraph.paragraphIndex} 段</p>
+                      <p className="mt-1 text-sm leading-6 text-foreground">{paragraph.summary}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground"><span className="font-medium text-foreground">依据：</span>{paragraph.evidence}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            {value.corrections.length > 0 && (
+              <section aria-label="修订示例">
+                <h3 className="mb-3 text-base font-semibold text-foreground">修订示例</h3>
+                <div className="space-y-3">
+                  {value.corrections.map((correction, index) => (
+                    <div key={`${correction.original}-${index}`} className="rounded-lg border border-border/70 px-3 py-3">
+                      <p className="text-sm leading-6 text-muted-foreground"><span className="font-medium text-foreground">原句：</span>{correction.original}</p>
+                      <p className="mt-2 text-sm leading-6 text-foreground"><span className="font-medium text-primary">建议改写：</span>{correction.revision}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{correction.reason}</p>
+                    </div>
+                  ))}
                 </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
+              </section>
+            )}
 
-      {value.corrections.length > 0 && (
-        <section className="border-t border-border/70 pt-4" aria-label="修订示例">
-          <h3 className="mb-2 text-sm font-semibold text-foreground">修订示例</h3>
-          <div className="divide-y divide-border/60">
-            {value.corrections.map((correction, index) => (
-              <div key={`${correction.original}-${index}`} className="space-y-1.5 py-3 first:pt-0 last:pb-0">
-                <p className="text-xs leading-5 text-muted-foreground">
-                  <span className="font-medium">原句：</span>{correction.original}
-                </p>
-                <p className="text-sm leading-6 text-foreground">
-                  <span className="font-medium text-primary">建议改写：</span>{correction.revision}
-                </p>
-                <p className="text-xs leading-5 text-muted-foreground">{correction.reason}</p>
-              </div>
-            ))}
+            {value.limitations.length > 0 && (
+              <section aria-label="评分局限" className="rounded-lg bg-amber-500/5 px-3 py-3">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" />
+                  <div>
+                    <p className="text-base font-medium text-foreground">评分局限</p>
+                    <ul className="mt-1.5 space-y-1 text-sm leading-6 text-muted-foreground">
+                      {value.limitations.map((item, index) => <li key={`${item}-${index}`}>· {item}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            )}
           </div>
-        </section>
-      )}
-
-      {value.limitations.length > 0 && (
-        <section className="border-t border-border/70 pt-4" aria-label="评分局限">
-          <div className="flex items-start gap-2 rounded-lg bg-amber-500/5 px-3 py-2.5">
-            <Info className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden="true" />
-            <div>
-              <p className="text-xs font-medium text-foreground">评分局限</p>
-              <ul className="mt-1 space-y-1 text-xs leading-5 text-muted-foreground">
-                {value.limitations.map((item, index) => <li key={`${item}-${index}`}>· {item}</li>)}
-              </ul>
-            </div>
-          </div>
-        </section>
+        </details>
       )}
     </article>
   )

@@ -257,7 +257,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       const taskContext = writingTask.context as WritingTaskContext | undefined
       const result = writingTask.result
       if (!taskContext || !result) {
-        setError({ message: 'AI 返回的写作反馈不完整，请重新生成。', code: 'INVALID_RESPONSE' })
+        setError({ message: '未生成写作反馈，作文草稿已保留，你可以重新生成。', code: 'INVALID_RESPONSE' })
         setStatus('error')
         return
       }
@@ -283,14 +283,14 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         setError(null)
         setStatus('preview')
       } catch {
-        setError({ message: 'AI 返回的写作反馈不完整，请重新生成。', code: 'INVALID_RESPONSE' })
+        setError({ message: '未生成写作反馈，作文草稿已保留，你可以重新生成。', code: 'INVALID_RESPONSE' })
         setStatus('error')
       }
       return
     }
-    const suffix = writingTask.status === 'outcome_unknown' ? '作文草稿已保留。' : ''
+    const suffix = writingTask.status === 'outcome_unknown' ? '请求状态尚未确认。' : ''
     setError({
-      message: [writingTask.failure?.message ?? '暂时无法生成写作反馈。', suffix].filter(Boolean).join(' '),
+      message: ['未生成写作反馈，作文草稿已保留，你可以重新生成。', suffix].filter(Boolean).join(' '),
       code: writingTask.failure?.code ?? 'UNKNOWN',
     })
     setStatus('error')
@@ -377,7 +377,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         try {
           parseWritingFeedbackV2(result.content, submission)
         } catch {
-          throw new AiGatewayError('INVALID_RESPONSE', 'AI 返回的写作反馈不完整，请重新生成。', true)
+          throw new AiGatewayError('INVALID_RESPONSE', '未生成写作反馈，作文草稿已保留，你可以重新生成。', true)
         }
       },
     })
@@ -458,123 +458,135 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
   if (preview && (status === 'preview' || status === 'saving' || status === 'saved')) {
     return (
-      <div className="space-y-4" aria-live="polite">
-        <AiQuotaNotice purpose="writing_feedback" active={quotaActive} />
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
-          <Button type="button" variant="ghost" size="sm" onClick={returnToEditor} disabled={status === 'saving'}>
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            返回修改
-          </Button>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline">Lexi AI</Badge>
-            <Badge variant="secondary">英文 {preview.submission.wordCount} 词</Badge>
-            {status === 'saved' && <Badge className="gap-1"><CheckCircle2 className="size-3" />已保存</Badge>}
+      <div className="flex min-h-full flex-col" aria-live="polite">
+        <div className="space-y-5 pb-4">
+          <AiQuotaNotice purpose="writing_feedback" active={quotaActive} className="text-sm" />
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5">
+            <Button type="button" variant="ghost" size="sm" onClick={returnToEditor} disabled={status === 'saving'}>
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              修改作文
+            </Button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="secondary" className="text-sm">英文 {preview.submission.wordCount} 词</Badge>
+              {status === 'saved' && <Badge className="gap-1"><CheckCircle2 className="size-3" />已保存</Badge>}
+            </div>
           </div>
+
+          <WritingFeedbackContent
+            submission={preview.submission}
+            feedback={preview.feedback}
+            overallBand={preview.overallBand}
+          />
+
+          {preview.warnings.length > 0 && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-sm leading-6 text-muted-foreground">
+              {preview.warnings.map((warning) => <p key={warning}>· {warning}</p>)}
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5" role="alert">
+              <p className="text-sm text-destructive">{error.message}</p>
+              <details className="mt-2 text-sm text-muted-foreground">
+                <summary className="cursor-pointer">技术详情</summary>
+                <p className="mt-1">错误代码：{error.code ?? 'UNKNOWN'}</p>
+              </details>
+            </div>
+          )}
         </div>
 
-        <WritingFeedbackContent
-          submission={preview.submission}
-          feedback={preview.feedback}
-          overallBand={preview.overallBand}
-        />
-
-        {preview.warnings.length > 0 && (
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-            {preview.warnings.map((warning) => <p key={warning}>· {warning}</p>)}
+        <div className="sticky bottom-0 z-10 -mx-4 mt-auto border-t border-border/80 bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={handleExport} className="w-full sm:w-auto">
+              <Download className="size-4" aria-hidden="true" />
+              导出 Markdown
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={status === 'saving' || status === 'saved'} className="w-full sm:w-auto">
+              {status === 'saving' ? <AILoadingState text="保存中" /> : <Save className="size-4" aria-hidden="true" />}
+              {status === 'saving' ? '保存中…' : status === 'saved' ? '已保存到 AI 内容库' : '保存报告'}
+            </Button>
           </div>
-        )}
-
-        {error && (
-          <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2" role="alert">
-            <p className="text-sm text-destructive">{error.message}</p>
-            <details className="mt-1 text-[11px] text-muted-foreground">
-              <summary className="cursor-pointer">技术详情</summary>
-              <p className="mt-1">错误代码：{error.code ?? 'UNKNOWN'}</p>
-            </details>
-          </div>
-        )}
-
-        <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t border-border/80 bg-background px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_18px_-16px_rgba(15,23,42,0.28)] sm:flex-row sm:items-center sm:justify-end">
-          <Button type="button" variant="outline" onClick={handleExport}>
-            <Download className="size-4" aria-hidden="true" />
-            导出 Markdown
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={status === 'saving' || status === 'saved'}>
-            {status === 'saving' ? <AILoadingState text="保存中" /> : <Save className="size-4" aria-hidden="true" />}
-            {status === 'saving' ? '保存中…' : status === 'saved' ? '已保存到 AI 内容库' : '保存报告'}
-          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-5" aria-busy={status === 'generating'}>
-      <AiQuotaNotice purpose="writing_feedback" active={quotaActive} pending={status === 'generating'} />
-      {access.status === 'locked' && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-h-full flex-col" aria-busy={status === 'generating'}>
+      <div className="space-y-4 pb-4">
+        <AiQuotaNotice purpose="writing_feedback" active={quotaActive} pending={status === 'generating'} className="text-sm" />
+        {access.status === 'locked' && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium">请先确认这台设备的账号归属</p>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">处理后才能使用 Lexi AI 并安全保存报告。</p>
+            <p className="text-base font-semibold">请先确认这台设备的账号归属</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">确认后即可生成并保存写作反馈。</p>
           </div>
           <Button type="button" size="sm" onClick={(event) => openAccountDialog(event.currentTarget)}>
             <ShieldCheck className="size-4" aria-hidden="true" />
             查看账号状态
           </Button>
         </div>
-      )}
+        )}
 
-      <section className="space-y-3">
-        <div>
-          <p className="text-sm font-semibold">1. 选择考试类型</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">用于选择对应的 Task Achievement / Task Response 评分标准。</p>
+        <section className="space-y-4 rounded-xl border border-border/70 bg-muted/[0.18] p-3.5 sm:p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">本次作文</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">选择题型，填入剑雅书号与 Test；无需再粘贴题目。</p>
+          </div>
+          <Badge variant="outline" className="border-primary/25 bg-primary/5 text-sm font-medium text-primary">题目参考</Badge>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={module === 'academic' ? 'default' : 'outline'}
-            onClick={() => setModule('academic')}
-            disabled={inputLocked}
-          >
-            Academic
-          </Button>
-          <Button
-            type="button"
-            variant={module === 'general_training' ? 'default' : 'outline'}
-            onClick={() => setModule('general_training')}
-            disabled={inputLocked}
-          >
-            General Training
-          </Button>
-          <Button
-            type="button"
-            variant={task === 'task1' ? 'secondary' : 'outline'}
-            onClick={() => setTask('task1')}
-            disabled={inputLocked}
-          >
-            <FileText className="size-4" aria-hidden="true" />Task 1
-          </Button>
-          <Button
-            type="button"
-            variant={task === 'task2' ? 'secondary' : 'outline'}
-            onClick={() => setTask('task2')}
-            disabled={inputLocked}
-          >
-            <FileText className="size-4" aria-hidden="true" />Task 2
-          </Button>
-        </div>
-      </section>
-
-      <section className="space-y-3 border-t border-border/70 pt-4">
-        <div>
-          <Label className="text-sm font-semibold">2. 题目引用</Label>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-            不必粘贴题目。AI 会根据剑雅书号、Test、考试类型和 Task 尝试识别题目，并按参考评估生成反馈。
-          </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-foreground">考试类型</legend>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={module === 'academic' ? 'default' : 'outline'}
+                onClick={() => setModule('academic')}
+                disabled={inputLocked}
+              >
+                Academic
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={module === 'general_training' ? 'default' : 'outline'}
+                onClick={() => setModule('general_training')}
+                disabled={inputLocked}
+              >
+                General Training
+              </Button>
+            </div>
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-foreground">写作任务</legend>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={task === 'task1' ? 'secondary' : 'outline'}
+                onClick={() => setTask('task1')}
+                disabled={inputLocked}
+              >
+                <FileText className="size-4" aria-hidden="true" />Task 1
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={task === 'task2' ? 'secondary' : 'outline'}
+                onClick={() => setTask('task2')}
+                disabled={inputLocked}
+              >
+                <FileText className="size-4" aria-hidden="true" />Task 2
+              </Button>
+            </div>
+          </fieldset>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
           <div className="space-y-1.5">
-            <Label htmlFor="writing-cambridge-book" className="text-xs">剑雅书号</Label>
+            <Label htmlFor="writing-cambridge-book" className="text-sm">剑雅书号</Label>
             <Input
               id="writing-cambridge-book"
               type="number"
@@ -586,11 +598,10 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
               onChange={(event) => setBookNumber(event.target.value)}
               disabled={inputLocked}
               placeholder="例如 19"
-              aria-describedby="writing-reference-note"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="writing-cambridge-test" className="text-xs">Test</Label>
+            <Label htmlFor="writing-cambridge-test" className="text-sm">Test</Label>
             <Input
               id="writing-cambridge-test"
               type="number"
@@ -602,27 +613,25 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
               onChange={(event) => setTestNumber(event.target.value)}
               disabled={inputLocked}
               placeholder="例如 2"
-              aria-describedby="writing-reference-note"
             />
           </div>
         </div>
-        <p id="writing-reference-note" className="rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-xs leading-5 text-muted-foreground">
-          <span className="font-medium text-primary">题目自动识别 · 参考评估</span>
-          {' '}书号和 Test 都必填；即使填写完整，结果也可能与原题不完全一致。
-        </p>
         {needsTaskOneMaterial && (
-          <p className="flex items-start gap-1.5 text-xs leading-5 text-amber-700 dark:text-amber-300">
-            <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            未提供原图，Task Achievement 仅作参考；AI 会以语言、结构和表达反馈为主，仍可生成报告。
-          </p>
+          <div className="flex items-start gap-2 rounded-lg bg-amber-500/5 px-3 py-2.5 text-sm leading-6 text-amber-800 dark:text-amber-200">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <p>未提供原图，Task Achievement 仅供参考；本次会重点反馈语言、结构和表达。</p>
+          </div>
         )}
-      </section>
+        </section>
 
-      <section className="space-y-2 border-t border-border/70 pt-4">
+        <section className="space-y-3 rounded-xl border border-border/70 p-3.5 sm:p-4">
         <div className="flex items-end justify-between gap-3">
-          <Label htmlFor="writing-essay" className="text-sm font-semibold">3. 作文正文</Label>
-          <span className={cn('text-xs tabular-nums', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
-            英文 {wordCount} 词
+          <div>
+            <Label htmlFor="writing-essay" className="text-base font-semibold">作文正文</Label>
+            <p className="mt-1 text-sm text-muted-foreground">粘贴或直接输入你的英文作文。</p>
+          </div>
+          <span className={cn('shrink-0 text-sm font-medium tabular-nums', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
+            {wordCount} 词
           </span>
         </div>
         <Textarea
@@ -631,61 +640,57 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
           onChange={(event) => setEssayText(event.target.value)}
           disabled={inputLocked}
           maxLength={12_000}
-          rows={14}
-          className="min-h-72 resize-y font-mono text-[13px] leading-6"
+          rows={10}
+          className="min-h-56 resize-y font-mono text-sm leading-6"
           placeholder="粘贴或输入你的英文作文…"
         />
-        <p className={cn('text-xs leading-5', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
+        <p className={cn('text-sm leading-6', belowMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
           {belowMinimum
             ? `当前英文词数少于 IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 的 ${minimumWords} 词最低要求；仍可批改，但报告会说明这一局限。`
             : `IELTS ${task === 'task1' ? 'Task 1' : 'Task 2'} 建议不少于 ${minimumWords} 个英文词；中文不会计入英文词数。`}
         </p>
-      </section>
+        </section>
 
-      {error && (
-        <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2" role="alert">
-          <p className="text-sm text-destructive">{error.message}</p>
-          <details className="mt-1 text-[11px] text-muted-foreground">
-            <summary className="cursor-pointer">技术详情</summary>
-            <p className="mt-1">错误代码：{error.code ?? 'UNKNOWN'}</p>
-          </details>
-        </div>
-      )}
-
-      {status === 'generating' && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-subject-writing-border bg-subject-writing-soft px-3 py-2.5" role="status" aria-live="polite">
-          <div className="min-w-0 space-y-0.5">
-            <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : '正在按题目引用生成参考评估'} />
-            <p className="truncate text-xs text-muted-foreground">
-              {writingTask?.status === 'stopping'
-                ? '已停止等待，最终结果状态会在同步后显示。'
-                : '请求已提交，今日次数正在同步；作文草稿已保留。'}
-            </p>
+        {error && (
+          <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5" role="alert">
+            <p className="text-sm text-destructive">{error.message}</p>
+            <details className="mt-2 text-sm text-muted-foreground">
+              <summary className="cursor-pointer">技术详情</summary>
+              <p className="mt-1">错误代码：{error.code ?? 'UNKNOWN'}</p>
+            </details>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={writingTask?.status === 'stopping'}>
-            <Square className="size-3" fill="currentColor" aria-hidden="true" />停止
+        )}
+
+        {status === 'generating' && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-subject-writing-border bg-subject-writing-soft px-3.5 py-3" role="status" aria-live="polite">
+            <div className="min-w-0 space-y-1">
+              <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : '正在生成写作反馈'} />
+              <p className="text-sm leading-5 text-muted-foreground">
+                {writingTask?.status === 'stopping'
+                  ? '已停止等待，最终结果状态会在同步后显示。'
+                  : '作文草稿已保留。完成后会在这里显示结果。'}
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={writingTask?.status === 'stopping'}>
+              <Square className="size-3" fill="currentColor" aria-hidden="true" />停止
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="sticky bottom-0 z-10 -mx-4 mt-auto border-t border-border/80 bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-5 text-muted-foreground">作文正文只用于本次批改。</p>
+          <Button
+            type="button"
+            onClick={handleGenerate}
+            disabled={status === 'generating' || access.status === 'locked' || !bookNumber.trim() || !testNumber.trim() || !essayText.trim()}
+            className="w-full shrink-0 bg-subject-writing text-white hover:bg-subject-writing/90 sm:w-auto"
+          >
+            {status === 'error' ? <RefreshCcw className="size-4" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
+            {status === 'error' ? '重新生成' : '生成写作反馈'}
           </Button>
         </div>
-      )}
-
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t border-border/80 bg-background px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_18px_-16px_rgba(15,23,42,0.28)] sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-0.5">
-          <p className="text-[11px] leading-4 text-muted-foreground">
-            作文仅用于本次 Lexi AI 请求，服务端默认不保存正文。
-          </p>
-          {status === 'generating' && (
-            <p className="text-[11px] leading-4 text-muted-foreground">今日 AI 次数正在同步，请以生成结束后的提示为准。</p>
-          )}
-        </div>
-        <Button
-          type="button"
-          onClick={handleGenerate}
-          disabled={status === 'generating' || access.status === 'locked' || !bookNumber.trim() || !testNumber.trim() || !essayText.trim()}
-          className="shrink-0 bg-subject-writing text-white hover:bg-subject-writing/90"
-        >
-          {status === 'error' ? <RefreshCcw className="size-4" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
-          {status === 'error' ? '重新生成' : '生成写作反馈'}
-        </Button>
       </div>
     </div>
   )

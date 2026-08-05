@@ -882,10 +882,10 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               </div>
               <div>
                 <p className="text-sm font-semibold">AI 写作批改</p>
-                <p className="text-xs text-muted-foreground">填写剑雅书号、Test 与作文，生成参考评估</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">填写剑雅书号、Test 与作文，生成可执行反馈</p>
               </div>
             </div>
-            <span className="text-xs text-muted-foreground shrink-0">点击展开 →</span>
+            <span className="shrink-0 text-sm font-medium text-primary">开始批改 →</span>
           </button>
         </Card>
       )}
@@ -1033,14 +1033,15 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
             setWritingWorkspaceState({ generating: false, hasUnsavedResult: false })
           }}
         >
-          <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)] p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-auto sm:!max-h-[92dvh] sm:!max-w-3xl sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
-            <DialogHeader className="border-b px-4 pb-3 pt-4 sm:px-5">
-              <DialogTitle className="flex items-center gap-2">
+          <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-auto sm:!max-h-[92dvh] sm:!max-w-4xl sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
+            <DialogHeader className="shrink-0 border-b bg-background/95 px-4 pb-3.5 pt-4 backdrop-blur sm:px-6 sm:pt-5">
+              <DialogTitle className="flex items-center gap-2 pr-10 text-lg">
                 <Sparkles className="h-5 w-5 text-amber-500" />
                 IELTS 写作反馈
               </DialogTitle>
+              <DialogDescription className="pr-8 text-sm leading-6">输入剑雅题号与作文，AI 会给出可执行的反馈。</DialogDescription>
             </DialogHeader>
-            <div className="min-h-0 overflow-y-auto px-4 pb-4 pt-3 sm:px-5">
+            <div className="min-h-0 overflow-y-auto px-4 pb-0 pt-4 sm:px-6">
               <WritingCorrection
                 onWorkspaceStateChange={setWritingWorkspaceState}
                 quotaActive={aiOpen}

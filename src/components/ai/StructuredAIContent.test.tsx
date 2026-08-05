@@ -166,7 +166,7 @@ describe('StructuredAIContent', () => {
     expect(html).toContain('评分局限')
   })
 
-  it('renders insufficient-evidence feedback without precise or overall scores', () => {
+  it('renders insufficient-evidence feedback as a short action plan without scores or a long rubric', () => {
     const insufficientFeedback: WritingFeedbackV2 = {
       ...writingFeedback,
       assessmentStatus: 'insufficient_evidence',
@@ -189,10 +189,13 @@ describe('StructuredAIContent', () => {
       />,
     )
 
-    expect(html).toContain('证据不足')
-    expect(html).toContain('评分维度反馈')
+    expect(html).toContain('快速改进建议')
+    expect(html).toContain('现在这样修改')
     expect(html).not.toContain('总体分')
     expect(html).not.toContain('6.5')
+    expect(html).not.toContain('评分维度反馈')
+    expect(html).not.toContain('连贯与衔接')
+    expect(html).not.toContain('评分局限')
   })
 
   it('shows the supplied Academic Task 1 material beside the original prompt', () => {
