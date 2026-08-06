@@ -40,6 +40,31 @@ export function aggregateTrackerSyncStatus({
   examDate,
   learningRecords,
 }: AggregateTrackerSyncStatusInput): TrackerCloudSyncStatus {
+  // The exam-date preference and compact learning records are two independent
+  // server-controlled streams. A deliberate partial rollout must not be
+  // presented as if the signed-in account has no cloud sync at all.
+  if (examDate.phase === 'paused' && learningRecords.phase === 'synced') {
+    return {
+      accountUserId,
+      phase: 'partial',
+      lastSyncedAt: latestTimestamp(examDate.lastSyncedAt, learningRecords.lastSyncedAt),
+      detail: '学习记录已同步；考试日期暂未开启云同步',
+      conflict: null,
+      resolveConflict: null,
+    }
+  }
+
+  if (examDate.phase === 'synced' && learningRecords.phase === 'paused') {
+    return {
+      accountUserId,
+      phase: 'partial',
+      lastSyncedAt: latestTimestamp(examDate.lastSyncedAt, learningRecords.lastSyncedAt),
+      detail: '考试日期已同步；学习记录同步范围尚未完整开启',
+      conflict: null,
+      resolveConflict: null,
+    }
+  }
+
   const selected = PHASE_PRIORITY[examDate.phase] >= PHASE_PRIORITY[learningRecords.phase]
     ? examDate
     : learningRecords

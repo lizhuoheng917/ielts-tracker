@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-06-tracker-desktop-dialog-layout-v1",
+  "release": "2026-08-06-tracker-sync-status-contract-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker now gives long reports, AI workspaces, plan forms, account and feedback panels an explicit desktop reading or working area while keeping existing mobile full-screen, bottom-sheet, narrow-width, safe-area, and scroll behavior. Existing product IDs, routes, local keys, sync queue, backup format, AI contract, and support-ticket source are unchanged."
+    "reason": "Tracker now distinguishes a deliberately or temporarily partial cloud-sync scope from a fully unavailable account. When one independent stream is synced and the other is paused, Settings says which scope remains available instead of incorrectly showing the whole account as unavailable. Existing local data, routes, queue payloads, and sync RPC contracts remain unchanged."
   },
   "Backend": {
-    "status": "reviewed-not-needed",
-    "reason": "The tracker product ID, sync RPCs and tables, AI gateway routes and quotas, support-ticket source, RLS, retention, and all existing data contracts were reviewed and remain unchanged. This scoped visual layout release requires no migration or backend deployment."
+    "status": "changed",
+    "reason": "The coordinated Lexi backend release adds a backward-compatible migration that restores `word_record` only to enabled historical complete Tracker allowlists. It preserves schemas, RPC signatures, RLS, quotas, retention, user data, disabled configurations, and intentional partial rollouts."
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "Lexi Control was reviewed: it has no user-facing Tracker report reader, client modal layout, or changed management contract in this release. Existing administrative controls, user filters, AI controls, cloud-sync controls, and support-ticket routing remain unchanged."
+    "status": "changed",
+    "reason": "The coordinated Lexi Control release detects the historic enabled five-kind allowlist that lacks `word_record` and explains the correction to administrators. Existing AAL2 protection, RPC calls, user controls, data visibility, and quota controls remain unchanged."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. A later release should deploy the verified Tracker client commit and confirm desktop report/form layouts plus mobile overflow behavior on production. No database migration, Edge Function deployment, or Lexi Control deployment is required."
+    "reason": "Not deployed. Apply and verify the paired Supabase migration first, then deploy the matching Tracker client and Lexi Control commits. Production smoke tests must confirm the authenticated Settings status, word-record sync, and administrator sync page."
   },
   "Verification": {
-    "status": "passed",
-    "reason": "The release gate passed: impact validation, typecheck, lint, 67 test files / 441 tests, and production build. Local desktop checks confirmed the plan form (672px), AI plan workspace (896px), account panel (576px), and feedback panel (768px) fit without page-level horizontal overflow. Mobile-specific full-screen, bottom-sheet, narrow-width, safe-area, and scroll classes were preserved; production smoke testing remains required after deployment."
+    "status": "required",
+    "reason": "Before release, run the Tracker release gate plus the paired Lexi full-stack release gate, test the targeted aggregation and admin/migration scenarios, verify the applied Supabase configuration, and smoke-test the authenticated production status."
   }
 }

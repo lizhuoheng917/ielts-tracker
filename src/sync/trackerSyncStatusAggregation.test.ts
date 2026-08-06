@@ -24,6 +24,57 @@ describe('Tracker sync status aggregation', () => {
     expect(status.lastSyncedAt).toBe('2026-08-03T01:00:00.000Z')
   })
 
+  it('reports a partial scope when learning records are paused but the exam date is synced', () => {
+    const status = aggregateTrackerSyncStatus({
+      accountUserId: 'account-1',
+      examDate: synced('2026-08-03T01:00:00.000Z'),
+      learningRecords: {
+        phase: 'paused',
+        detail: '学习记录同步暂未开放',
+        lastSyncedAt: null,
+      },
+    })
+
+    expect(status.phase).toBe('partial')
+    expect(status.detail).toContain('考试日期已同步')
+    expect(status.lastSyncedAt).toBe('2026-08-03T01:00:00.000Z')
+  })
+
+  it('reports a partial scope when the exam date is paused but learning records are synced', () => {
+    const status = aggregateTrackerSyncStatus({
+      accountUserId: 'account-1',
+      examDate: {
+        phase: 'paused',
+        detail: '考试日期同步暂未开放',
+        lastSyncedAt: null,
+      },
+      learningRecords: synced('2026-08-03T01:01:00.000Z'),
+    })
+
+    expect(status.phase).toBe('partial')
+    expect(status.detail).toContain('学习记录已同步')
+    expect(status.lastSyncedAt).toBe('2026-08-03T01:01:00.000Z')
+  })
+
+  it('keeps cloud sync paused when both streams are unavailable', () => {
+    const status = aggregateTrackerSyncStatus({
+      accountUserId: 'account-1',
+      examDate: {
+        phase: 'paused',
+        detail: '考试日期同步暂未开放',
+        lastSyncedAt: null,
+      },
+      learningRecords: {
+        phase: 'paused',
+        detail: '学习记录同步暂未开放',
+        lastSyncedAt: null,
+      },
+    })
+
+    expect(status.phase).toBe('paused')
+    expect(status.detail).toContain('考试日期')
+  })
+
   it('keeps the exam-date choice above background record activity', async () => {
     const resolveConflict = vi.fn(async () => undefined)
     const conflict = { localExamDate: '2026-12-01', remoteExamDate: '2027-01-01' }

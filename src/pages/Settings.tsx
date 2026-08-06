@@ -127,6 +127,11 @@ export default function Settings() {
       case 'needs_choice':
         return { label: '需处理', detail: '考试日期有两个版本', tone: 'warning' as const }
       case 'partial':
+        return {
+          label: '部分同步',
+          detail: trackerSyncStatus.detail || '部分学习记录暂未同步',
+          tone: 'warning' as const,
+        }
       case 'error':
         return { label: '待重试', detail: '会自动继续同步', tone: 'warning' as const }
       case 'offline':
