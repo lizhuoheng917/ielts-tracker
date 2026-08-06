@@ -49,7 +49,7 @@ function resolvedTheme(theme: TrackerSupportDiagnosticsContext['theme']): 'light
 
 function buildDetails() {
   return {
-    appVersion: bounded(import.meta.env.VITE_APP_VERSION, 'Tracker', 24),
+    appVersion: bounded(import.meta.env.VITE_APP_VERSION, 'Lexi Tracker', 24),
     buildSha: bounded(
       import.meta.env.VITE_CF_PAGES_COMMIT_SHA
         || import.meta.env.VITE_GIT_COMMIT_SHA

@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-05-tracker-writing-overall-estimate-v1",
+  "release": "2026-08-06-lexi-tracker-visual-brand-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker's writing dialog is larger on desktop (up to 72rem wide and 94dvh high) while retaining its mobile full-screen layout and stable action bar. New writing feedback can show one clearly labeled AI overall estimate, keeps the existing analysis, and saves the estimate through report titles and Markdown export. Legacy V2 reports without it remain unchanged and readable."
+    "reason": "Tracker now consistently presents the public product as Lexi Tracker with the subtitle “雅思学习规划与复盘” across navigation, authentication, account, settings, feedback, and user-visible diagnostics. The stable tracker product ID, existing URLs, ielts-tracker local keys, IndexedDB sync queue, backup format, AI contract, and support-ticket source are deliberately unchanged."
   },
   "Backend": {
-    "status": "changed",
-    "reason": "The paired Formal Edge gateway adds the nullable estimatedOverallBand contract field. The current book/Test reference path requires one 0-to-9 half-band estimate based only on the essay text, keeps all four criterion bands null, and retains the compact 45-second generation budget. No database schema, RLS, quota, retention, sync, or raw-writing persistence contract changes are required."
+    "status": "reviewed-not-needed",
+    "reason": "The tracker product ID, sync RPCs and tables, AI gateway routes and quotas, support-ticket source, RLS, retention, and all existing data contracts were reviewed and remain unchanged. This visible-brand release requires no migration or backend deployment."
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "Lexi Control's existing AI policy and aggregate outcome receipts continue to cover the relevant availability state. This release adds no administrator setting, report field, quota rule, override, or learner-writing exposure."
+    "status": "changed",
+    "reason": "The paired Lexi Control site presents the shared product consistently as Lexi Tracker while retaining stable tracker IDs, deep-link view parameters, user filters, AI controls, cloud-sync controls, and support-ticket routing."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. The paired Formal Edge gateway and Tracker client must be released from their verified matching commits, then an authenticated V3 writing submission must render the AI estimate and produce a succeeded receipt. No database migration is required."
+    "reason": "Not deployed. Release matching verified Tracker and Lexi Control commits, then confirm the client and administrator labels show Lexi Tracker while existing account, AI, sync, quota, and feedback flows retain their current behavior. No database migration or Edge Function deployment is required."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker release verification passed: impact validation, typecheck, lint, 67 test files / 440 tests, and the production bundle. Formal release verification, focused gateway scenarios, staging harness, and cross-repository writing-contract parity also passed. An authenticated V3 production smoke test remains required after the paired deployment."
+    "reason": "Tracker verification passed: impact validation, typecheck, lint, 67 test files / 441 tests, and the production bundle. The paired Lexi Control build and focused portfolio, sync, quota, and support checks also passed. A visual production smoke test remains required after a coordinated deployment."
   }
 }

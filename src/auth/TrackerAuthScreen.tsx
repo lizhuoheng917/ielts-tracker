@@ -65,7 +65,7 @@ function AuthBrand() {
       <BrandMark className="size-11" />
       <div>
         <p className="text-base font-semibold tracking-tight text-foreground">Lexi Tracker</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">IELTS 学习总控台</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">雅思学习规划与复盘</p>
       </div>
     </div>
   )
@@ -320,11 +320,11 @@ export function TrackerAuthScreen({ initialMode }: { initialMode: TrackerAuthMod
               <BrandMark className="size-11 shadow-[0_12px_28px_-15px_rgb(10_10_55/0.95)]" />
               <div>
                 <p className="text-base font-semibold tracking-tight">Lexi Tracker</p>
-                <p className="mt-0.5 text-xs text-indigo-100/85">IELTS 学习总控台</p>
+                <p className="mt-0.5 text-xs text-indigo-100/85">雅思学习规划与复盘</p>
               </div>
             </div>
             <div className="mt-12 max-w-lg sm:mt-16">
-              <p className="text-[11px] font-semibold tracking-[0.19em] text-cyan-100">YOUR IELTS COMPANION</p>
+              <p className="text-[11px] font-semibold tracking-[0.19em] text-cyan-100">PLAN · PRACTICE · REVIEW</p>
               <h1 className="mt-3 text-[2.35rem] font-semibold leading-[1.12] tracking-[-0.055em] sm:text-5xl">
                 让每一次学习，<br />
                 <span className="text-cyan-200">都留下可见的进步。</span>

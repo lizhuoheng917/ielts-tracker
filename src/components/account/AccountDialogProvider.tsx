@@ -137,7 +137,7 @@ function LexiAccountDialog({
     setDeletionOpen(false)
     setDeletionPhrase('')
     setMessage(cleanup.phase4bStateCleared
-      ? '共享 Lexi 账号及云端学习数据已永久删除，当前 Tracker 浏览器记录也已清除。正在返回登录页面…'
+      ? '共享 Lexi 账号及云端学习数据已永久删除，当前 Lexi Tracker 浏览器记录也已清除。正在返回登录页面…'
       : '共享 Lexi 账号及云端学习数据已永久删除。当前浏览器的同步缓存未能确认清除，请随后在浏览器设置中清除本网站数据。')
     window.setTimeout(() => window.location.assign('/login?accountDeleted=1'), 1_000)
   }
@@ -164,7 +164,7 @@ function LexiAccountDialog({
             个人中心
           </DialogTitle>
           <DialogDescription>
-            Tracker 与 Lexi Words 共用同一个 Lexi 账号。
+            Lexi Tracker 与 Lexi Words 共用同一个 Lexi 账号。
           </DialogDescription>
         </DialogHeader>
 
@@ -318,7 +318,7 @@ function LexiAccountDialog({
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
                   <div>
                     <p className="text-sm font-semibold text-foreground">永久注销共享账号</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">将永久删除这个 Lexi 账号及云端学习数据。Tracker 和 Lexi Words 都会注销，无法恢复。</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">将永久删除这个 Lexi 账号及云端学习数据。Lexi Tracker 和 Lexi Words 都会注销，无法恢复。</p>
                   </div>
                 </div>
                 {!deletionOpen ? (
@@ -339,7 +339,7 @@ function LexiAccountDialog({
                   <div className="mt-3 space-y-3 rounded-lg border border-destructive/25 bg-background/85 p-3">
                     <p className="text-sm font-semibold text-foreground">确认永久注销？</p>
                     <p className="text-xs leading-5 text-muted-foreground">
-                      云端的账户和学习数据会立即删除；当前 Tracker 浏览器数据会同时清除。其他设备或 Lexi Words 本机未同步内容无法由这里自动清除。
+                      云端的账户和学习数据会立即删除；当前 Lexi Tracker 浏览器数据会同时清除。其他设备或 Lexi Words 本机未同步内容无法由这里自动清除。
                     </p>
                     <div className="space-y-2">
                       <Label htmlFor="tracker-account-deletion-confirmation">输入“永久注销”以继续</Label>
@@ -389,7 +389,7 @@ function LexiAccountDialog({
                 <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><UserRound className="size-4.5" /></span>
                 <div>
                   <p className="text-sm font-semibold text-foreground">登录或创建 Lexi 账号</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Tracker 与 Lexi Words 使用同一个账户。登录、注册、邮箱验证和找回密码都在统一页面完成。</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Lexi Tracker 与 Lexi Words 使用同一个账户。登录、注册、邮箱验证和找回密码都在统一页面完成。</p>
                 </div>
               </div>
               <Button type="button" onClick={openAuthPage} className="min-h-11 w-full">

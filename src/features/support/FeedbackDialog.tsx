@@ -464,7 +464,7 @@ export function FeedbackDialog({
                 问题反馈
               </DialogTitle>
               <DialogDescription className="mt-2 max-w-lg leading-5">
-                提交 Tracker 使用问题，并在这里查看处理进度。
+                提交 Lexi Tracker 使用问题，并在这里查看处理进度。
               </DialogDescription>
             </div>
             <Button
@@ -507,7 +507,7 @@ export function FeedbackDialog({
               <div className="flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                 <p>
-                  这条反馈会固定标记为 <b className="font-semibold text-foreground">Tracker</b>。诊断信息默认关闭，且不会包含账号、学习内容或本机存储数据。
+                  这条反馈会固定标记为 <b className="font-semibold text-foreground">Lexi Tracker</b>。诊断信息默认关闭，且不会包含账号、学习内容或本机存储数据。
                 </p>
               </div>
 
@@ -737,8 +737,8 @@ export function FeedbackDialog({
               <section className="space-y-3" aria-live="polite">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-semibold text-foreground">我的 Tracker 反馈</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">这里只显示从 Tracker 提交的工单。</p>
+                    <h3 className="text-base font-semibold text-foreground">我的 Lexi Tracker 反馈</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">这里只显示从 Lexi Tracker 提交的工单。</p>
                   </div>
                   <Button type="button" size="sm" variant="ghost" onClick={() => void loadTickets(false)} disabled={ticketsLoading} aria-label="刷新我的反馈">
                     <RefreshCw className={ticketsLoading ? 'animate-spin' : ''} aria-hidden="true" />

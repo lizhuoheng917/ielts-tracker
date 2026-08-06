@@ -86,7 +86,7 @@ export function MobileNav() {
               {currentRoute?.label ?? 'Lexi Tracker'}
             </p>
             <p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">
-              {currentRoute?.description ?? '雅思学习总控台'}
+              {currentRoute?.description ?? '雅思学习规划与复盘'}
             </p>
           </div>
         </div>

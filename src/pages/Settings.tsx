@@ -431,7 +431,7 @@ export default function Settings() {
               </span>
               <div className="min-w-0">
                 <h2 className="font-semibold leading-5 text-foreground">帮助与反馈</h2>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">提交 Tracker 使用问题，并持续查看管理员回复。</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">提交 Lexi Tracker 使用问题，并持续查看管理员回复。</p>
               </div>
             </div>
             <Button

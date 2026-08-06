@@ -22,7 +22,7 @@ export function Sidebar() {
         <BrandMark className="size-10" />
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold leading-tight">Lexi Tracker</h1>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">Lexi IELTS 学习总控台</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">雅思学习规划与复盘</p>
         </div>
       </div>
 

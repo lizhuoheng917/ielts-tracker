@@ -116,7 +116,7 @@ function diagnosticsFrom(value: unknown): SupportDiagnostics | null {
 function assertTrackerTicket(source: JsonRecord): void {
   const reportedProductId = optionalText(valueAt(source, 'product_id', 'productId'))
   if (reportedProductId && reportedProductId !== TRACKER_SUPPORT_PRODUCT_ID) {
-    throw new ProductSupportApiError('反馈服务返回了不属于 Tracker 的内容，请刷新后重试。', 'unavailable')
+    throw new ProductSupportApiError('反馈服务返回了不属于 Lexi Tracker 的内容，请刷新后重试。', 'unavailable')
   }
 }
 
