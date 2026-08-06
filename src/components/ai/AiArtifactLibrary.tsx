@@ -264,16 +264,16 @@ export function AiArtifactLibrary() {
       </CardContent>
 
       <Dialog open={selected !== null} onOpenChange={(open) => { if (!open) setSelectedRecordId(null) }}>
-        <DialogContent className="max-h-[88dvh] max-w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] p-0 sm:max-w-2xl">
+        <DialogContent className="max-h-[88dvh] max-w-[calc(100vw-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 p-0 sm:!h-[min(90dvh,60rem)] sm:!max-h-[90dvh] sm:!w-[min(94vw,72rem)] sm:!max-w-none">
           {selected && (
             <>
-              <DialogHeader className="border-b px-5 pb-3 pt-5">
+              <DialogHeader className="shrink-0 border-b bg-background/95 px-5 pb-3 pt-5 backdrop-blur sm:px-6">
                 <DialogTitle className="pr-8">{selected.title}</DialogTitle>
                 <DialogDescription>
                   {artifactTypeLabel(selected.kind)} · {sourceLabel(selected)} · {new Date(selected.createdAt).toLocaleString('zh-CN')}
                 </DialogDescription>
               </DialogHeader>
-              <div className="min-h-0 overflow-y-auto px-5 py-4">
+              <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
                 {selected.outputSchemaVersion === 2 && selected.kind === 'daily_suggestion' ? (
                   <DailySuggestionContent value={selected.content} />
                 ) : selected.outputSchemaVersion === 2 && selected.kind === 'learning_analysis' ? (
@@ -296,7 +296,7 @@ export function AiArtifactLibrary() {
                   <SafeAIContent content={selected.markdownProjection} variant="report" />
                 )}
               </div>
-              <DialogFooter className="mx-0 mb-0 px-5 py-3">
+              <DialogFooter className="mx-0 mb-0 shrink-0 px-5 py-3 sm:px-6">
                 <Button type="button" variant="outline" onClick={() => exportOne(selected)}>
                   <Download className="size-4" />
                   导出 Markdown

@@ -703,7 +703,7 @@ function RecordFormDialog({
     >
       <DialogContent
         aria-busy={isSubmitting}
-        className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto"
+        className="max-h-[90dvh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-h-[88dvh] sm:max-w-xl"
       >
         <DialogHeader>
           <DialogTitle>记录练习</DialogTitle>
@@ -886,7 +886,7 @@ function EditRecordDialog({
     >
       <DialogContent
         aria-busy={isSubmitting}
-        className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto"
+        className="max-h-[90dvh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-h-[88dvh] sm:max-w-xl"
       >
         <DialogHeader>
           <DialogTitle>编辑记录</DialogTitle>

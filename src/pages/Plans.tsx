@@ -752,15 +752,15 @@ export default function Plans() {
 
       {/* 添加/编辑弹窗 */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="flex max-h-[90dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
-          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12">
+        <DialogContent className="flex max-h-[90dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(92vw,42rem)] md:h-[min(88dvh,52rem)]">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 md:px-6">
             <DialogTitle>{editingId ? '编辑计划' : '添加计划'}</DialogTitle>
             <DialogDescription>
               {editingId ? '调整任务的安排方式、时间与学习目标' : '先选择单次任务或重复计划，再补全安排'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
             <div className="space-y-5">
               {editingLegacyCustomFrequency && (
                 <p
@@ -1056,7 +1056,7 @@ export default function Plans() {
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_18px_-18px_rgb(15_23_42_/_0.45)] sm:flex-row sm:justify-end">
+          <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_18px_-18px_rgb(15_23_42_/_0.45)] sm:flex-row sm:justify-end md:px-6">
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">
               取消
             </Button>
@@ -1095,8 +1095,8 @@ export default function Plans() {
 
       {/* AI 生成计划弹窗 */}
       <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-        <DialogContent className="max-h-[90dvh] max-w-[calc(100vw-1rem)] sm:max-w-lg flex flex-col p-0">
-          <DialogHeader className="px-4 pt-4 pb-2">
+        <DialogContent className="flex max-h-[90dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(94vw,56rem)] md:h-[min(86dvh,54rem)]">
+          <DialogHeader className="shrink-0 px-4 pt-4 pb-2 pr-12 md:px-6 md:pt-5">
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
               AI 生成学习计划
@@ -1105,7 +1105,7 @@ export default function Plans() {
               每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；请核对单次或重复安排、日期和目标后再逐条加入。
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col flex-1 min-h-0 px-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 md:px-6 md:pb-6">
             <AIChatPanel
               createSnapshot={createPlanSnapshot}
               placeholder="让 AI 根据你的学习数据生成计划..."
@@ -1135,19 +1135,19 @@ export default function Plans() {
 
       {/* 计划详情弹窗 */}
       <Dialog open={planDetailOpen} onOpenChange={setPlanDetailOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[85dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(92vw,36rem)]">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 md:px-6">
             <DialogTitle className="flex items-center gap-2">
               <ListTodo className="h-5 w-5 text-primary" aria-hidden="true" />
               计划详情
             </DialogTitle>
           </DialogHeader>
           {selectedPlan && (
-            <div className="space-y-3">
+            <div className="min-h-0 space-y-3 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
               <div>
-                <h3 className="text-base font-semibold">{selectedPlan.title}</h3>
+                <h3 className="break-words text-base font-semibold">{selectedPlan.title}</h3>
                 {selectedPlan.description && (
-                  <p className="mt-1 text-sm text-muted-foreground">{selectedPlan.description}</p>
+                  <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">{selectedPlan.description}</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1175,7 +1175,7 @@ export default function Plans() {
               </div>
               <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2.5 text-sm">
                 <span className="text-muted-foreground">安排</span>
-                <p className="mt-1 font-medium">{formatPlanSchedule(selectedPlan)}</p>
+                <p className="mt-1 break-words font-medium">{formatPlanSchedule(selectedPlan)}</p>
                 {(selectedPlan.targetTime || selectedPlan.targetDuration) && (
                   <p className="mt-1 text-xs text-muted-foreground">{formatPlanTimeAndDuration(selectedPlan)}</p>
                 )}

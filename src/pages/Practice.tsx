@@ -361,7 +361,7 @@ function PracticeFormDialog({
     >
       <DialogContent
         aria-busy={isSubmitting}
-        className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto"
+        className="max-h-[90dvh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-h-[88dvh] sm:max-w-xl"
       >
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑模考' : '添加模考'}</DialogTitle>
@@ -1155,16 +1155,16 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
       )}
 
       <Dialog open={selectedWritingReport !== null} onOpenChange={(open) => { if (!open) setSelectedWritingReportId(null) }}>
-        <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)_auto] p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-auto sm:!max-h-[90dvh] sm:!max-w-3xl sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
+        <DialogContent className="!inset-0 !top-0 !left-0 !h-dvh !max-h-none !max-w-none !translate-x-0 !translate-y-0 !rounded-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 p-0 sm:!top-1/2 sm:!left-1/2 sm:!h-[min(94dvh,60rem)] sm:!max-h-[94dvh] sm:!w-[min(94vw,72rem)] sm:!max-w-none sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!rounded-xl">
           {selectedWritingReport && (
             <>
-              <DialogHeader className="border-b px-4 pb-3 pt-4 sm:px-5">
+              <DialogHeader className="shrink-0 border-b bg-background/95 px-4 pb-3 pt-4 backdrop-blur sm:px-6 sm:pt-5">
                 <DialogTitle className="pr-8">{selectedWritingReport.title}</DialogTitle>
                 <DialogDescription>
                   英文 {selectedWritingReport.content.submission.wordCount} 词 · {selectedWritingReport.source === 'managed' ? 'Lexi AI' : '历史外部来源'} · {format(new Date(selectedWritingReport.createdAt), 'yyyy-MM-dd HH:mm')}
                 </DialogDescription>
               </DialogHeader>
-              <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-5">
+              <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
                 <WritingFeedbackContent
                   submission={selectedWritingReport.content.submission}
                   feedback={selectedWritingReport.content.feedback}
@@ -1175,7 +1175,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{selectedWritingReport.content.submission.essayText}</p>
                 </details>
               </div>
-              <DialogFooter className="mx-0 mb-0 px-4 py-3 sm:px-5">
+              <DialogFooter className="mx-0 mb-0 shrink-0 px-4 py-3 sm:px-6">
                 <Button type="button" variant="outline" onClick={() => downloadWritingReport(selectedWritingReport)}>
                   <Download className="size-4" aria-hidden="true" />导出 Markdown
                 </Button>

@@ -78,6 +78,7 @@ import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { SUBJECT_VISUALS } from '@/lib/subjectVisuals'
+import { cn } from '@/lib/utils'
 import {
   getActivityLevel,
   countActiveDays,
@@ -1043,7 +1044,14 @@ export default function Stats() {
 
       {/* AI 智能分析弹窗 */}
       <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
+        <DialogContent
+          className={cn(
+            'max-h-[90dvh] flex flex-col gap-0 p-0',
+            reportState === 'report' && reportAccessKey === currentExecutionKey
+              ? 'sm:!h-[min(90dvh,60rem)] sm:!max-h-[90dvh] sm:!w-[min(94vw,64rem)] sm:!max-w-none'
+              : 'sm:max-w-2xl',
+          )}
+        >
           {reportState === 'idle' && !reportError && (
             <>
               <DialogHeader className="px-5 pt-5 pb-2">
@@ -1165,16 +1173,16 @@ export default function Stats() {
 
           {reportState === 'report' && reportAccessKey === currentExecutionKey && (
             <>
-              <DialogHeader className="px-5 pt-5 pb-2">
+              <DialogHeader className="shrink-0 px-5 pt-5 pb-2 sm:px-6">
                 <DialogTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-violet-500" />
                   学习分析报告
                 </DialogTitle>
               </DialogHeader>
-              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="mx-5 mt-2" />
+              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="mx-5 mt-2 shrink-0 sm:mx-6" />
               <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                 {/* 报告内容 */}
-                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-3 bg-white dark:bg-background">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-white px-5 py-3 dark:bg-background sm:px-6 sm:py-4">
                   <div className="mb-4 flex flex-wrap items-center gap-2">
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Clock className="h-4 w-4" />
@@ -1199,7 +1207,7 @@ export default function Stats() {
                   )}
                 </div>
                 {/* 底部按钮 */}
-                <div className="border-t px-5 py-3 flex flex-wrap items-center gap-2">
+                <div className="shrink-0 border-t px-5 py-3 flex flex-wrap items-center gap-2 sm:px-6">
                   {reportSaveError ? (
                     <p className="min-w-0 flex-1 basis-full text-xs leading-5 text-destructive sm:basis-auto" role="alert">
                       {reportSaveError}

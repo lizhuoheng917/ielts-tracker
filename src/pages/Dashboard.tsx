@@ -739,14 +739,16 @@ export default function Dashboard() {
       </section>
 
       <Dialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen}>
-        <DialogContent className="max-h-[85vh] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(92vw,42rem)]">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 md:px-6">
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="size-5 text-primary" aria-hidden="true" />
               今日学习建议
             </DialogTitle>
           </DialogHeader>
-          <AiSuggestionDialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen} />
+          <div className="min-h-0 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+            <AiSuggestionDialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen} />
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -783,18 +785,18 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={planDetailOpen} onOpenChange={setPlanDetailOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[85dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(92vw,36rem)]">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 md:px-6">
             <DialogTitle className="flex items-center gap-2">
               <ListTodo className="size-5 text-primary" aria-hidden="true" />
               计划详情
             </DialogTitle>
           </DialogHeader>
           {selectedPlan && (
-            <div className="space-y-3">
+            <div className="min-h-0 space-y-3 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
               <div>
-                <h3 className="text-base font-semibold">{selectedPlan.title}</h3>
-                {selectedPlan.description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{selectedPlan.description}</p>}
+                <h3 className="break-words text-base font-semibold">{selectedPlan.title}</h3>
+                {selectedPlan.description && <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">{selectedPlan.description}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
                 {selectedPlan.category && (

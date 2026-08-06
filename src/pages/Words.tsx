@@ -580,7 +580,7 @@ export default function Words() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90dvh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-h-[88dvh] sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingId ? '编辑记录' : '添加记录'}</DialogTitle>
             <DialogDescription>

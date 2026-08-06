@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-06-lexi-tracker-visual-brand-v1",
+  "release": "2026-08-06-tracker-desktop-dialog-layout-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker now consistently presents the public product as Lexi Tracker with the subtitle “雅思学习规划与复盘” across navigation, authentication, account, settings, feedback, and user-visible diagnostics. The stable tracker product ID, existing URLs, ielts-tracker local keys, IndexedDB sync queue, backup format, AI contract, and support-ticket source are deliberately unchanged."
+    "reason": "Tracker now gives long reports, AI workspaces, plan forms, account and feedback panels an explicit desktop reading or working area while keeping existing mobile full-screen, bottom-sheet, narrow-width, safe-area, and scroll behavior. Existing product IDs, routes, local keys, sync queue, backup format, AI contract, and support-ticket source are unchanged."
   },
   "Backend": {
     "status": "reviewed-not-needed",
-    "reason": "The tracker product ID, sync RPCs and tables, AI gateway routes and quotas, support-ticket source, RLS, retention, and all existing data contracts were reviewed and remain unchanged. This visible-brand release requires no migration or backend deployment."
+    "reason": "The tracker product ID, sync RPCs and tables, AI gateway routes and quotas, support-ticket source, RLS, retention, and all existing data contracts were reviewed and remain unchanged. This scoped visual layout release requires no migration or backend deployment."
   },
   "Admin": {
-    "status": "changed",
-    "reason": "The paired Lexi Control site presents the shared product consistently as Lexi Tracker while retaining stable tracker IDs, deep-link view parameters, user filters, AI controls, cloud-sync controls, and support-ticket routing."
+    "status": "reviewed-not-needed",
+    "reason": "Lexi Control was reviewed: it has no user-facing Tracker report reader, client modal layout, or changed management contract in this release. Existing administrative controls, user filters, AI controls, cloud-sync controls, and support-ticket routing remain unchanged."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. Release matching verified Tracker and Lexi Control commits, then confirm the client and administrator labels show Lexi Tracker while existing account, AI, sync, quota, and feedback flows retain their current behavior. No database migration or Edge Function deployment is required."
+    "reason": "Not deployed. A later release should deploy the verified Tracker client commit and confirm desktop report/form layouts plus mobile overflow behavior on production. No database migration, Edge Function deployment, or Lexi Control deployment is required."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker verification passed: impact validation, typecheck, lint, 67 test files / 441 tests, and the production bundle. The paired Lexi Control build and focused portfolio, sync, quota, and support checks also passed. A visual production smoke test remains required after a coordinated deployment."
+    "reason": "The release gate passed: impact validation, typecheck, lint, 67 test files / 441 tests, and production build. Local desktop checks confirmed the plan form (672px), AI plan workspace (896px), account panel (576px), and feedback panel (768px) fit without page-level horizontal overflow. Mobile-specific full-screen, bottom-sheet, narrow-width, safe-area, and scroll classes were preserved; production smoke testing remains required after deployment."
   }
 }
