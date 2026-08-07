@@ -623,7 +623,7 @@ export function TrackerUpdatePasswordScreen() {
         <div className="mt-9">
           <p className="text-[11px] font-semibold tracking-[0.18em] text-primary">SECURE YOUR ACCOUNT</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">设置新密码</h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">新密码保存后，你会继续进入原来的学习账户。</p>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">新密码保存后，当前设备会继续进入学习账户；其他已登录设备需要使用新密码重新登录。</p>
         </div>
         <form className="mt-7 space-y-4" onSubmit={submit} aria-busy={busy}>
           <div className="space-y-2"><Label htmlFor="tracker-new-password">新密码</Label><Input id="tracker-new-password" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required autoFocus className="h-12 rounded-xl text-base" /></div>

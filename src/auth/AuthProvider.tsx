@@ -2,6 +2,12 @@ import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabas
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { deleteCurrentLexiAccount } from '@/auth/accountDeletion'
+import {
+  accountSessionScopeAffectsCurrentDevice,
+  sendTrackerPasswordReset,
+  signOutTrackerAccountSessions,
+  type AccountSessionScope,
+} from '@/auth/accountSecurity'
 import { safeAuthErrorMessage } from '@/auth/authErrors'
 import { removeCurrentDevicePresence } from '@/auth/devicePresence'
 import {
@@ -199,15 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sendPasswordReset: async (email, redirectTo) => {
       const client = clientRef.current
       if (!client) return { ok: false, message: '当前环境尚未连接 Lexi 账号服务。' }
-      try {
-        const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-          redirectTo,
-        })
-        if (error) return { ok: false, message: safeAuthErrorMessage(error) }
-        return { ok: true }
-      } catch (error) {
-        return { ok: false, message: safeAuthErrorMessage(error) }
-      }
+      return sendTrackerPasswordReset(email, redirectTo, client)
     },
     updatePassword: async (password) => {
       const client = clientRef.current
@@ -220,20 +218,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, message: safeAuthErrorMessage(error) }
       }
     },
-    signOut: async () => {
+    signOut: async (scope: AccountSessionScope = 'local') => {
       const client = clientRef.current
       if (!client) return { ok: false, message: '当前环境尚未连接 Lexi 账号服务。' }
       try {
         const userId = sessionRef.current?.user.id
-        if (userId) {
+        if (userId && accountSessionScopeAffectsCurrentDevice(scope)) {
           try {
             await removeCurrentDevicePresence(userId)
           } catch {
             // Device presence expires shortly even if the best-effort cleanup fails.
           }
         }
-        const { error } = await client.auth.signOut({ scope: 'local' })
-        if (error) return { ok: false, message: safeAuthErrorMessage(error) }
+        const result = await signOutTrackerAccountSessions(scope, client)
+        if (!result.ok) return result
+        if (!accountSessionScopeAffectsCurrentDevice(scope)) return { ok: true }
+
         sessionRef.current = null
         setSession(null)
         setStatus('signed-out')

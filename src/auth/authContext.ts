@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { createContext, useContext } from 'react'
 
+import type { AccountSessionScope } from '@/auth/accountSecurity'
 import type { ManagedAiDataBindingState } from '@/auth/managedAiDataBinding'
 
 export type AuthStatus =
@@ -38,7 +39,7 @@ export type AuthContextValue = {
   ) => Promise<AuthSignUpResult>
   sendPasswordReset: (email: string, redirectTo: string) => Promise<AuthActionResult>
   updatePassword: (password: string) => Promise<AuthActionResult>
-  signOut: () => Promise<AuthActionResult>
+  signOut: (scope?: AccountSessionScope) => Promise<AuthActionResult>
   deleteAccount: () => Promise<AuthActionResult>
   enterGuest: () => void
   exitGuest: () => void
