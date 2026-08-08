@@ -29,6 +29,8 @@ interface ContentCloudLocationFieldProps {
   value: TrackerContentCloudMode
   onValueChange: (value: TrackerContentCloudMode) => void
   disabled?: boolean
+  /** Use the compact control when several selectable records share one view. */
+  variant?: 'default' | 'compact'
   /** Plans use this for their dependent execution-record quota and failures. */
   relatedContent?: {
     entityKind: TrackerPhase4bEntityKind
@@ -78,6 +80,7 @@ export function ContentCloudLocationField({
   value,
   onValueChange,
   disabled = false,
+  variant = 'default',
   relatedContent,
 }: ContentCloudLocationFieldProps) {
   const { status, managedAiDataBinding } = useAuth()
@@ -136,6 +139,38 @@ export function ContentCloudLocationField({
     || !selectiveCloudAvailable
     || quotaExhausted
     || relatedQuotaExhausted
+  const compact = variant === 'compact'
+  const locationLabelId = `content-location-${entityKind}${entityId ? `-${entityId}` : ''}`
+  const quotaSummary = quotaDescription({ entityKind, quota, relatedContent, relatedQuota })
+
+  const locationStatus = visibleFailure
+    ? readableTrackerContentCloudFailure(visibleFailure.reason)
+    : !cloudReady
+      ? '登录并确认本机数据归属后，可选择同步云端。'
+      : isCheckingPolicy && !hasConfirmedCloudPolicy
+        ? '正在确认云端规则与可用额度，本机内容不会受影响。'
+        : policyRefreshFailed
+          ? '暂时无法确认云端规则，请刷新后再选择；本机内容不会受影响。'
+          : !hasConfirmedCloudPolicy
+            ? '正在等待云端规则确认，本机内容已保存。'
+            : !selectiveCloudAvailable
+              ? '管理员暂未开放内容上云，本机内容已保存。'
+              : quotaSummary
+                ?? (value === 'cloud'
+                  ? '会同步到已登录设备。'
+                  : '改为仅本机后，会立即请求移除云端副本。')
+
+  const showCompactStatus = Boolean(
+    visibleFailure
+    || !cloudReady
+    || (isCheckingPolicy && !hasConfirmedCloudPolicy)
+    || policyRefreshFailed
+    || !hasConfirmedCloudPolicy
+    || !selectiveCloudAvailable
+    || quotaExhausted
+    || relatedQuotaExhausted
+    || value === 'cloud',
+  )
 
   useEffect(() => {
     if (!cloudReady) return
@@ -144,13 +179,18 @@ export function ContentCloudLocationField({
 
   return (
     <section
-      className="space-y-2 rounded-xl border border-border bg-surface-subtle p-3"
-      aria-labelledby={`content-location-${entityKind}`}
+      className={cn(
+        'border border-border bg-surface-subtle',
+        compact ? 'space-y-1.5 rounded-lg px-2.5 py-2' : 'space-y-2 rounded-xl p-3',
+      )}
+      aria-labelledby={locationLabelId}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className={cn('flex justify-between gap-3', compact ? 'items-center' : 'items-start')}>
         <div>
-          <h3 id={`content-location-${entityKind}`} className="text-sm font-semibold">保存位置</h3>
-          <p className="mt-0.5 text-xs leading-4 text-muted-foreground">新内容默认只保存在这台设备。</p>
+          <h3 id={locationLabelId} className="text-sm font-semibold">保存位置</h3>
+          {!compact && (
+            <p className="mt-0.5 text-xs leading-4 text-muted-foreground">新内容默认只保存在这台设备。</p>
+          )}
         </div>
         {transferState && !visibleFailure && (
           <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground" role="status">
@@ -163,27 +203,32 @@ export function ContentCloudLocationField({
             type="button"
             onClick={() => requestTrackerContentCloudPolicyRefresh({ force: true, reason: 'manual' })}
             disabled={disabled || isCheckingPolicy}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+            className={cn(
+              'inline-flex shrink-0 items-center rounded-md font-medium text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60',
+              compact ? '-my-1 h-10 w-10 justify-center' : 'gap-1 px-1.5 py-1 text-xs',
+            )}
             aria-label="刷新云端规则和额度"
+            title="刷新云端规则和额度"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', isCheckingPolicy && 'animate-spin')} aria-hidden="true" />
-            {isCheckingPolicy ? '确认中' : '刷新'}
+            {!compact && (isCheckingPolicy ? '确认中' : '刷新')}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2" role="group" aria-label="选择保存位置">
+      <div className={cn('grid grid-cols-2', compact ? 'gap-1.5' : 'gap-2')} role="group" aria-label="选择保存位置">
         <button
           type="button"
           aria-pressed={value === 'local'}
           disabled={disabled}
           onClick={() => onValueChange('local')}
           className={cn(
-            'flex min-h-12 items-center gap-2 rounded-lg border px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+            'flex items-center rounded-lg border font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+            compact ? 'min-h-10 justify-center gap-1.5 px-2 text-[13px]' : 'min-h-12 gap-2 px-3 text-left text-sm',
             value === 'local' ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent',
           )}
         >
-          <HardDrive className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <HardDrive className={cn('shrink-0 text-primary', compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} aria-hidden="true" />
           仅本机
         </button>
         <button
@@ -195,33 +240,27 @@ export function ContentCloudLocationField({
             onValueChange('cloud')
           }}
           className={cn(
-            'flex min-h-12 items-center gap-2 rounded-lg border px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+            'flex items-center rounded-lg border font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+            compact ? 'min-h-10 justify-center gap-1.5 px-2 text-[13px]' : 'min-h-12 gap-2 px-3 text-left text-sm',
             value === 'cloud' ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background hover:bg-accent',
           )}
         >
-          <Cloud className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <Cloud className={cn('shrink-0 text-primary', compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} aria-hidden="true" />
           同步云端
         </button>
       </div>
 
-      <p className={cn('text-xs leading-4', visibleFailure ? 'text-destructive' : 'text-muted-foreground')} role={visibleFailure ? 'alert' : undefined}>
-        {visibleFailure
-          ? readableTrackerContentCloudFailure(visibleFailure.reason)
-          : !cloudReady
-            ? '登录并确认本机数据归属后，可选择同步云端。'
-            : isCheckingPolicy && !hasConfirmedCloudPolicy
-              ? '正在确认云端规则与可用额度，本机内容不会受影响。'
-              : policyRefreshFailed
-                ? '暂时无法确认云端规则，请刷新后再选择；本机内容不会受影响。'
-                : !hasConfirmedCloudPolicy
-                  ? '正在等待云端规则确认，本机内容已保存。'
-                  : !selectiveCloudAvailable
-                    ? '管理员暂未开放内容上云，本机内容已保存。'
-                    : quotaDescription({ entityKind, quota, relatedContent, relatedQuota })
-                      ?? (value === 'cloud'
-                        ? '会同步到已登录设备。'
-                        : '改为仅本机后，会立即请求移除云端副本。')}
-      </p>
+      {(!compact || showCompactStatus) && (
+        <p
+          className={cn(
+            'text-xs leading-4',
+            visibleFailure ? 'text-destructive' : 'text-muted-foreground',
+          )}
+          role={visibleFailure ? 'alert' : undefined}
+        >
+          {locationStatus}
+        </p>
+      )}
 
       {visibleFailure && retryEntityId && failureTarget && (
         <button

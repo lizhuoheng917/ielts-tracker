@@ -479,9 +479,9 @@ export function AIChatPanel({
             )}
 
             <div className={cn(
-              'min-w-0 text-sm',
+              'min-w-0',
               message.role === 'user'
-                ? 'max-w-[85%] rounded-[20px_6px_20px_20px] bg-indigo-600 px-3.5 py-2.5 text-white'
+                ? 'max-w-[85%] rounded-[20px_6px_20px_20px] bg-indigo-600 px-3.5 py-2.5 text-[15px] leading-6 text-white'
                 : 'w-full max-w-[calc(100%-2.25rem)] space-y-3 rounded-[6px_20px_20px_20px] border border-indigo-200/70 bg-indigo-50/70 px-3.5 py-3 dark:border-indigo-900/50 dark:bg-indigo-950/20',
             )}>
               {message.role === 'user' ? (
@@ -494,7 +494,7 @@ export function AIChatPanel({
                   <span>{message.content || '这次没有生成可用草稿，请重新发送。'}</span>
                 </div>
               ) : (
-                <SafeAIContent content={message.content} />
+                <SafeAIContent content={message.content} className="text-[15px] leading-7" />
               )}
 
               {message.role === 'assistant' && message.commandDrafts && message.commandDrafts.length > 0 && (

@@ -6,8 +6,14 @@ import type { PlanCreateCommandDraft } from '@/ai/planCommands'
 import { AIConfirmCard } from './AIConfirmCard'
 
 vi.mock('@/components/sync/ContentCloudLocationField', () => ({
-  ContentCloudLocationField: ({ value }: { value: 'local' | 'cloud' }) => (
-    <p>保存位置：{value === 'cloud' ? '同步云端' : '仅本机'}</p>
+  ContentCloudLocationField: ({
+    value,
+    variant,
+  }: {
+    value: 'local' | 'cloud'
+    variant?: 'default' | 'compact'
+  }) => (
+    <p data-variant={variant}>保存位置：{value === 'cloud' ? '同步云端' : '仅本机'}</p>
   ),
 }))
 
@@ -93,6 +99,7 @@ describe('AI plan confirmation card', () => {
     )
 
     expect(html).toContain('保存位置：同步云端')
+    expect(html).toContain('data-variant="compact"')
     expect(html).toContain('确认加入计划')
   })
 

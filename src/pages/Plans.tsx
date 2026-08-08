@@ -32,6 +32,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -43,6 +51,7 @@ import {
   CalendarDays,
   CheckCircle,
   Circle,
+  CircleHelp,
   Clock3,
   ListTodo,
   Pause,
@@ -1097,11 +1106,33 @@ export default function Plans() {
       <Dialog open={aiOpen} onOpenChange={setAiOpen}>
         <DialogContent className="flex max-h-[90dvh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(94vw,56rem)] md:h-[min(86dvh,54rem)]">
           <DialogHeader className="shrink-0 px-4 pt-4 pb-2 pr-12 md:px-6 md:pt-5">
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
-              AI 生成学习计划
-            </DialogTitle>
-            <DialogDescription>
+            <div className="flex items-center gap-1.5">
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+                AI 生成学习计划
+              </DialogTitle>
+              <Popover>
+                <PopoverTrigger
+                  className="-my-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="查看 AI 计划生成说明"
+                >
+                  <CircleHelp className="size-4" aria-hidden="true" />
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="bottom"
+                  className="w-[min(20rem,calc(100vw-2rem))] gap-3 p-3"
+                >
+                  <PopoverHeader>
+                    <PopoverTitle>生成说明</PopoverTitle>
+                    <PopoverDescription className="leading-5">
+                      每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；请核对单次或重复安排、日期和目标后再逐条加入。
+                    </PopoverDescription>
+                  </PopoverHeader>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <DialogDescription className="sr-only">
               每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；请核对单次或重复安排、日期和目标后再逐条加入。
             </DialogDescription>
           </DialogHeader>

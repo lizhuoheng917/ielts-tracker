@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-07-tracker-lexi-account-information-architecture-v1",
+  "release": "2026-08-08-tracker-ai-plan-dialog-density-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker now separates product-local data binding, sync presence, and current-device sign-out from shared Lexi Account security, uses the parent Lexi Account mark without replacing the Tracker product mark, and offers a fail-closed hand-off to the account center. The hand-off carries only source=tracker and a sanitized same-product return path; it never includes an Auth token, account id, device id, or learning data. Existing password recovery, session scopes, deletion, routes, queue payloads, and sync contracts remain compatible."
+    "reason": "The AI plan dialog now keeps the long generation explanation behind a touch-accessible non-modal help popover, slightly improves prompt and generated-plan readability, and uses a compact cloud-location selector only inside AI plan draft cards. The default location field remains unchanged in plan, practice, timer, and word editors."
   },
   "Backend": {
     "status": "reviewed-not-needed",
-    "reason": "Reviewed the shared Supabase Auth boundary. This change does not make an Auth, Edge Function, table, migration, RPC, RLS, secret, SMTP, or policy request; it only creates a browser-safe HTTPS navigation URL. Existing resetPasswordForEmail, updateUser, session-scope signOut, and deletion behavior are unchanged."
+    "reason": "Reviewed the managed AI and selective-content-sync path. This presentation-only change does not alter AI gateway requests, prompts, authentication, content schemas, cloud-transfer order, quotas, RLS, RPCs, Edge Functions, migrations, or secrets. A confirmed draft still creates the local plan first and then applies the existing cloud-location operation."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "Reviewed Lexi Control. The native Tracker information-architecture and account-center hand-off add no administrator-visible state, control, report, policy, or permission. The configured account-center base URL remains a reviewed learner deployment value, not an administrator-facing secret."
+    "reason": "Reviewed Lexi Control's existing AI and content-cloud controls. Provider policy, global availability, per-user overrides, quotas, reporting, and permissions are unchanged; the compact client control still reads the same live policy and quota state."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. No migration is required. Before deployment, confirm that VITE_LEXI_ACCOUNT_URL is either absent (the reviewed HTTPS default is used) or a reviewed HTTPS account-center origin; local HTTP is accepted only in development for loopback testing."
+    "reason": "Not deployed. No migration, Edge Function, or administrator deployment is required for this presentation change."
   },
   "Verification": {
     "status": "required",
-    "reason": "Before release, run the Tracker release gate and review the paired Lexi frontend/backend/admin release boundary. Smoke-test a signed-in Tracker user: product-local binding remains available, the account-center link contains only source=tracker plus a sanitized relative returnTo, invalid configured URLs disable the link, password recovery still opens Tracker recovery, the new password works in both Lexi products, and local/others/global controls preserve or clear the current session as labeled."
+    "reason": "Before release, run the Tracker release gate. Verify desktop and mobile AI plan dialogs: the help button opens a non-blocking readable popover without overflow, prompt and generated copy remain readable, each draft offers a compact local/cloud choice, unavailable or exhausted cloud status remains understandable, and confirming a local or cloud draft preserves the existing local-first transfer behavior."
   }
 }

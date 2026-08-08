@@ -108,12 +108,12 @@ export function AIConfirmCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <h4 className="text-sm font-semibold leading-5">{payload.title}</h4>
+            <h4 className="text-[15px] font-semibold leading-6">{payload.title}</h4>
             <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
               {CATEGORY_LABELS[payload.category] || '综合'}
             </Badge>
           </div>
-          <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
             {payload.description}
           </p>
         </div>
@@ -141,6 +141,7 @@ export function AIConfirmCard({
       {cloudMode && onCloudModeChange && (
         <div className="mt-3">
           <ContentCloudLocationField
+            variant="compact"
             entityKind="study_plan"
             entityId={draft.draftId}
             value={cloudMode}
