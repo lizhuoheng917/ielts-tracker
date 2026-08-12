@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lexi Words">
+  <rect width="512" height="512" rx="112" fill="#58b947"/>
+  <path d="M112 155c61-18 109-2 144 34 35-36 83-52 144-34v194c-60-16-107-2-144 33-37-35-84-49-144-33z" fill="none" stroke="#fff" stroke-width="34" stroke-linejoin="round"/>
+  <path d="M256 189v193" stroke="#fff" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="388" cy="116" r="34" fill="#ffc928"/>
+</svg>

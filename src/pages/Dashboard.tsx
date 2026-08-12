@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 
 import { AiSuggestionDialog } from '@/components/ai/AiSuggestionDialog'
+import { resolveLexiWordsUrl } from '@/app/productLinks'
 import {
   learnerAiTaskCoordinator,
   learnerAiTaskKey,
@@ -35,6 +36,7 @@ import {
   useLearnerAiTaskState,
 } from '@/ai/learnerAiTaskCoordinator'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
+import { useAuth } from '@/auth/authContext'
 import { AchievementMark } from '@/components/achievements/achievement-mark'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -55,6 +57,11 @@ import { isLocalDate, parseLocalDate, toLocalDate } from '@/lib/localDate'
 import { indexLatestPlanExecutionsForDate, isPlanScheduledForDate } from '@/lib/planView'
 import { getActivityLevel, getDateRangeSummary } from '@/lib/statsAnalytics'
 import { cn } from '@/lib/utils'
+import { WordsDailySummaryCard } from '@/features/words-summary/WordsDailySummaryCard'
+import {
+  createWordsDailySummaryPreview,
+  useWordsDailySummary,
+} from '@/features/words-summary/wordsDailySummary'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { usePlanStore } from '@/stores/planStore'
@@ -84,6 +91,11 @@ const HEATMAP_COLORS = [
 ] as const
 
 const BADGE_BY_ID = new Map(BADGES.map((badge) => [badge.id, badge]))
+
+const LEXI_WORDS_URL = resolveLexiWordsUrl({
+  wordsAppUrl: import.meta.env.VITE_LEXI_WORDS_APP_URL,
+  isDevelopment: import.meta.env.DEV,
+})
 
 function ReportMetric({ value, label, tone }: { value: string | number; label: string; tone: string }) {
   return (
@@ -135,6 +147,7 @@ function planScheduleLabel(plan: {
 }
 
 export default function Dashboard() {
+  const { status: authStatus, user } = useAuth()
   const artifactAccess = useAiArtifactAccess()
   const scopeKey = learnerAiTaskScopeKey(artifactAccess)
   const dailySuggestionTaskKey = scopeKey
@@ -186,6 +199,16 @@ export default function Dashboard() {
 
   const today = toLocalDate()
   const checkedIn = lastCheckinDate === today
+  const wordsSummaryPreview = useMemo(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return null
+    const preview = new URLSearchParams(window.location.search).get('preview')
+    return preview === 'words-summary' ? createWordsDailySummaryPreview(today) : null
+  }, [today])
+  const { state: wordsSummaryState, refresh: refreshWordsSummary } = useWordsDailySummary({
+    userId: authStatus === 'signed-in' ? (user?.id ?? null) : null,
+    studyDate: today,
+    previewSummary: wordsSummaryPreview,
+  })
 
   const todayQuote = useMemo(() => {
     const now = new Date()
@@ -458,6 +481,12 @@ export default function Dashboard() {
             tone: 'reading',
           },
         ]}
+      />
+
+      <WordsDailySummaryCard
+        state={wordsSummaryState}
+        wordsUrl={LEXI_WORDS_URL}
+        onRefresh={() => void refreshWordsSummary()}
       />
 
       {((examCountdown && showExamCountdown) || showAiSuggestions) && (
