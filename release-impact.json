@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-12-tracker-words-daily-summary-step2",
+  "release": "2026-08-12-tracker-words-plan-intent-step3",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker Dashboard now consumes the V1 Words cloud-only daily summary through a strictly validated, non-blocking card with the established Words product mark and a vetted product-root link. It reads once per mount and only refreshes on explicit user action; it does not persist, sync, merge or mutate any Tracker or Words record."
+    "reason": "Vocabulary plan details now offer an explicit Send to Words flow. The dialog sends only a reviewed date, count, mode and non-content plan reference, validates the V1 response, keeps one operation id for identical retries, locks fields during submission and leaves every non-vocabulary plan unchanged."
   },
   "Backend": {
     "status": "changed",
-    "reason": "This UI is coordinated with the formal Lexi repository's backward-compatible lexi_get_words_daily_summary RPC from step 1. The RPC derives the response from existing Words cloud rows with no summary table or cache row, rechecks auth.uid against the captured account, and must be applied and remotely verified before this Tracker commit can be deployed."
+    "reason": "This UI consumes the formal Lexi repository's backward-compatible owner-scoped handoff RPC from step 1. Step 3 adds no Tracker schema or duplicated plan record; the shared backend keeps explicit authenticated execution, captured-account checks, fixed payload shape, operation-id idempotency, hard row caps and expiry cleanup."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "The new card exposes only a transient own-account read of existing Words aggregates and creates no administrator-manageable state, policy, queue or learner-content copy. Lexi Control already reports the source Words records where relevant; no new admin search field, action or metric is required for this read-only presentation step."
+    "reason": "The transient plan intent contains no title, notes or learning content and is controlled only by its owning learner in Words. It introduces no administrator configuration, moderation case, support action or durable analytics entity, while its lifecycle is already bounded by the shared cleanup contract."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Neither the Supabase migration nor this Tracker UI has been deployed in this step. Production release remains blocked until both repository gates pass, the exact migration is applied and remotely verified first, and the verified Tracker commit is then deployed and smoke-tested."
+    "reason": "Neither the Supabase migration nor either step-3 client has been deployed. Production release remains blocked until both repository gates pass, the exact migration is applied and remotely verified first, and the verified Words, Control and Tracker sources are deployed and smoke-tested together."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The final Tracker release gate passed typecheck, oxlint, 75 test files and 469 tests, plus the pinned production build and bundle review. The formal Lexi release gate, including the zero-storage cross-product migration scenarios, also passed; local desktop and mobile browser checks verified the success, unsigned-user and manual-refresh states with no horizontal overflow or console warnings."
+    "reason": "The complete Tracker gate passed typecheck, oxlint, 76 test files with 474 tests, pinned production build and bundle review. The formal Lexi gate also passed learner, Control and Account builds plus all contract and regression suites. Desktop and mobile browser checks verified localized labels, success state, responsive stacking and no horizontal overflow or fresh-page console warnings."
   }
 }

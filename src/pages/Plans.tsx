@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/select'
 import {
   AlertCircle,
+  ArrowUpRight,
   CalendarDays,
   CheckCircle,
   Circle,
@@ -61,6 +62,7 @@ import {
   Repeat2,
   RotateCcw,
   Search,
+  Send,
   Sparkles,
   Trash2,
 } from 'lucide-react'
@@ -94,6 +96,9 @@ import {
   trackerContentCloudMode,
   type TrackerContentCloudMode,
 } from '@/sync/trackerContentCloudPolicy'
+import { useAuth } from '@/auth/authContext'
+import { resolveLexiWordsUrl } from '@/app/productLinks'
+import { WordsPlanIntentDialog } from '@/features/words-plan-intent/WordsPlanIntentDialog'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   once: '单次任务',
@@ -151,7 +156,13 @@ function getTodayStr(): string {
   return toLocalDate()
 }
 
+const LEXI_WORDS_URL = resolveLexiWordsUrl({
+  wordsAppUrl: import.meta.env.VITE_LEXI_WORDS_APP_URL,
+  isDevelopment: import.meta.env.DEV,
+})
+
 export default function Plans() {
+  const { user } = useAuth()
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
@@ -191,6 +202,7 @@ export default function Plans() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [planDetailOpen, setPlanDetailOpen] = useState(false)
+  const [planIntentOpen, setPlanIntentOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<StudyPlan | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<PlanStatusFilter>('all')
@@ -237,6 +249,30 @@ export default function Plans() {
     formWeekDaysMissing ? 'plan-form-weekdays-error' : null,
     formDurationInvalid ? 'plan-form-duration-error' : null,
   ].filter(Boolean).join(' ') || undefined
+
+  const planIntentPreview = useMemo(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('preview') === 'plan-intent'
+  }, [])
+
+  useEffect(() => {
+    if (!planIntentPreview) return
+    setSelectedPlan({
+      id: 'preview-vocabulary-plan',
+      title: '本周雅思核心词汇复习',
+      description: '每天完成一组核心词复习，并补充当天新词。',
+      category: 'vocabulary',
+      frequency: 'once',
+      scheduledDate: getTodayStr(),
+      targetTime: '20:30',
+      targetDuration: 35,
+      targetCount: 24,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    setPlanIntentOpen(true)
+  }, [planIntentPreview])
 
   useEffect(() => {
     if (!planDraftTaskKey || openRequestedTaskKey !== planDraftTaskKey) return
@@ -1211,10 +1247,45 @@ export default function Plans() {
                   <p className="mt-1 text-xs text-muted-foreground">{formatPlanTimeAndDuration(selectedPlan)}</p>
                 )}
               </div>
+              {selectedPlan.category === 'vocabulary' && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                  <div className="flex items-start gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <Send className="size-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground">交给 Words 安排当天学习</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        先发送日期、词数和模式；词书仍在 Words 中由你选择并确认。
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    className="mt-3 w-full"
+                    onClick={() => {
+                      setPlanDetailOpen(false)
+                      setPlanIntentOpen(true)
+                    }}
+                  >
+                    发送到 Words
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      <WordsPlanIntentDialog
+        open={planIntentOpen}
+        plan={selectedPlan}
+        userId={user?.id ?? null}
+        wordsUrl={LEXI_WORDS_URL}
+        preview={planIntentPreview}
+        onOpenChange={setPlanIntentOpen}
+      />
     </div>
   )
 }
