@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-08-tracker-ai-plan-dialog-density-v1",
+  "release": "2026-08-12-tracker-cross-product-contracts-v1",
   "Frontend": {
     "status": "changed",
-    "reason": "The AI plan dialog now keeps the long generation explanation behind a touch-accessible non-modal help popover, slightly improves prompt and generated-plan readability, and uses a compact cloud-location selector only inside AI plan draft cards. The default location field remains unchanged in plan, practice, timer, and word editors."
+    "reason": "Tracker now freezes the same V1 cross-product TypeScript contract and storage limits as Lexi Words. The contract is not imported by any page or runtime in this step, so navigation, local-first stores, cloud-sync selection, AI, account behavior and all visible user flows remain unchanged."
   },
   "Backend": {
-    "status": "reviewed-not-needed",
-    "reason": "Reviewed the managed AI and selective-content-sync path. This presentation-only change does not alter AI gateway requests, prompts, authentication, content schemas, cloud-transfer order, quotas, RLS, RPCs, Edge Functions, migrations, or secrets. A confirmed draft still creates the local plan first and then applies the existing cloud-location operation."
+    "status": "changed",
+    "reason": "The coordinated formal Lexi repository contains the backward-compatible Supabase migration for a zero-storage Words summary and compact expiring handoffs. Tracker does not call these RPCs yet and does not upload or merge any existing local record as part of this step."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "Reviewed Lexi Control's existing AI and content-cloud controls. Provider policy, global availability, per-user overrides, quotas, reporting, and permissions are unchanged; the compact client control still reads the same live policy and quota state."
+    "reason": "The new contract has no administrator-visible learner content, per-user management action or editable policy. The existing whole-database capacity metric automatically includes its storage, while per-account row limits and retention are server-enforced; Lexi Control remains unchanged until a later step introduces an intentionally managed state."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Not deployed. No migration, Edge Function, or administrator deployment is required for this presentation change."
+    "reason": "No Tracker or backend production deployment is performed in this step. A future UI integration remains blocked until the exact Supabase migration is applied and remotely verified."
   },
   "Verification": {
-    "status": "required",
-    "reason": "Before release, run the Tracker release gate. Verify desktop and mobile AI plan dialogs: the help button opens a non-blocking readable popover without overflow, prompt and generated copy remain readable, each draft offers a compact local/cloud choice, unavailable or exhausted cloud status remains understandable, and confirming a local or cloud draft preserves the existing local-first transfer behavior."
+    "status": "passed",
+    "reason": "The Tracker release gate passed with typecheck, oxlint, 72 test files and 458 tests, plus a production build and bundle review. The formal Lexi gate and dedicated migration scenarios also passed, the two TypeScript contract files are byte-identical, and no page or runtime imports the new contract."
   }
 }
