@@ -196,6 +196,7 @@ export default function Words() {
   const location = useLocation()
   const navigate = useNavigate()
   const plans = usePlanStore((s) => s.plans)
+  const deletePlan = usePlanStore((s) => s.deletePlan)
   const records = useWordStore((s) => s.records)
   const addRecord = useWordStore((s) => s.addRecord)
   const updateRecord = useWordStore((s) => s.updateRecord)
@@ -211,6 +212,9 @@ export default function Words() {
   const [selectedPlanId, setSelectedPlanId] = useState('')
   const [planIntentOpen, setPlanIntentOpen] = useState(false)
   const [planIntentMode, setPlanIntentMode] = useState<WordsPlanIntentMode>('manual')
+  const [planDeleteTarget, setPlanDeleteTarget] = useState<StudyPlan | null>(null)
+  const [planDeleteSaving, setPlanDeleteSaving] = useState(false)
+  const [planMutationError, setPlanMutationError] = useState('')
 
   const { openRequestedTaskKey, tasks: aiTasks } = useLearnerAiTaskState()
   const wordsHubPreview = useMemo(() => {
@@ -478,6 +482,23 @@ export default function Words() {
     }
   }
 
+  const handleVocabularyPlanDelete = async () => {
+    if (!planDeleteTarget || planDeleteSaving) return
+    setPlanDeleteSaving(true)
+    setPlanMutationError('')
+    try {
+      const result = await deletePlan(planDeleteTarget.id)
+      if (result.status === 'applied' || result.status === 'not_found') {
+        setSelectedPlanId(WORDS_HUB_NEW_PLAN_ID)
+        setPlanDeleteTarget(null)
+      } else {
+        setPlanMutationError(result.error?.message || '词汇计划暂时无法删除，请重试。')
+      }
+    } finally {
+      setPlanDeleteSaving(false)
+    }
+  }
+
   const clearFilters = () => {
     setSearchQuery('')
     setFilterCategory('all')
@@ -536,6 +557,7 @@ export default function Words() {
         plans={vocabularyPlans}
         selectedPlan={selectedPlan}
         onSelectPlan={setSelectedPlanId}
+        onDeletePlan={() => selectedPlan && setPlanDeleteTarget(selectedPlan)}
         onStartManual={() => {
           setPlanIntentMode('manual')
           setPlanIntentOpen(true)
@@ -885,6 +907,34 @@ export default function Words() {
         onPlanSaved={setSelectedPlanId}
         onOpenChange={setPlanIntentOpen}
       />
+
+      <Dialog
+        open={!!planDeleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !planDeleteSaving) {
+            setPlanDeleteTarget(null)
+            setPlanMutationError('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>删除词汇计划？</DialogTitle>
+            <DialogDescription>
+              {planDeleteTarget ? `将删除「${planDeleteTarget.title}」及其 Tracker 执行记录。Words 中已经确认的学习安排不会被反向修改。` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {planMutationError && <p className="text-sm text-destructive" role="alert">{planMutationError}</p>}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={() => setPlanDeleteTarget(null)} disabled={planDeleteSaving} className="w-full sm:w-auto">
+              取消
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleVocabularyPlanDelete()} disabled={planDeleteSaving} className="w-full sm:w-auto">
+              {planDeleteSaving ? '正在删除…' : '删除词汇计划'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

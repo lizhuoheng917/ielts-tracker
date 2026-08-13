@@ -4,6 +4,7 @@ import {
   PenLine,
   Settings2,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +31,7 @@ type Props = {
   plans: readonly StudyPlan[]
   selectedPlan: StudyPlan | null
   onSelectPlan: (planId: string) => void
+  onDeletePlan: () => void
   onStartManual: () => void
   onStartAi: () => void
   onOpenPlans: () => void
@@ -39,6 +41,7 @@ export function WordsCollaborationPanel({
   plans,
   selectedPlan,
   onSelectPlan,
+  onDeletePlan,
   onStartManual,
   onStartAi,
   onOpenPlans,
@@ -95,20 +98,34 @@ export function WordsCollaborationPanel({
 
       <div className="mt-3 flex min-w-0 flex-col gap-1.5 rounded-xl border border-border/75 bg-background/65 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className="shrink-0 text-xs font-medium text-muted-foreground">保存方式</span>
-        <Select
-          value={selectedPlan?.id ?? WORDS_HUB_NEW_PLAN_ID}
-          onValueChange={(value) => value && onSelectPlan(value)}
-        >
-          <SelectTrigger id="words-hub-plan" aria-label="选择新建或更新词汇计划" className="h-8 w-full bg-background sm:max-w-sm">
-            <SelectValue>{selectedPlan ? `更新：${selectedPlan.title}` : '新建词汇计划'}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={WORDS_HUB_NEW_PLAN_ID}>新建词汇计划</SelectItem>
-            {plans.map((plan) => (
-              <SelectItem key={plan.id} value={plan.id}>更新：{plan.title}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:max-w-sm">
+          <Select
+            value={selectedPlan?.id ?? WORDS_HUB_NEW_PLAN_ID}
+            onValueChange={(value) => value && onSelectPlan(value)}
+          >
+            <SelectTrigger id="words-hub-plan" aria-label="选择新建或更新词汇计划" className="h-8 min-w-0 flex-1 bg-background">
+              <SelectValue>{selectedPlan ? `更新：${selectedPlan.title}` : '新建词汇计划'}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={WORDS_HUB_NEW_PLAN_ID}>新建词汇计划</SelectItem>
+              {plans.map((plan) => (
+                <SelectItem key={plan.id} value={plan.id}>更新：{plan.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedPlan && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onDeletePlan}
+              aria-label={`删除词汇计划：${selectedPlan.title}`}
+              className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
