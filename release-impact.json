@@ -15,7 +15,7 @@
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Local coordinated release candidate only. The new Supabase migration, Words release unit and Tracker frontend have not been pushed, applied or deployed; production remains unchanged."
+    "reason": "Source publication only. The new Supabase migration, Words release unit and Tracker frontend are coordinated release candidates, but no migration or Cloudflare deployment is included; production remains unchanged."
   },
   "Verification": {
     "status": "passed",
