@@ -1,7 +1,7 @@
 # Tracker × Words 最小计划回执：Step 14 Gate
 
 - 日期：2026-08-13
-- 状态：正式代码候选；Supabase 迁移与线上部署尚未执行
+- 状态：已与正式 Supabase、Words、Control、Account 协调上线
 - 范围：既有短期 handoff、Tracker 词汇中心与计划中心
 
 ## 本步目标
@@ -40,4 +40,25 @@ Lexi Control 无需新增页面或 RPC。回执是用户本人可见、自动过
 3. 一次最多查询 50 个计划，不轮询，不新增数据库存储结构；
 4. Words 现有确认、拒绝、容量保护和本地恢复流程不变；
 5. 词汇中心与计划中心桌面 / 移动布局无横向溢出；
-6. 两个仓库完整发布门禁通过，生产保持不变。
+6. 两个仓库完整发布门禁通过，并在同一窗口核对生产 migration 与四个站点来源。
+
+## 生产发布证据
+
+- Words 仓库的本地 migration `20260813110754_lexi_cross_product_plan_receipts.sql`
+  已精确应用到正式 Supabase，远端记录为
+  `20260813132108_lexi_cross_product_plan_receipts`；没有执行宽范围 migration push。
+- 生产权限验证覆盖：匿名调用拒绝、缺少 JWT 的 authenticated 调用拒绝、当前账号读取成功、
+  切换账号读取拒绝、超过 50 个引用拒绝；校验在事务内回滚，没有创建用户数据。
+- 首轮 Tracker Production deployment 为 `10c929ff-2d5c-43d6-ba33-741b99d2baa4`，
+  来源 `d066e86d58a0d17856032686fa67a47a13722dfe`。配套 Words、Control、Account
+  来源均为 `18b43105215092355706eec3e56235b78c682f58`，对应首轮 deployment 分别为
+  `9bd9c8ff-6749-4561-96f2-7c1d74a23dcc`、
+  `df37a33e-34a6-4a80-869a-8701a733c6a4` 与
+  `e06a2ddc-e4bb-4d6d-8a15-b7a54c25819b`。
+- 正式 `/words`、`/plans` 与三个 Lexi 站点均返回 `200`，Words 退休的 `/admin`
+  返回 `410`。已有登录状态下，Tracker 能识别同一账号并加载 4 条现有计划，Words 显示
+  “已同步”，Control 能识别管理员；验收没有保存、发送或修改计划。
+- Tracker 最新生产资源在登录态打开 AI 弹窗后，只显示“确认生成计划（消耗额度）”；
+  等待 5 秒仍未自动生成。部署前已经打开的旧标签可能持有旧脚本，刷新后即可进入新流程。
+- 当前验收账号 AI 当日额度为 `0 / 4`，没有通过修改额度或创建数据强行完成真实
+  “生成 → 发送 → Words 决定 → Tracker 回执”；此操作留到额度恢复后的人工复核。

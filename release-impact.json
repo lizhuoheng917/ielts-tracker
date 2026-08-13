@@ -14,11 +14,11 @@
     "reason": "Reviewed Lexi Control and its admin RPC boundaries. Plan receipts are transient owner-only workflow feedback with no policy, quota, moderation, support or remotely manageable value; granting administrators a new read path would expose learner workflow without an operational action, so no Control surface is added."
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "Source publication only. The new Supabase migration, Words release unit and Tracker frontend are coordinated release candidates, but no migration or Cloudflare deployment is included; production remains unchanged."
+    "status": "deployed",
+    "reason": "Production Supabase applied local migration 20260813110754_lexi_cross_product_plan_receipts.sql as remote migration 20260813132108. Runtime-changing commits d066e86d58a0d17856032686fa67a47a13722dfe for Tracker and 18b43105215092355706eec3e56235b78c682f58 for the paired Words, Control and Account surfaces were deployed and verified; this record-only closeout contains no runtime change and is included in the final source-parity deployment. Production endpoints, signed-in read-only surfaces and the explicit AI-generation gate were verified."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The complete Tracker release gate passed typecheck, lint, 85 test files and 520 tests, production build and bundle checks. The coordinated Words release gate also passed learner, Control and Account builds plus all migration, RLS, account-isolation, sync, AI and security regressions. Browser acceptance confirmed pending and accepted receipt states, accurate copy, no console errors, and no dialog-level horizontal overflow at a mobile-class viewport."
+    "reason": "The complete Tracker release gate passed typecheck, lint, 85 test files and 520 tests, production build and bundle checks. The coordinated Words release gate also passed learner, Control and Account builds plus all migration, RLS, account-isolation, sync, AI and security regressions. Production SQL checks rejected anonymous, missing-JWT, cross-account and over-limit reads while allowing an authenticated owner read. A freshly reloaded signed-in Tracker page kept the AI dialog idle for five seconds until an explicit generate action; Words, Tracker, Control and Account surfaces loaded without creating learning data. The current account had no remaining AI quota, so a real generate-send-decide-receipt cycle remains a named non-blocking follow-up."
   }
 }
