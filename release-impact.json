@@ -14,11 +14,11 @@
     "reason": "Reviewed with no additional Control surface or policy required. Local-first plan storage and deletion use the existing Tracker content-cloud policy when the learner explicitly selects cloud, and Vocabulary Center AI remains governed by the existing words_plan_recommendation purpose and independent quota. No generated recommendation body or duplicate plan history is added to administrator storage."
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "Production deployment is being repeated after end-to-end smoke testing identified the missing Vocabulary Center deletion control required by the approved ownership rule. Supabase contracts and the paired Lexi surfaces are already deployed; final status requires this corrected Tracker artifact and a production cleanup smoke test."
+    "status": "deployed",
+    "reason": "Tracker production is deployed from verified commit d08fa99 as Cloudflare Pages deployment 4a769d08-b1a7-4efa-a662-9a99afbed49e. The paired Lexi Words, Control and Account surfaces are deployed from their coordinated commit 0d3e8d4, and the exact Supabase migrations plus lexi-ai-gateway v15 are active."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The previous candidate passed 83 test files and 510 tests plus production bundle checks. Authenticated production QA then verified shared-account Words summaries, canonical save-and-send, a 7-word Tracker request, Words safe projection to 12 reviews and zero new words, explicit rejection with no learning-data change, and exposed a missing delete control. The corrected candidate must pass verify:release again, deploy from the recorded SHA, delete the temporary QA plan, and repeat desktop/mobile and console-error checks."
+    "reason": "The corrected release passed typecheck, lint, 83 test files and 510 tests, production build and bundle safety checks. Authenticated production QA verified shared-account Words summaries, canonical save-and-send, a 7-word Tracker request, Words safe projection to 12 reviews and zero new words, explicit rejection with no learning-data change, and Vocabulary Center deletion. The temporary plan and rejected handoff were removed, the Tracker account returned to its original four plans, and the four public surfaces completed final HTTP and browser console checks."
   }
 }
