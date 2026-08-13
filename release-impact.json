@@ -14,11 +14,11 @@
     "reason": "Reviewed Lexi Control and its existing AI policy and quota controls. The new values are per-request derived aggregates, not persisted administrator-manageable state; the current words_plan_recommendation enable switch and daily quota remain sufficient. Homepage card visibility and order are individual device presentation choices, so no Control UI or admin RPC change is needed."
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "This is a local coordinated implementation and validation handoff. No production Supabase function or Cloudflare Pages deployment has been performed in this change."
+    "status": "deployed",
+    "reason": "Runtime commit 1b012a164c68be07de024778d31cc5e188a9e3b8 was pushed to main and deployed to Cloudflare production as deployment 4aa33d2e-d373-4be0-b1d2-b4c4f90b5684 with source 1b012a1. The paired Lexi release a502907c871f22ac7d10d393919cbc465dd619b6 deployed production lexi-ai-gateway v16 before Tracker, preserving rolling compatibility. No database migration was required."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker release verification passed impact review, typecheck, lint, 86 test files with 534 tests, production build and bundle safety checks. Targeted layout, backup, sync and Words-summary tests also passed. Browser validation confirmed the compact Settings entry, dedicated dialog, fixed-card labels, ordering, hiding, Dashboard mapping and default reset. The coordinated Words release gate had already passed after its latest code change; production smoke testing remains part of the later deployment step."
+    "reason": "Tracker release verification passed impact review, typecheck, lint, 86 test files with 534 tests, production build and bundle safety checks. Cross-repository Words-plan parity passed for valid, legacy and rejected contracts. Production Pages source SHA and HTTP checks passed; browser validation confirmed the Settings entry, dedicated eight-card dialog, the single exam-countdown visibility control, Vocabulary Center entry points and normal loading. Words, Control and the corrected Account login surface also loaded successfully, while no real AI generation or learner-data write was triggered during smoke testing."
   }
 }
