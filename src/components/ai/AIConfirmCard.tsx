@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  ArrowUpRight,
   CalendarDays,
   Check,
   Clock3,
@@ -11,6 +12,7 @@ import type { AiCommandReceipt } from '@/ai/contracts'
 import type { PlanCreateCommandDraft } from '@/ai/planCommands'
 import { ContentCloudLocationField } from '@/components/sync/ContentCloudLocationField'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { Badge } from '@/components/ui/badge'
 import { isLocalDate } from '@/lib/localDate'
 import { cn } from '@/lib/utils'
@@ -72,7 +74,7 @@ function scheduleLabel(draft: PlanCreateCommandDraft): string {
 function receiptMessage(receipt: AiCommandReceipt): string {
   if (receipt.status === 'applied') return '已加入学习计划'
   if (receipt.status === 'duplicate') return '已存在，未重复添加'
-  if (receipt.status === 'rejected') return '已忽略这条草稿'
+  if (receipt.status === 'rejected') return receipt.error?.message || '已忽略这条草稿'
   if (receipt.status === 'stale') return '草稿已过期，请重新生成'
   if (receipt.status === 'scope_mismatch') return '账号或 AI 来源已变化，请重新生成'
   return receipt.error?.message || '保存失败，请重试'
@@ -93,6 +95,7 @@ export function AIConfirmCard({
   const blocked = receipt?.status === 'stale' || receipt?.status === 'scope_mismatch'
   const failed = receipt?.status === 'failed'
   const isFinal = completed || rejected || blocked
+  const vocabularyManaged = payload.category === 'vocabulary'
 
   return (
     <article className={cn(
@@ -138,7 +141,7 @@ export function AIConfirmCard({
         </div>
       </dl>
 
-      {cloudMode && onCloudModeChange && (
+      {cloudMode && onCloudModeChange && !vocabularyManaged && (
         <div className="mt-3">
           <ContentCloudLocationField
             variant="compact"
@@ -148,6 +151,33 @@ export function AIConfirmCard({
             onValueChange={onCloudModeChange}
             disabled={applying || isFinal}
           />
+        </div>
+      )}
+
+      {vocabularyManaged && !isFinal && (
+        <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-3">
+          <p className="text-xs leading-5 text-muted-foreground">
+            这是一条历史 AI 词汇草稿。词汇计划现已统一到词汇中心创建，不会从计划中心写入。
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onReject}
+              disabled={applying}
+              className="min-h-11"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+              忽略旧草稿
+            </Button>
+            <a
+              href="/words"
+              className={cn(buttonVariants({ variant: 'default' }), 'min-h-11')}
+            >
+              前往词汇中心
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
+            </a>
+          </div>
         </div>
       )}
 
@@ -169,7 +199,7 @@ export function AIConfirmCard({
         </div>
       )}
 
-      {!isFinal && (
+      {!isFinal && !vocabularyManaged && (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
           <Button
             type="button"

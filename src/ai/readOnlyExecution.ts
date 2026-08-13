@@ -7,6 +7,10 @@ import {
   type AiStructuredContentForPurpose,
 } from './structuredOutputs'
 import { parseWritingSubmission, type WritingSubmission } from './writingFeedback'
+import {
+  assertWordsPlanRecommendationMatchesContext,
+  type WordsPlanRecommendationContextDataV1,
+} from './wordsPlanRecommendation'
 
 export interface ReadOnlyAiExecutionRequest<
   TPurpose extends ManagedAiPurpose = ManagedAiPurpose,
@@ -125,6 +129,12 @@ export async function executeReadOnlyAi<TPurpose extends ManagedAiPurpose>(
   let content: AiStructuredContentForPurpose<TPurpose>
   try {
     content = parseStructuredAiOutput(result.artifact.content, request.purpose, writingSubmission)
+    if (request.purpose === 'words_plan_recommendation' && content.kind === 'words_plan_recommendation') {
+      assertWordsPlanRecommendationMatchesContext(
+        content,
+        request.snapshot.data as WordsPlanRecommendationContextDataV1,
+      )
+    }
   } catch {
     throw new AiGatewayError(
       'INVALID_RESPONSE',

@@ -73,6 +73,12 @@ export type AiPlanCategory = (typeof AI_PLAN_CATEGORIES)[number]
 export const AI_PLAN_FREQUENCIES = ['once', 'daily', 'weekly'] as const
 export type AiPlanFrequency = (typeof AI_PLAN_FREQUENCIES)[number]
 
+export const AI_WORDS_STUDY_MODES = ['mixed', 'review', 'new'] as const
+export type AiWordsStudyMode = (typeof AI_WORDS_STUDY_MODES)[number]
+
+export const AI_RECOMMENDATION_CONFIDENCE = ['low', 'medium', 'high'] as const
+export type AiRecommendationConfidence = (typeof AI_RECOMMENDATION_CONFIDENCE)[number]
+
 export interface DailySuggestionV2 {
   schemaVersion: typeof AI_OUTPUT_SCHEMA_VERSION
   kind: 'daily_suggestion'
@@ -139,10 +145,27 @@ export interface PlanDraftV2 {
   limitations: string[]
 }
 
+export interface WordsPlanRecommendationV2 {
+  schemaVersion: typeof AI_OUTPUT_SCHEMA_VERSION
+  kind: 'words_plan_recommendation'
+  targetDate: string
+  studyMode: AiWordsStudyMode
+  targetCount: number
+  reviewWords: number
+  newWords: number
+  estimatedMinutes: number
+  confidence: AiRecommendationConfidence
+  summary: string
+  evidence: string[]
+  risks: string[]
+  limitations: string[]
+}
+
 export type AiStructuredContentV2 =
   | DailySuggestionV2
   | LearningAnalysisV2
   | PlanDraftV2
+  | WordsPlanRecommendationV2
   | WritingFeedbackV2
 
 export type AiStructuredContentForPurpose<TPurpose extends ManagedAiPurpose> =
@@ -152,7 +175,9 @@ export type AiStructuredContentForPurpose<TPurpose extends ManagedAiPurpose> =
       ? LearningAnalysisV2
       : TPurpose extends 'plan_draft'
         ? PlanDraftV2
-        : WritingFeedbackV2
+        : TPurpose extends 'writing_feedback'
+          ? WritingFeedbackV2
+          : WordsPlanRecommendationV2
 
 export class StructuredAiOutputValidationError extends Error {
   constructor(message: string) {
@@ -503,6 +528,121 @@ export function parsePlanDraftV2(value: unknown): PlanDraftV2 {
   }
 }
 
+export function parseWordsPlanRecommendationV2(
+  value: unknown,
+): WordsPlanRecommendationV2 {
+  assertSerializedSize(value)
+  const output = record(value, 'words plan recommendation')
+  exactKeys(output, [
+    'schemaVersion',
+    'kind',
+    'targetDate',
+    'studyMode',
+    'targetCount',
+    'reviewWords',
+    'newWords',
+    'estimatedMinutes',
+    'confidence',
+    'summary',
+    'evidence',
+    'risks',
+    'limitations',
+  ], 'words plan recommendation')
+  if (output.schemaVersion !== AI_OUTPUT_SCHEMA_VERSION) {
+    fail('words plan recommendation.schemaVersion must be 2')
+  }
+  if (output.kind !== 'words_plan_recommendation') {
+    fail('words plan recommendation.kind is invalid')
+  }
+  if (!isLocalDate(output.targetDate)) {
+    fail('words plan recommendation.targetDate must be a valid local date')
+  }
+  const studyMode = enumValue(
+    output.studyMode,
+    AI_WORDS_STUDY_MODES,
+    'words plan recommendation.studyMode',
+  )
+  const targetCount = nullableBoundedInteger(
+    output.targetCount,
+    'words plan recommendation.targetCount',
+    1,
+    1_000,
+  )
+  const reviewWords = nullableBoundedInteger(
+    output.reviewWords,
+    'words plan recommendation.reviewWords',
+    0,
+    1_000,
+  )
+  const newWords = nullableBoundedInteger(
+    output.newWords,
+    'words plan recommendation.newWords',
+    0,
+    1_000,
+  )
+  if (targetCount === null || reviewWords === null || newWords === null) {
+    fail('words plan recommendation counts must be integers')
+  }
+  if (reviewWords + newWords !== targetCount) {
+    fail('words plan recommendation count split must equal targetCount')
+  }
+  if (studyMode === 'review' && (reviewWords !== targetCount || newWords !== 0)) {
+    fail('review mode must contain review words only')
+  }
+  if (studyMode === 'new' && (newWords !== targetCount || reviewWords !== 0)) {
+    fail('new mode must contain new words only')
+  }
+  if (studyMode === 'mixed' && (reviewWords < 1 || newWords < 1)) {
+    fail('mixed mode must contain both review and new words')
+  }
+  const evidence = boundedStringArray(
+    output.evidence,
+    'words plan recommendation.evidence',
+    4,
+    200,
+  )
+  const limitations = boundedStringArray(
+    output.limitations,
+    'words plan recommendation.limitations',
+    3,
+    200,
+  )
+  if (evidence.length < 2) {
+    fail('words plan recommendation.evidence must contain at least 2 items')
+  }
+  if (limitations.length < 1) {
+    fail('words plan recommendation.limitations must contain at least 1 item')
+  }
+
+  return {
+    schemaVersion: AI_OUTPUT_SCHEMA_VERSION,
+    kind: 'words_plan_recommendation',
+    targetDate: output.targetDate,
+    studyMode,
+    targetCount,
+    reviewWords,
+    newWords,
+    estimatedMinutes: boundedMinutes(
+      output.estimatedMinutes,
+      'words plan recommendation.estimatedMinutes',
+    ),
+    confidence: enumValue(
+      output.confidence,
+      AI_RECOMMENDATION_CONFIDENCE,
+      'words plan recommendation.confidence',
+    ),
+    summary: boundedString(output.summary, 'words plan recommendation.summary', 320),
+    evidence,
+    risks: boundedStringArray(
+      output.risks,
+      'words plan recommendation.risks',
+      3,
+      200,
+    ),
+    limitations,
+  }
+}
+
 export function parseStructuredAiOutput<TPurpose extends ManagedAiPurpose>(
   value: unknown,
   purpose: TPurpose,
@@ -514,7 +654,9 @@ export function parseStructuredAiOutput<TPurpose extends ManagedAiPurpose>(
       ? parseLearningAnalysisV2(value)
       : purpose === 'plan_draft'
         ? parsePlanDraftV2(value)
-        : parseWritingFeedbackV2(value, writingSubmission)) as AiStructuredContentForPurpose<TPurpose>
+        : purpose === 'writing_feedback'
+          ? parseWritingFeedbackV2(value, writingSubmission)
+          : parseWordsPlanRecommendationV2(value)) as AiStructuredContentForPurpose<TPurpose>
 }
 
 export function parseStructuredAiOutputJson<TPurpose extends ManagedAiPurpose>(
@@ -558,6 +700,17 @@ export function isLearningAnalysisV2(value: unknown): value is LearningAnalysisV
 export function isPlanDraftV2(value: unknown): value is PlanDraftV2 {
   try {
     parsePlanDraftV2(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function isWordsPlanRecommendationV2(
+  value: unknown,
+): value is WordsPlanRecommendationV2 {
+  try {
+    parseWordsPlanRecommendationV2(value)
     return true
   } catch {
     return false

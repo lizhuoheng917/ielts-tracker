@@ -160,6 +160,78 @@ describe('plan store AI command transaction', () => {
       .toEqual(['标签 A 的计划', '标签 B 的计划'])
   })
 
+  it('creates one canonical vocabulary plan and updates that same id on retry', async () => {
+    const store = storeModule.usePlanStore.getState()
+    const created = await store.upsertVocabularyPlan({
+      title: '8月14日词汇计划',
+      description: '目标由词汇中心维护；具体词书与单词在 Words 中确认。',
+      frequency: 'once',
+      scheduledDate: '2026-08-14',
+      targetCount: 24,
+      targetDuration: 20,
+      isActive: true,
+    })
+    expect(created.status).toBe('applied')
+    expect(created.targetId).toBeTruthy()
+
+    const updated = await storeModule.usePlanStore.getState().upsertVocabularyPlan({
+      id: created.targetId,
+      title: '8月14日词汇计划',
+      description: '目标由词汇中心维护；具体词书与单词在 Words 中确认。',
+      frequency: 'once',
+      scheduledDate: '2026-08-14',
+      targetTime: '20:30',
+      targetCount: 30,
+      targetDuration: 25,
+      isActive: true,
+    })
+
+    expect(updated).toMatchObject({ status: 'applied', targetId: created.targetId })
+    expect(storeModule.usePlanStore.getState().plans).toEqual([
+      expect.objectContaining({
+        id: created.targetId,
+        category: 'vocabulary',
+        frequency: 'once',
+        scheduledDate: '2026-08-14',
+        targetTime: '20:30',
+        targetCount: 30,
+        targetDuration: 25,
+      }),
+    ])
+  })
+
+  it('refuses to overwrite a missing or non-vocabulary plan through the specialized writer', async () => {
+    const reading = await storeModule.usePlanStore.getState().addPlan({
+      title: '阅读计划', category: 'reading', frequency: 'daily', isActive: true,
+    })
+    await expect(storeModule.usePlanStore.getState().upsertVocabularyPlan({
+      id: reading.targetId,
+      title: '错误覆盖',
+      frequency: 'once',
+      scheduledDate: '2026-08-14',
+      targetCount: 20,
+      targetDuration: 20,
+      isActive: true,
+    })).resolves.toMatchObject({ status: 'not_found' })
+    expect(storeModule.usePlanStore.getState().plans[0].category).toBe('reading')
+  })
+
+  it('rejects an invalid professional vocabulary schedule before local persistence', async () => {
+    const result = await storeModule.usePlanStore.getState().upsertVocabularyPlan({
+      title: '无日期计划',
+      frequency: 'once',
+      targetCount: 20,
+      targetDuration: 20,
+      isActive: true,
+    })
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: { code: 'INVALID_VOCABULARY_PLAN' },
+    })
+    expect(storeModule.usePlanStore.getState().plans).toEqual([])
+  })
+
   it('blocks expired or account-mismatched drafts before plan creation', async () => {
     const store = storeModule.usePlanStore.getState()
     const stale = await store.applyConfirmedAiPlanDraft(draft(), {
@@ -179,6 +251,26 @@ describe('plan store AI command transaction', () => {
     expect(stale.status).toBe('stale')
     expect(mismatch.status).toBe('scope_mismatch')
     expect(storeModule.usePlanStore.getState().plans).toHaveLength(0)
+  })
+
+  it('redirects restored vocabulary AI drafts without creating a Plan Center plan', async () => {
+    const source = draft()
+    const receipt = await storeModule.usePlanStore.getState().applyConfirmedAiPlanDraft(draft({
+      payload: { ...source.payload, category: 'vocabulary' },
+    }), {
+      routeMode: 'managed',
+      accountScopeId: 'managed:user-1',
+      now: new Date('2026-08-02T01:00:00.000Z'),
+    })
+
+    expect(receipt).toMatchObject({
+      status: 'rejected',
+      error: {
+        code: 'VOCABULARY_PLAN_MANAGED_IN_WORDS',
+      },
+    })
+    expect(storeModule.usePlanStore.getState().plans).toHaveLength(0)
+    expect(storeModule.usePlanStore.getState().aiCommandReceipts).toHaveLength(1)
   })
 
   it('rolls memory back and reports failure when the atomic envelope cannot persist', async () => {

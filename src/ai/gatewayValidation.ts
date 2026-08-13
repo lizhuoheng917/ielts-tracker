@@ -1,4 +1,5 @@
 import { resolveAiScopes } from './capabilities'
+import { isLocalDate } from '@/lib/localDate'
 import type { AiArtifact, AiContextSnapshotV1, AiResultEnvelope, AiRun } from './contracts'
 import {
   AI_GATEWAY_PRODUCT_ID,
@@ -18,6 +19,10 @@ import {
   type AiStructuredContentV2,
 } from './structuredOutputs'
 import { parseWritingSubmission } from './writingFeedback'
+import {
+  assertWordsPlanRecommendationMatchesContext,
+  type WordsPlanRecommendationContextDataV1,
+} from './wordsPlanRecommendation'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -101,7 +106,7 @@ function isoTimestamp(value: unknown, label: string): string {
 
 function localDate(value: unknown, label: string): string {
   const parsed = stringValue(value, label, 10)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed) || !Number.isFinite(Date.parse(`${parsed}T00:00:00Z`))) {
+  if (!isLocalDate(parsed)) {
     fail(`${label} must be a local date`)
   }
   return parsed
@@ -291,6 +296,88 @@ function assertWritingContextData(snapshot: AiContextSnapshotV1): void {
   }
 }
 
+function assertWordsPlanRecommendationContextData(snapshot: AiContextSnapshotV1): void {
+  const data = record(snapshot.data, 'snapshot.data')
+  exactKeys(data, ['targetDate', 'timeZone', 'sourcePlan', 'tracker', 'words'], 'snapshot.data')
+  localDate(data.targetDate, 'snapshot.data.targetDate')
+  stringValue(data.timeZone, 'snapshot.data.timeZone', 64)
+
+  const sourcePlan = record(data.sourcePlan, 'snapshot.data.sourcePlan')
+  exactKeys(sourcePlan, ['currentTargetCount', 'targetDurationMinutes'], 'snapshot.data.sourcePlan')
+  for (const key of ['currentTargetCount', 'targetDurationMinutes'] as const) {
+    if (sourcePlan[key] !== null) finiteNumber(sourcePlan[key], `snapshot.data.sourcePlan.${key}`, { integer: true, min: 1, max: key === 'currentTargetCount' ? 1_000 : 180 })
+  }
+
+  const tracker = record(data.tracker, 'snapshot.data.tracker')
+  exactKeys(tracker, ['recent7Days', 'vocabularyHistory30Days', 'targetDay'], 'snapshot.data.tracker')
+  const recent = record(tracker.recent7Days, 'snapshot.data.tracker.recent7Days')
+  exactKeys(recent, ['startDate', 'endDate', 'activeDays', 'wordRecordCount', 'wordsLogged', 'practiceSessions', 'timerSessions', 'studySeconds', 'recordedPlanExecutions', 'completedPlanExecutions', 'recordedPlanCompletionRate'], 'snapshot.data.tracker.recent7Days')
+  localDate(recent.startDate, 'snapshot.data.tracker.recent7Days.startDate')
+  localDate(recent.endDate, 'snapshot.data.tracker.recent7Days.endDate')
+  for (const key of ['activeDays', 'wordRecordCount', 'wordsLogged', 'practiceSessions', 'timerSessions', 'studySeconds', 'recordedPlanExecutions', 'completedPlanExecutions'] as const) {
+    finiteNumber(recent[key], `snapshot.data.tracker.recent7Days.${key}`, { integer: true, min: 0, max: 100_000_000 })
+  }
+  if (recent.recordedPlanCompletionRate !== null) finiteNumber(recent.recordedPlanCompletionRate, 'snapshot.data.tracker.recent7Days.recordedPlanCompletionRate', { min: 0, max: 100 })
+  if (Number(recent.activeDays) > 7 || Number(recent.completedPlanExecutions) > Number(recent.recordedPlanExecutions)) fail('snapshot.data.tracker.recent7Days counts are inconsistent')
+
+  const vocabularyHistory = record(tracker.vocabularyHistory30Days, 'snapshot.data.tracker.vocabularyHistory30Days')
+  exactKeys(vocabularyHistory, ['startDate', 'endDate', 'planCount', 'activePlanCount', 'plansWithTargetCount', 'medianTargetCount', 'recordedExecutions', 'completedExecutions', 'recordedCompletionRate', 'actualWordsLogged'], 'snapshot.data.tracker.vocabularyHistory30Days')
+  localDate(vocabularyHistory.startDate, 'snapshot.data.tracker.vocabularyHistory30Days.startDate')
+  localDate(vocabularyHistory.endDate, 'snapshot.data.tracker.vocabularyHistory30Days.endDate')
+  for (const key of ['planCount', 'activePlanCount', 'plansWithTargetCount', 'recordedExecutions', 'completedExecutions', 'actualWordsLogged'] as const) {
+    finiteNumber(vocabularyHistory[key], `snapshot.data.tracker.vocabularyHistory30Days.${key}`, { integer: true, min: 0, max: 100_000_000 })
+  }
+  if (vocabularyHistory.medianTargetCount !== null) finiteNumber(vocabularyHistory.medianTargetCount, 'snapshot.data.tracker.vocabularyHistory30Days.medianTargetCount', { integer: true, min: 1, max: 1_000 })
+  if (vocabularyHistory.recordedCompletionRate !== null) finiteNumber(vocabularyHistory.recordedCompletionRate, 'snapshot.data.tracker.vocabularyHistory30Days.recordedCompletionRate', { min: 0, max: 100 })
+  if (
+    Number(vocabularyHistory.activePlanCount) > Number(vocabularyHistory.planCount)
+    || Number(vocabularyHistory.plansWithTargetCount) > Number(vocabularyHistory.planCount)
+    || Number(vocabularyHistory.completedExecutions) > Number(vocabularyHistory.recordedExecutions)
+    || (Number(vocabularyHistory.plansWithTargetCount) === 0) !== (vocabularyHistory.medianTargetCount === null)
+  ) fail('snapshot.data.tracker.vocabularyHistory30Days counts are inconsistent')
+
+  const targetDay = record(tracker.targetDay, 'snapshot.data.tracker.targetDay')
+  exactKeys(targetDay, ['scheduledPlanCount', 'completedPlanCount', 'remainingPlanCount', 'vocabularyPlanCount', 'nonVocabularyPlanCount', 'plannedMinutesKnown', 'plansWithoutDuration', 'actualMinutesLogged'], 'snapshot.data.tracker.targetDay')
+  for (const [key, value] of Object.entries(targetDay)) finiteNumber(value, `snapshot.data.tracker.targetDay.${key}`, { integer: true, min: 0, max: 100_000_000 })
+  if (
+    Number(targetDay.completedPlanCount) + Number(targetDay.remainingPlanCount) !== Number(targetDay.scheduledPlanCount)
+    || Number(targetDay.vocabularyPlanCount) + Number(targetDay.nonVocabularyPlanCount) !== Number(targetDay.scheduledPlanCount)
+    || Number(targetDay.plansWithoutDuration) > Number(targetDay.scheduledPlanCount)
+  ) fail('snapshot.data.tracker.targetDay counts are inconsistent')
+
+  const words = record(data.words, 'snapshot.data.words')
+  exactKeys(words, ['coverage', 'inventory', 'recent7Days', 'targetDay', 'recommendationBounds'], 'snapshot.data.words')
+  if (words.coverage !== 'cloud_data_only') fail('snapshot.data.words.coverage is invalid')
+  const countObject = (value: unknown, label: string, keys: readonly string[]) => {
+    const object = record(value, label)
+    exactKeys(object, keys, label)
+    for (const key of keys) finiteNumber(object[key], `${label}.${key}`, { integer: true, min: 0, max: 100_000_000 })
+    return object
+  }
+  const inventory = countObject(words.inventory, 'snapshot.data.words.inventory', ['activeWordbooks', 'activeWords', 'newWords', 'learningWords', 'availableNewWords', 'masteredWords', 'dueNowWords', 'dueByTargetWords'])
+  const wordsRecent = countObject(words.recent7Days, 'snapshot.data.words.recent7Days', ['activeDays', 'attempts', 'passed', 'durationMs', 'uniqueWordsStudied', 'wordStudyTouches'])
+  const wordsTarget = countObject(words.targetDay, 'snapshot.data.words.targetDay', ['attempts', 'passed', 'durationMs', 'plannedNewWords', 'plannedReviewWords', 'completedNewWords', 'completedReviewWords'])
+  const bounds = countObject(words.recommendationBounds, 'snapshot.data.words.recommendationBounds', ['minimumReviewWords', 'maximumReviewWords', 'minimumNewWords', 'maximumNewWords'])
+  if (
+    Number(inventory.newWords) + Number(inventory.learningWords) + Number(inventory.masteredWords) !== Number(inventory.activeWords)
+    || Number(inventory.availableNewWords) !== Number(inventory.newWords) + Number(inventory.learningWords)
+    || Number(inventory.dueNowWords) > Number(inventory.dueByTargetWords)
+    || Number(inventory.dueByTargetWords) > Number(inventory.masteredWords)
+    || Number(wordsRecent.activeDays) > 7
+    || Number(wordsRecent.passed) > Number(wordsRecent.attempts)
+    || Number(wordsRecent.uniqueWordsStudied) > Number(wordsRecent.wordStudyTouches)
+    || Number(wordsTarget.passed) > Number(wordsTarget.attempts)
+    || Number(wordsTarget.completedNewWords) > Number(wordsTarget.plannedNewWords)
+    || Number(wordsTarget.completedReviewWords) > Number(wordsTarget.plannedReviewWords)
+    || Number(bounds.minimumReviewWords) !== Number(wordsTarget.completedReviewWords)
+    || Number(bounds.minimumNewWords) !== Number(wordsTarget.completedNewWords)
+    || Number(bounds.maximumReviewWords) !== Math.min(1_000, Number(bounds.minimumReviewWords) + Number(inventory.dueByTargetWords))
+    || Number(bounds.maximumNewWords) !== Math.min(1_000, Number(bounds.minimumNewWords) + Number(inventory.availableNewWords))
+    || Number(bounds.minimumReviewWords) + Number(bounds.minimumNewWords) > 1_000
+    || Number(bounds.maximumReviewWords) + Number(bounds.maximumNewWords) < 1
+  ) fail('snapshot.data.words counts are inconsistent')
+}
+
 function assertSnapshot(snapshot: AiContextSnapshotV1, purpose: ManagedAiPurpose, now: Date): void {
   const object = record(snapshot, 'snapshot')
   exactKeys(object, [
@@ -341,8 +428,9 @@ function assertSnapshot(snapshot: AiContextSnapshotV1, purpose: ManagedAiPurpose
       snapshot.privateScopes.length !== 1
       || snapshot.privateScopes[0] !== 'writing.submission'
     )
-  ) {
-    fail('writing_feedback requires the writing.submission private scope')
+  ) fail('writing_feedback requires the writing.submission private scope')
+  if (purpose === 'words_plan_recommendation' && snapshot.privateScopes.length !== 0) {
+    fail('words_plan_recommendation does not accept private scopes')
   }
   const resolved = resolveAiScopes(purpose, snapshot.privateScopes, snapshot.privateScopes)
   const expectedScopes = resolved.scopes
@@ -365,6 +453,8 @@ function assertSnapshot(snapshot: AiContextSnapshotV1, purpose: ManagedAiPurpose
   if (purpose === 'writing_feedback') {
     if (recordCount !== 1) fail('writing_feedback snapshot must contain exactly one submission')
     assertWritingContextData(snapshot)
+  } else if (purpose === 'words_plan_recommendation') {
+    assertWordsPlanRecommendationContextData(snapshot)
   } else {
     assertLearningContextData(snapshot)
   }
@@ -381,10 +471,13 @@ export function createAiGatewayWireRequest(
     request.userInput,
     'userInput',
     MAX_AI_GATEWAY_USER_INPUT_LENGTH,
-    request.purpose === 'writing_feedback',
+    request.purpose === 'writing_feedback' || request.purpose === 'words_plan_recommendation',
   )
-  if (request.purpose === 'writing_feedback' && request.userInput.trim().length !== 0) {
-    fail('writing_feedback userInput must be empty')
+  if (
+    (request.purpose === 'writing_feedback' || request.purpose === 'words_plan_recommendation')
+    && request.userInput.trim().length !== 0
+  ) {
+    fail(`${request.purpose} userInput must be empty`)
   }
   assertSnapshot(request.snapshot, request.purpose, now)
 
@@ -483,6 +576,12 @@ export function parseAiGatewayResponse(
         ? parseWritingSubmission((request.snapshot.data as UnknownRecord).submission)
         : undefined
       content = parseStructuredAiOutput(artifact.content, request.purpose, writingSubmission)
+      if (request.purpose === 'words_plan_recommendation' && content.kind === 'words_plan_recommendation') {
+        assertWordsPlanRecommendationMatchesContext(
+          content,
+          request.snapshot.data as WordsPlanRecommendationContextDataV1,
+        )
+      }
     } catch {
       return responseFail('artifact.content does not match the requested output contract')
     }

@@ -172,6 +172,7 @@ function isManagedPurpose(value: unknown): value is ManagedAiPurpose {
     'learning_analysis',
     'plan_draft',
     'writing_feedback',
+    'words_plan_recommendation',
   ].includes(value)
 }
 

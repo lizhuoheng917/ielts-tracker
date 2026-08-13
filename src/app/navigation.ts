@@ -109,9 +109,9 @@ export const appRoutes: AppRoute[] = [
     {
       id: 'words',
       path: '/words',
-      label: '单词记录',
-      shortLabel: '单词',
-      description: '记录词汇学习活动',
+      label: '词汇中心',
+      shortLabel: '词汇',
+      description: '记录词汇学习并与 Words 协作',
       icon: BookA,
       group: 'learn',
       mobilePlacement: 'more',

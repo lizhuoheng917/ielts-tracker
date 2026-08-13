@@ -37,6 +37,46 @@ export type LexiWordsDailySummaryV1 = {
   dueWords: number
 }
 
+/**
+ * An on-demand numeric projection for planning. It contains no word text,
+ * meaning, wordbook name or event row and is never persisted as a snapshot.
+ */
+export type LexiWordsPlanningContextV1 = {
+  contractVersion: typeof LEXI_CROSS_PRODUCT_CONTRACT_VERSION
+  product: 'words'
+  coverage: 'cloud_data_only'
+  targetDate: string
+  timeZone: string
+  generatedAt: string
+  inventory: {
+    activeWordbooks: number
+    activeWords: number
+    newWords: number
+    learningWords: number
+    availableNewWords: number
+    masteredWords: number
+    dueNowWords: number
+    dueByTargetWords: number
+  }
+  recent7Days: {
+    activeDays: number
+    attempts: number
+    passed: number
+    durationMs: number
+    uniqueWordsStudied: number
+    wordStudyTouches: number
+  }
+  targetDay: {
+    attempts: number
+    passed: number
+    durationMs: number
+    plannedNewWords: number
+    plannedReviewWords: number
+    completedNewWords: number
+    completedReviewWords: number
+  }
+}
+
 export type LexiPlanIntentRequestV1 = {
   sourceProduct: LexiProductId
   targetProduct: LexiProductId

@@ -3,6 +3,7 @@ export const AI_PURPOSES = [
   'learning_analysis',
   'plan_draft',
   'writing_feedback',
+  'words_plan_recommendation',
   'assistant_chat',
 ] as const
 
@@ -16,6 +17,7 @@ export const AI_DATA_SCOPES = [
   'diary.excerpts',
   'ai_artifacts.history',
   'writing.submission',
+  'words.planning.summary',
 ] as const
 
 export type AiDataScope = (typeof AI_DATA_SCOPES)[number]
@@ -86,6 +88,7 @@ export type AiArtifactKind =
   | 'learning_analysis'
   | 'plan_draft'
   | 'writing_feedback'
+  | 'words_plan_recommendation'
   | 'chat_response'
 
 export interface AiArtifact<TContent = unknown> {

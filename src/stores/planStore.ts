@@ -36,6 +36,7 @@ import {
   findPlanExecutionForDate,
   samePlanExecutionValue,
 } from '@/lib/planExecution'
+import { isLocalDate } from '@/lib/localDate'
 import type { PlanExecution, StudyPlan } from '@/lib/types'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useActivityLedgerStore } from '@/stores/activityLedgerStore'
@@ -55,6 +56,21 @@ export interface PlanMutationResult {
   }
 }
 
+export type UpsertVocabularyPlanInput = {
+  id?: string
+  title: string
+  description?: string
+  frequency: 'once' | 'daily' | 'weekly'
+  scheduledDate?: string
+  startDate?: string
+  endDate?: string
+  weekDays?: number[]
+  targetTime?: string
+  targetDuration: number
+  targetCount: number
+  isActive: boolean
+}
+
 export type SetPlanExecutionInput = Omit<PlanExecution, 'id' | 'updatedAt'>
 
 interface PlanStore {
@@ -63,6 +79,8 @@ interface PlanStore {
   aiCommandReceipts: AiCommandReceipt[]
   mutationRevision: number
   addPlan: (plan: Omit<StudyPlan, 'id' | 'createdAt' | 'updatedAt'>) => Promise<PlanMutationResult>
+  /** Vocabulary Center is the only trusted writer for new vocabulary plans. */
+  upsertVocabularyPlan: (plan: UpsertVocabularyPlanInput) => Promise<PlanMutationResult>
   /** User confirmation is the trusted input; the model can only propose the draft payload. */
   applyConfirmedAiPlanDraft: (
     draft: PlanCreateCommandDraft,
@@ -202,6 +220,41 @@ function sameStudyPlan(left: StudyPlan, right: StudyPlan): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
+function validVocabularyPlanInput(data: UpsertVocabularyPlanInput): boolean {
+  const title = data.title.trim()
+  const validTime = data.targetTime === undefined
+    || /^([01]\d|2[0-3]):[0-5]\d$/.test(data.targetTime)
+  const validDates = (data.startDate === undefined || isLocalDate(data.startDate))
+    && (data.endDate === undefined || isLocalDate(data.endDate))
+    && !(data.startDate && data.endDate && data.endDate < data.startDate)
+  const validWeekDays = data.weekDays === undefined || (
+    data.weekDays.length > 0
+    && data.weekDays.length <= 7
+    && new Set(data.weekDays).size === data.weekDays.length
+    && data.weekDays.every((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+  )
+  const validSchedule = data.frequency === 'once'
+    ? isLocalDate(data.scheduledDate)
+      && data.startDate === undefined
+      && data.endDate === undefined
+      && data.weekDays === undefined
+    : data.scheduledDate === undefined
+      && validDates
+      && (data.frequency === 'weekly' ? validWeekDays : data.weekDays === undefined)
+
+  return title.length > 0
+    && title.length <= 60
+    && (data.description === undefined || new TextEncoder().encode(data.description).byteLength <= 4 * 1024)
+    && Number.isSafeInteger(data.targetCount)
+    && data.targetCount >= 1
+    && data.targetCount <= 1_000
+    && Number.isSafeInteger(data.targetDuration)
+    && data.targetDuration >= 5
+    && data.targetDuration <= 180
+    && validTime
+    && validSchedule
+}
+
 export const usePlanStore = create<PlanStore>()(
   persist(
     (set, get) => {
@@ -250,6 +303,69 @@ export const usePlanStore = create<PlanStore>()(
               return { status: 'applied', targetId: plan.id } satisfies PlanMutationResult
             })
             announceCurrentPlanRevision()
+            return result
+          } catch (error) {
+            return failedPlanMutation(error)
+          }
+        },
+
+        upsertVocabularyPlan: async (data) => {
+          if (!validVocabularyPlanInput(data)) {
+            return {
+              status: 'failed',
+              error: {
+                code: 'INVALID_VOCABULARY_PLAN',
+                message: '词汇计划内容无效，请检查名称、目标和安排。',
+              },
+            }
+          }
+          try {
+            const result = await withFreshPlanMutation(() => {
+              const state = get()
+              const current = data.id
+                ? state.plans.find((plan) => plan.id === data.id)
+                : undefined
+              if (data.id && (!current || current.category !== 'vocabulary')) {
+                return { status: 'not_found' } satisfies PlanMutationResult
+              }
+
+              const now = new Date().toISOString()
+              const targetId = current?.id ?? generateId()
+              const next: StudyPlan = {
+                id: targetId,
+                title: data.title,
+                ...(data.description ? { description: data.description } : {}),
+                category: 'vocabulary',
+                frequency: data.frequency,
+                ...(data.scheduledDate ? { scheduledDate: data.scheduledDate } : {}),
+                ...(data.startDate ? { startDate: data.startDate } : {}),
+                ...(data.endDate ? { endDate: data.endDate } : {}),
+                ...(data.weekDays ? { weekDays: [...data.weekDays] } : {}),
+                ...(data.targetTime ? { targetTime: data.targetTime } : {}),
+                targetDuration: data.targetDuration,
+                targetCount: data.targetCount,
+                isActive: data.isActive,
+                createdAt: current?.createdAt ?? now,
+                updatedAt: current?.updatedAt ?? now,
+              }
+
+              if (current) {
+                const comparable = { ...next, updatedAt: current.updatedAt }
+                if (sameStudyPlan(current, comparable)) {
+                  return { status: 'duplicate', targetId } satisfies PlanMutationResult
+                }
+                next.updatedAt = now
+              }
+
+              setEnvelope((latest) => ({
+                plans: current
+                  ? latest.plans.map((plan) => (plan.id === targetId ? next : plan))
+                  : [next, ...latest.plans],
+                mutationRevision: latest.mutationRevision + 1,
+              }))
+              return { status: 'applied', targetId } satisfies PlanMutationResult
+            })
+            if (result.status === 'applied') announceCurrentPlanRevision()
             return result
           } catch (error) {
             return failedPlanMutation(error)
@@ -312,6 +428,26 @@ export const usePlanStore = create<PlanStore>()(
               code: 'INVALID_PLAN_DRAFT',
               message: '计划草稿格式无效，请重新生成。',
             })
+          }
+
+          if (payload.category === 'vocabulary') {
+            try {
+              const receipt = await withFreshPlanMutation(() => {
+                const redirected = createAiCommandReceipt(draft, 'rejected', {
+                  code: 'VOCABULARY_PLAN_MANAGED_IN_WORDS',
+                  message: '词汇计划现在由词汇中心创建和管理；这条历史草稿没有写入计划中心。',
+                })
+                setEnvelope((state) => ({
+                  aiCommandReceipts: appendAiCommandReceipt(state.aiCommandReceipts, redirected),
+                  mutationRevision: state.mutationRevision + 1,
+                }))
+                return redirected
+              })
+              announceCurrentPlanRevision()
+              return receipt
+            } catch (error) {
+              return failedAiReceipt(draft, error)
+            }
           }
 
           try {

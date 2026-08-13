@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { WordRecord } from '@/lib/types'
+import { useLocation, useNavigate } from 'react-router-dom'
+import type { StudyPlan, WordRecord } from '@/lib/types'
 import { DEFAULT_WORD_CATEGORIES } from '@/lib/constants'
+import { usePlanStore } from '@/stores/planStore'
 import { useWordStore } from '@/stores/wordStore'
+import { useAuth } from '@/auth/authContext'
+import { resolveLexiWordsUrl } from '@/app/productLinks'
+import {
+  learnerAiTaskCoordinator,
+  useLearnerAiTaskState,
+} from '@/ai/learnerAiTaskCoordinator'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -54,6 +62,18 @@ import {
   trackerContentCloudMode,
   type TrackerContentCloudMode,
 } from '@/sync/trackerContentCloudPolicy'
+import { WordsCollaborationPanel } from '@/features/words-plan-intent/WordsCollaborationPanel'
+import {
+  WordsPlanIntentDialog,
+  type WordsPlanIntentMode,
+} from '@/features/words-plan-intent/WordsPlanIntentDialog'
+import {
+  listWordsHubVocabularyPlans,
+  resolveWordsHubVocabularyPlan,
+  WORDS_HUB_NEW_PLAN_ID,
+  WORDS_HUB_SOURCE_PLAN_PARAM,
+} from '@/features/words-plan-intent/wordsHub'
+import { parseWordsPlanRecommendationTaskContext } from '@/features/words-plan-intent/wordsPlanRecommendationView'
 
 // ===== Helper Functions =====
 
@@ -131,6 +151,31 @@ const CATEGORY_COLORS: Record<string, string> = {
 const DEFAULT_CATEGORY_COLOR =
   'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-700'
 
+const WORDS_HUB_PREVIEW_PLAN_ID = 'preview-vocabulary-plan'
+const LEXI_WORDS_URL = resolveLexiWordsUrl({
+  wordsAppUrl: import.meta.env.VITE_LEXI_WORDS_APP_URL,
+  isDevelopment: import.meta.env.DEV,
+})
+
+function createWordsHubPreviewPlan(): StudyPlan {
+  const now = new Date().toISOString()
+  return {
+    id: WORDS_HUB_PREVIEW_PLAN_ID,
+    title: '本周雅思核心词汇复习',
+    description: '每天完成一组核心词复习，并补充当天新词。',
+    category: 'vocabulary',
+    frequency: 'weekly',
+    startDate: getTodayStr(),
+    weekDays: [1, 3, 5],
+    targetTime: '20:30',
+    targetDuration: 35,
+    targetCount: 24,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] || DEFAULT_CATEGORY_COLOR
 }
@@ -147,6 +192,10 @@ function getHeatmapColor(count: number, maxCount: number): string {
 // ===== Main Component =====
 
 export default function Words() {
+  const { user } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const plans = usePlanStore((s) => s.plans)
   const records = useWordStore((s) => s.records)
   const addRecord = useWordStore((s) => s.addRecord)
   const updateRecord = useWordStore((s) => s.updateRecord)
@@ -159,6 +208,25 @@ export default function Words() {
   const [dateTo, setDateTo] = useState('')
   const [sortOrder, setSortOrder] = useState<WordRecordSortOrder>('newest')
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedPlanId, setSelectedPlanId] = useState('')
+  const [planIntentOpen, setPlanIntentOpen] = useState(false)
+  const [planIntentMode, setPlanIntentMode] = useState<WordsPlanIntentMode>('manual')
+
+  const { openRequestedTaskKey, tasks: aiTasks } = useLearnerAiTaskState()
+  const wordsHubPreview = useMemo(() => {
+    if (!import.meta.env.DEV) return false
+    return new URLSearchParams(location.search).get('preview') === 'words-hub'
+  }, [location.search])
+  const previewPlan = useMemo(createWordsHubPreviewPlan, [])
+  const vocabularyPlans = useMemo(
+    () => listWordsHubVocabularyPlans(
+      wordsHubPreview
+        ? [previewPlan, ...plans.filter((plan) => plan.id !== WORDS_HUB_PREVIEW_PLAN_ID)]
+        : plans,
+    ),
+    [plans, previewPlan, wordsHubPreview],
+  )
+  const selectedPlan = resolveWordsHubVocabularyPlan(vocabularyPlans, selectedPlanId)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -212,6 +280,63 @@ export default function Words() {
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
+
+  useEffect(() => {
+    if (selectedPlanId === WORDS_HUB_NEW_PLAN_ID) return
+    if (selectedPlan && selectedPlan.id === selectedPlanId) return
+    setSelectedPlanId(
+      wordsHubPreview
+        ? WORDS_HUB_PREVIEW_PLAN_ID
+        : WORDS_HUB_NEW_PLAN_ID,
+    )
+  }, [selectedPlan, selectedPlanId, vocabularyPlans, wordsHubPreview])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const requestedPlanId = params.get(WORDS_HUB_SOURCE_PLAN_PARAM)
+    const shouldOpenPreview = wordsHubPreview && params.get('open') === 'plan-intent'
+    if (!requestedPlanId && !shouldOpenPreview) return
+
+    const sourcePlan = resolveWordsHubVocabularyPlan(
+      vocabularyPlans,
+      requestedPlanId ?? WORDS_HUB_PREVIEW_PLAN_ID,
+    )
+    if (sourcePlan) {
+      setSelectedPlanId(sourcePlan.id)
+    }
+    if (shouldOpenPreview) {
+      setPlanIntentMode('ai')
+      setPlanIntentOpen(true)
+    }
+
+    params.delete(WORDS_HUB_SOURCE_PLAN_PARAM)
+    params.delete('open')
+    const nextSearch = params.toString()
+    navigate(
+      { pathname: '/words', search: nextSearch ? `?${nextSearch}` : '' },
+      { replace: true },
+    )
+  }, [location.search, navigate, vocabularyPlans, wordsHubPreview])
+
+  useEffect(() => {
+    if (!openRequestedTaskKey) return
+    const task = aiTasks[openRequestedTaskKey]
+    if (task?.purpose !== 'words_plan_recommendation') return
+    const context = parseWordsPlanRecommendationTaskContext(task.context)
+    const sourcePlan = context
+      ? vocabularyPlans.find((plan) => plan.id === context.sourcePlanId)
+      : undefined
+    if (sourcePlan) {
+      setSelectedPlanId(sourcePlan.id)
+      setPlanIntentMode('ai')
+      setPlanIntentOpen(true)
+    } else if (context?.sourcePlanId === null) {
+      setSelectedPlanId(WORDS_HUB_NEW_PLAN_ID)
+      setPlanIntentMode('ai')
+      setPlanIntentOpen(true)
+    }
+    learnerAiTaskCoordinator.consumeOpenRequest(openRequestedTaskKey)
+  }, [aiTasks, openRequestedTaskKey, vocabularyPlans])
 
   const allCategories = useMemo(() => {
     const presetNames: string[] = DEFAULT_WORD_CATEGORIES.map((c) => c.name)
@@ -385,9 +510,9 @@ export default function Words() {
   return (
     <div className="space-y-5 md:space-y-6">
       <PageHeader
-        eyebrow="Vocabulary log"
-        title="单词记录"
-        description="记录每日背诵量，用筛选和趋势回顾词汇积累。"
+        eyebrow="Vocabulary center"
+        title="词汇中心"
+        description="记录词汇学习，并在 Tracker 与 Words 之间制定可审阅的智能安排。"
         actions={(
           <Button onClick={openAddForm} className="w-full sm:w-auto">
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -405,6 +530,21 @@ export default function Words() {
           { label: '本周背诵', value: weekCount, description: '词' },
           { label: '本月背诵', value: monthCount, description: '词' },
         ]}
+      />
+
+      <WordsCollaborationPanel
+        plans={vocabularyPlans}
+        selectedPlan={selectedPlan}
+        onSelectPlan={setSelectedPlanId}
+        onStartManual={() => {
+          setPlanIntentMode('manual')
+          setPlanIntentOpen(true)
+        }}
+        onStartAi={() => {
+          setPlanIntentMode('ai')
+          setPlanIntentOpen(true)
+        }}
+        onOpenPlans={() => navigate('/plans')}
       />
 
       {/* View toggle */}
@@ -734,6 +874,17 @@ export default function Words() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <WordsPlanIntentDialog
+        open={planIntentOpen}
+        mode={planIntentMode}
+        plan={selectedPlan}
+        userId={user?.id ?? null}
+        wordsUrl={LEXI_WORDS_URL}
+        preview={wordsHubPreview}
+        onPlanSaved={setSelectedPlanId}
+        onOpenChange={setPlanIntentOpen}
+      />
     </div>
   )
 }

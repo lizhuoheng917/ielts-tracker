@@ -6,6 +6,7 @@ export const MANAGED_AI_PURPOSES = [
   'learning_analysis',
   'plan_draft',
   'writing_feedback',
+  'words_plan_recommendation',
 ] as const
 export type ManagedAiPurpose = (typeof MANAGED_AI_PURPOSES)[number]
 

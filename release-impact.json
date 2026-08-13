@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-12-tracker-words-plan-intent-step3",
+  "release": "2026-08-13-vocabulary-plan-template-step11",
   "Frontend": {
     "status": "changed",
-    "reason": "Vocabulary plan details now offer an explicit Send to Words flow. The dialog sends only a reviewed date, count, mode and non-content plan reference, validates the V1 response, keeps one operation id for identical retries, locks fields during submission and leaves every non-vocabulary plan unchanged."
+    "reason": "Vocabulary Center now explicitly creates a new or updates one selected canonical Tracker vocabulary plan before sending Words. The professional template stores title, schedule, count, duration and optional time, preserves recurring schedules, defaults new plans to local-only, and gives Plan Center a readable target-count presentation. The handoff always references the real saved plan ID and uncertain retries retain the same plan and operation IDs."
   },
   "Backend": {
     "status": "changed",
-    "reason": "This UI consumes the formal Lexi repository's backward-compatible owner-scoped handoff RPC from step 1. Step 3 adds no Tracker schema or duplicated plan record; the shared backend keeps explicit authenticated execution, captured-account checks, fixed payload shape, operation-id idempotency, hard row caps and expiry cleanup."
+    "reason": "The paired AI gateway still provides the strict transient numeric recommendation path and generic plan generation still excludes vocabulary. Step 11 reuses the existing owner-scoped plan-intent RPC, RLS, retention and Tracker Phase 4B plan-sync contract; no table, column, RPC, index, snapshot, AI prose history or recommendation history is added."
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "The transient plan intent contains no title, notes or learning content and is controlled only by its owning learner in Words. It introduces no administrator configuration, moderation case, support action or durable analytics entity, while its lifecycle is already bounded by the shared cleanup contract."
+    "status": "changed",
+    "reason": "Reviewed with no additional Control surface or policy for Step 11. Local-first plan storage uses the existing Tracker content-cloud policy when the learner explicitly selects cloud, and Vocabulary Center AI remains governed by the existing disabled-by-default words_plan_recommendation purpose and independent quota. No generated recommendation body or duplicate plan history is added to administrator storage."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "Neither the Supabase migration nor either step-3 client has been deployed. Production release remains blocked until both repository gates pass, the exact migration is applied and remotely verified first, and the verified Words, Control and Tracker sources are deployed and smoke-tested together."
+    "reason": "Not deployed. The professional vocabulary template and canonical save-then-send workflow are being verified locally. Production remains pending until the exact Supabase migrations, coordinated learner/Control/Account/Tracker deployment and authenticated cross-account smoke tests are completed in one release window."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The complete Tracker gate passed typecheck, oxlint, 76 test files with 474 tests, pinned production build and bundle review. The formal Lexi gate also passed learner, Control and Account builds plus all contract and regression suites. Desktop and mobile browser checks verified localized labels, success state, responsive stacking and no horizontal overflow or fresh-page console warnings."
+    "reason": "Tracker verify:release passed with 83 test files and 510 tests plus production bundle checks. The coordinated Words/backend/Control/Account verify:release gate also passed, including cross-product RPC, migration, RLS, retention, administrator and cross-account tests. Chrome QA passed at 1408x689 and 390x844 without horizontal overflow: new/update selection is explicit, manual and AI drafts share the professional template, AI fills 30 words and 25 minutes before confirmation, recurring-plan copy preserves cadence, and Plan Center displays 30 words, 20:30 and about 25 minutes."
   }
 }

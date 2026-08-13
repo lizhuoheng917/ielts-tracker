@@ -86,4 +86,20 @@ describe('plan command lifecycle', () => {
     expect(mapped).not.toHaveProperty('endDate')
     expect(mapped).not.toHaveProperty('weekDays')
   })
+
+  it('does not create Plan Center commands for vocabulary drafts while keeping other drafts', () => {
+    const commands = createPlanCommandDrafts({
+      ...CONTENT,
+      plans: [
+        { ...CONTENT.plans[0], title: '旧词汇草稿', category: 'vocabulary' },
+        { ...CONTENT.plans[0], title: '阅读训练', category: 'reading' },
+      ],
+    }, 'run-2', {
+      context: COMMAND_CONTEXT,
+      createId: () => '123e4567-e89b-42d3-a456-426614174113',
+    })
+
+    expect(commands).toHaveLength(1)
+    expect(commands[0].payload).toMatchObject({ title: '阅读训练', category: 'reading' })
+  })
 })

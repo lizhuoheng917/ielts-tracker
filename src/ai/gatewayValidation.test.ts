@@ -11,6 +11,7 @@ import {
   createWritingSubmissionV2,
   createWritingSubmissionV3,
 } from './writingFeedback'
+import { buildWordsPlanRecommendationSnapshot } from './wordsPlanRecommendation'
 import {
   ManagedAiGateway,
   mapAiGatewayHttpStatus,
@@ -174,6 +175,39 @@ function createReferenceWritingRequest(): AiGatewayRequest {
   }
 }
 
+function createWordsPlanRecommendationRequest(): AiGatewayRequest {
+  const sourcePlan = {
+    id: 'words-plan', title: '词汇计划', category: 'vocabulary' as const,
+    frequency: 'once' as const, scheduledDate: '2026-08-01', targetCount: 24,
+    targetDuration: 30, isActive: true, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(),
+  }
+  return {
+    requestId: '123e4567-e89b-42d3-a456-426614174096',
+    idempotencyKey: 'idempotency-words-plan-1',
+    purpose: 'words_plan_recommendation',
+    snapshot: buildWordsPlanRecommendationSnapshot({
+      sourcePlan,
+      plans: [sourcePlan],
+      planExecutions: [],
+      wordRecords: [],
+      practiceRecords: [],
+      timerRecords: [],
+      words: {
+        contractVersion: 1,
+        product: 'words',
+        coverage: 'cloud_data_only',
+        targetDate: '2026-08-01',
+        timeZone: 'Asia/Shanghai',
+        generatedAt: '2026-08-01T03:59:50.000Z',
+        inventory: { activeWordbooks: 1, activeWords: 100, newWords: 20, learningWords: 20, availableNewWords: 40, masteredWords: 60, dueNowWords: 10, dueByTargetWords: 12 },
+        recent7Days: { activeDays: 4, attempts: 80, passed: 60, durationMs: 1800000, uniqueWordsStudied: 35, wordStudyTouches: 45 },
+        targetDay: { attempts: 0, passed: 0, durationMs: 0, plannedNewWords: 0, plannedReviewWords: 0, completedNewWords: 0, completedReviewWords: 0 },
+      },
+    }, { now: NOW, createId: () => 'words-plan-snapshot-1' }),
+    userInput: '',
+  }
+}
+
 function createSuccessResponse(request = createRequest()) {
   return {
     ok: true,
@@ -326,6 +360,57 @@ describe('managed AI gateway wire validation', () => {
     } as never
     expect(() => parseAiGatewayResponse(invalid, wire)).toThrowError(
       expect.objectContaining({ code: 'INVALID_RESPONSE' }),
+    )
+  })
+
+  it('accepts Words plan recommendations only within the exact snapshot date and bounds', () => {
+    const request = createWordsPlanRecommendationRequest()
+    const wire = createAiGatewayWireRequest(request, NOW)
+    expect(wire).toMatchObject({
+      purpose: 'words_plan_recommendation',
+      userInput: '',
+      snapshot: {
+        scopes: ['learning.summary', 'plans.summary', 'words.planning.summary'],
+        privateScopes: [],
+      },
+    })
+    const content = {
+      schemaVersion: 2,
+      kind: 'words_plan_recommendation',
+      targetDate: '2026-08-01',
+      studyMode: 'mixed',
+      targetCount: 20,
+      reviewWords: 12,
+      newWords: 8,
+      estimatedMinutes: 20,
+      confidence: 'medium',
+      summary: '先完成到期复习，再加入少量新词。',
+      evidence: ['目标日前有 12 个到期词。', '近 7 天 Words 活跃 4 天。'],
+      risks: [],
+      limitations: ['Words 仅覆盖已经同步到云端的数据。'],
+    }
+    const response = createSuccessResponse(request)
+    response.artifact.content = content as never
+    expect(parseAiGatewayResponse(response, wire)).toMatchObject({
+      ok: true,
+      artifact: { kind: 'words_plan_recommendation', content },
+    })
+
+    const overCapacity = createSuccessResponse(request)
+    overCapacity.artifact.content = {
+      ...content,
+      targetCount: 49,
+      reviewWords: 13,
+      newWords: 36,
+    } as never
+    expect(() => parseAiGatewayResponse(overCapacity, wire)).toThrowError(
+      expect.objectContaining({ code: 'INVALID_RESPONSE' }),
+    )
+
+    const hiddenInput = createWordsPlanRecommendationRequest()
+    hiddenInput.userInput = '绕过专属快照'
+    expect(() => createAiGatewayWireRequest(hiddenInput, NOW)).toThrowError(
+      expect.objectContaining({ code: 'INVALID_REQUEST' }),
     )
   })
 

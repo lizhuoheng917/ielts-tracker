@@ -54,4 +54,10 @@ describe('Plans schedule presentation', () => {
       .toBe('19:30 · 约 45 分钟')
     expect(formatPlanTimeAndDuration(createPlan())).toBe('未设具体时间')
   })
+
+  it('shows the vocabulary target count as a professional plan objective', () => {
+    expect(formatPlanTimeAndDuration(createPlan({
+      category: 'vocabulary', targetCount: 30, targetTime: '20:30', targetDuration: 25,
+    }))).toBe('30 词 · 20:30 · 约 25 分钟')
+  })
 })

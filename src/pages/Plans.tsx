@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { PlanExecution, StudyPlan } from '@/lib/types'
 import { usePlanStore } from '@/stores/planStore'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
@@ -62,7 +63,6 @@ import {
   Repeat2,
   RotateCcw,
   Search,
-  Send,
   Sparkles,
   Trash2,
 } from 'lucide-react'
@@ -73,6 +73,11 @@ import { useAIPrivacyStore } from '@/stores/aiPrivacyStore'
 import { PLAN_CATEGORY_OPTIONS } from '@/lib/constants'
 import { DEFAULT_DATA_PAGE_SIZE, getDataPageCount, paginateItems } from '@/lib/dataView'
 import { addLocalDays, isLocalDate, toLocalDate } from '@/lib/localDate'
+import {
+  isPlanCenterCreationCategory,
+  isVocabularyPlan,
+  PLAN_CENTER_CREATION_CATEGORIES,
+} from '@/lib/planOwnership'
 import {
   filterAndSortPlans,
   indexLatestPlanExecutionsForDate,
@@ -96,9 +101,7 @@ import {
   trackerContentCloudMode,
   type TrackerContentCloudMode,
 } from '@/sync/trackerContentCloudPolicy'
-import { useAuth } from '@/auth/authContext'
-import { resolveLexiWordsUrl } from '@/app/productLinks'
-import { WordsPlanIntentDialog } from '@/features/words-plan-intent/WordsPlanIntentDialog'
+import { createWordsHubHref } from '@/features/words-plan-intent/wordsHub'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   once: '单次任务',
@@ -156,13 +159,8 @@ function getTodayStr(): string {
   return toLocalDate()
 }
 
-const LEXI_WORDS_URL = resolveLexiWordsUrl({
-  wordsAppUrl: import.meta.env.VITE_LEXI_WORDS_APP_URL,
-  isDevelopment: import.meta.env.DEV,
-})
-
 export default function Plans() {
-  const { user } = useAuth()
+  const navigate = useNavigate()
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
@@ -202,7 +200,6 @@ export default function Plans() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [planDetailOpen, setPlanDetailOpen] = useState(false)
-  const [planIntentOpen, setPlanIntentOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<StudyPlan | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<PlanStatusFilter>('all')
@@ -250,29 +247,32 @@ export default function Plans() {
     formDurationInvalid ? 'plan-form-duration-error' : null,
   ].filter(Boolean).join(' ') || undefined
 
-  const planIntentPreview = useMemo(() => {
-    if (!import.meta.env.DEV || typeof window === 'undefined') return false
-    return new URLSearchParams(window.location.search).get('preview') === 'plan-intent'
-  }, [])
+  useEffect(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('preview') !== 'plan-intent') return
+    navigate('/words?preview=words-hub&open=plan-intent', { replace: true })
+  }, [navigate])
 
   useEffect(() => {
-    if (!planIntentPreview) return
+    if (!import.meta.env.DEV || typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('preview') !== 'vocabulary-template') return
+    const now = new Date().toISOString()
     setSelectedPlan({
-      id: 'preview-vocabulary-plan',
-      title: '本周雅思核心词汇复习',
-      description: '每天完成一组核心词复习，并补充当天新词。',
+      id: 'preview-vocabulary-template-plan',
+      title: '8月13日词汇计划',
+      description: '目标由词汇中心维护；具体词书与单词在 Words 中确认。',
       category: 'vocabulary',
       frequency: 'once',
       scheduledDate: getTodayStr(),
       targetTime: '20:30',
-      targetDuration: 35,
-      targetCount: 24,
+      targetDuration: 25,
+      targetCount: 30,
       isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     })
-    setPlanIntentOpen(true)
-  }, [planIntentPreview])
+    setPlanDetailOpen(true)
+  }, [])
 
   useEffect(() => {
     if (!planDraftTaskKey || openRequestedTaskKey !== planDraftTaskKey) return
@@ -418,6 +418,11 @@ export default function Plans() {
   }
 
   const openEdit = (plan: StudyPlan) => {
+    if (isVocabularyPlan(plan)) {
+      setPlanDetailOpen(false)
+      navigate(createWordsHubHref(plan.id))
+      return
+    }
     const planFrequency = getPlanFrequency(plan)
     const { scheduledDate, startDate, endDate } = getPlanScheduleFields(plan)
     setEditingId(plan.id)
@@ -439,10 +444,14 @@ export default function Plans() {
 
   const handleSave = async () => {
     if (!formTitle.trim() || formHasSchedulingError || formSaving) return
+    if (!isPlanCenterCreationCategory(formCategory)) {
+      setPlanMutationError('词汇计划请前往词汇中心创建和管理。')
+      return
+    }
     const data = {
       title: formTitle.trim(),
       description: formDescription.trim() || undefined,
-      category: formCategory as 'reading' | 'listening' | 'writing' | 'speaking' | 'vocabulary' | 'general',
+      category: formCategory,
       frequency: formFreq,
       scheduledDate: formFreq === 'once' ? formScheduledDate : undefined,
       startDate: formFreq === 'daily' || formFreq === 'weekly' ? formStartDate : undefined,
@@ -547,6 +556,26 @@ export default function Plans() {
           </>
         )}
       />
+
+      <aside
+        className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+        aria-label="词汇计划入口"
+      >
+        <p className="text-sm leading-5 text-muted-foreground">
+          <strong className="font-medium text-foreground">词汇计划已统一到词汇中心：</strong>
+          新建、AI 生成和修改都在那里完成；已有词汇计划仍保留在这里查看。
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full shrink-0 sm:w-auto"
+          onClick={() => navigate('/words')}
+        >
+          前往词汇中心
+          <ArrowUpRight className="size-3.5" aria-hidden="true" />
+        </Button>
+      </aside>
 
       {planMutationError && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
@@ -897,14 +926,25 @@ export default function Plans() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="reading">阅读</SelectItem>
-                  <SelectItem value="listening">听力</SelectItem>
-                  <SelectItem value="writing">写作</SelectItem>
-                  <SelectItem value="speaking">口语</SelectItem>
-                  <SelectItem value="vocabulary">词汇</SelectItem>
-                  <SelectItem value="general">综合</SelectItem>
+                  {PLAN_CENTER_CREATION_CATEGORIES.map((category) => (
+                    <SelectItem key={category} value={category}>{PLAN_CATEGORY_LABELS[category]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs leading-5 text-muted-foreground">
+                词汇计划使用专用模板，请在
+                <button
+                  type="button"
+                  className="mx-1 rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => {
+                    setFormOpen(false)
+                    navigate('/words')
+                  }}
+                >
+                  词汇中心
+                </button>
+                创建。
+              </p>
             </div>
 
               {formFreq === 'once' && (
@@ -1162,20 +1202,20 @@ export default function Plans() {
                   <PopoverHeader>
                     <PopoverTitle>生成说明</PopoverTitle>
                     <PopoverDescription className="leading-5">
-                      每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；请核对单次或重复安排、日期和目标后再逐条加入。
+                      每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。这里仅生成非词汇类结构化草稿；词汇计划请前往词汇中心。请核对安排、日期和目标后再逐条加入。
                     </PopoverDescription>
                   </PopoverHeader>
                 </PopoverContent>
               </Popover>
             </div>
-            <DialogDescription className="sr-only">
-              每次发送时读取近 {aiDefaultRangeDays} 天的最新学习快照。AI 只生成结构化草稿；请核对单次或重复安排、日期和目标后再逐条加入。
+            <DialogDescription className="leading-5">
+              AI 只生成阅读、听力、写作、口语或综合计划；词汇计划请使用词汇中心的专用生成方式。
             </DialogDescription>
           </DialogHeader>
           <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 md:px-6 md:pb-6">
             <AIChatPanel
               createSnapshot={createPlanSnapshot}
-              placeholder="让 AI 根据你的学习数据生成计划..."
+              placeholder="让 AI 安排阅读、听力、写作或口语计划..."
               chatContext="plans"
               quotaActive={aiOpen}
               suggestions={
@@ -1224,6 +1264,11 @@ export default function Plans() {
                 <Badge variant="outline" className="text-xs">
                   {FREQUENCY_LABELS[getPlanFrequency(selectedPlan)]}
                 </Badge>
+                {selectedPlan.targetCount && (
+                  <Badge variant="outline" className="text-xs">
+                    {selectedPlan.category === 'vocabulary' ? `${selectedPlan.targetCount} 词` : `目标 ${selectedPlan.targetCount}`}
+                  </Badge>
+                )}
                 {selectedPlan.targetTime && (
                   <Badge variant="outline" className="border-primary/25 bg-primary/10 text-xs text-primary">
                     {selectedPlan.targetTime}
@@ -1243,7 +1288,7 @@ export default function Plans() {
               <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2.5 text-sm">
                 <span className="text-muted-foreground">安排</span>
                 <p className="mt-1 break-words font-medium">{formatPlanSchedule(selectedPlan)}</p>
-                {(selectedPlan.targetTime || selectedPlan.targetDuration) && (
+                {(selectedPlan.targetTime || selectedPlan.targetDuration || selectedPlan.targetCount) && (
                   <p className="mt-1 text-xs text-muted-foreground">{formatPlanTimeAndDuration(selectedPlan)}</p>
                 )}
               </div>
@@ -1251,24 +1296,25 @@ export default function Plans() {
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5">
                   <div className="flex items-start gap-3">
                     <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                      <Send className="size-4" aria-hidden="true" />
+                      <ArrowUpRight className="size-4" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-foreground">交给 Words 安排当天学习</p>
+                      <p className="font-semibold text-foreground">词汇计划由词汇中心管理</p>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        先发送日期、词数和模式；词书仍在 Words 中由你选择并确认。
+                        此计划会作为 Tracker 侧的分析参考；建议、修改与发送都在词汇中心完成，Words 仍负责最终确认。
                       </p>
                     </div>
                   </div>
                   <Button
                     type="button"
+                    variant="outline"
                     className="mt-3 w-full"
                     onClick={() => {
                       setPlanDetailOpen(false)
-                      setPlanIntentOpen(true)
+                      navigate(createWordsHubHref(selectedPlan.id))
                     }}
                   >
-                    发送到 Words
+                    在词汇中心管理
                     <ArrowUpRight className="size-4" aria-hidden="true" />
                   </Button>
                 </div>
@@ -1278,14 +1324,6 @@ export default function Plans() {
         </DialogContent>
       </Dialog>
 
-      <WordsPlanIntentDialog
-        open={planIntentOpen}
-        plan={selectedPlan}
-        userId={user?.id ?? null}
-        wordsUrl={LEXI_WORDS_URL}
-        preview={planIntentPreview}
-        onOpenChange={setPlanIntentOpen}
-      />
     </div>
   )
 }
@@ -1418,9 +1456,9 @@ function ScheduleOverviewRow({
         size="sm"
         onClick={() => onEdit(plan)}
         className="shrink-0"
-        aria-label={`调整日期：${plan.title}`}
+        aria-label={isVocabularyPlan(plan) ? `在词汇中心管理：${plan.title}` : `调整日期：${plan.title}`}
       >
-        改期
+        {isVocabularyPlan(plan) ? '管理' : '改期'}
       </Button>
     </li>
   )
@@ -1478,7 +1516,7 @@ function PlanList({
             <col />
             <col className="w-28" />
             <col className="w-44" />
-            <col className="w-24" />
+            <col className="w-40" />
             <col className="w-24" />
             <col className="w-32" />
           </colgroup>
@@ -1487,7 +1525,7 @@ function PlanList({
               <th scope="col" className="px-4 py-3 text-left font-medium">计划</th>
               <th scope="col" className="px-4 py-3 text-left font-medium">分类</th>
               <th scope="col" className="px-4 py-3 text-left font-medium">安排</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">时间与时长</th>
+              <th scope="col" className="px-4 py-3 text-left font-medium">目标与时间</th>
               <th scope="col" className="px-4 py-3 text-left font-medium">状态</th>
               <th scope="col" className="px-4 py-3 text-right font-medium"><span className="sr-only">操作</span></th>
             </tr>
@@ -1539,36 +1577,51 @@ function PlanList({
                 </td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex justify-end gap-0.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onToggleActive(plan)}
-                      className={cn('h-8 w-8', plan.isActive ? 'text-warning' : 'text-success')}
-                      aria-label={plan.isActive ? `暂停计划：${plan.title}` : `启用计划：${plan.title}`}
-                    >
-                      {plan.isActive ? <Pause className="size-3.5" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onEdit(plan)}
-                      className="h-8 w-8"
-                      aria-label={`编辑计划：${plan.title}`}
-                    >
-                      <Pencil className="size-3.5" aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onDelete(plan)}
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      aria-label={`删除计划：${plan.title}`}
-                    >
-                      <Trash2 className="size-3.5" aria-hidden="true" />
-                    </Button>
+                    {isVocabularyPlan(plan) ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onEdit(plan)}
+                        className="h-8 w-8 text-primary"
+                        aria-label={`在词汇中心管理：${plan.title}`}
+                      >
+                        <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onToggleActive(plan)}
+                          className={cn('h-8 w-8', plan.isActive ? 'text-warning' : 'text-success')}
+                          aria-label={plan.isActive ? `暂停计划：${plan.title}` : `启用计划：${plan.title}`}
+                        >
+                          {plan.isActive ? <Pause className="size-3.5" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onEdit(plan)}
+                          className="h-8 w-8"
+                          aria-label={`编辑计划：${plan.title}`}
+                        >
+                          <Pencil className="size-3.5" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onDelete(plan)}
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label={`删除计划：${plan.title}`}
+                        >
+                          <Trash2 className="size-3.5" aria-hidden="true" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -1616,6 +1669,9 @@ function PlanList({
                 </Badge>
                 <span>{FREQUENCY_LABELS[getPlanFrequency(plan)]}</span>
                 <span>{formatPlanSchedule(plan)}</span>
+                {plan.targetCount && (
+                  <span>{plan.category === 'vocabulary' ? `${plan.targetCount} 词` : `目标 ${plan.targetCount}`}</span>
+                )}
                 {plan.targetTime && (
                   <span className="inline-flex items-center gap-1 font-medium tabular-nums text-primary">
                     <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1626,36 +1682,52 @@ function PlanList({
               </div>
 
               <div className="flex flex-wrap justify-end gap-1 border-t border-border/60 pt-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onToggleActive(plan)}
-                  className={plan.isActive ? 'text-warning' : 'text-success'}
-                  aria-label={plan.isActive ? `暂停计划：${plan.title}` : `启用计划：${plan.title}`}
-                >
-                  {plan.isActive ? <Pause className="size-3.5" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
-                  {plan.isActive ? '暂停' : '启用'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onEdit(plan)}
-                  aria-label={`编辑计划：${plan.title}`}
-                >
-                  <Pencil className="size-3.5" aria-hidden="true" />编辑
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDelete(plan)}
-                  className="text-destructive hover:text-destructive"
-                  aria-label={`删除计划：${plan.title}`}
-                >
-                  <Trash2 className="size-3.5" aria-hidden="true" />删除
-                </Button>
+                {isVocabularyPlan(plan) ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(plan)}
+                    className="w-full text-primary sm:w-auto"
+                    aria-label={`在词汇中心管理：${plan.title}`}
+                  >
+                    在词汇中心管理
+                    <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleActive(plan)}
+                      className={plan.isActive ? 'text-warning' : 'text-success'}
+                      aria-label={plan.isActive ? `暂停计划：${plan.title}` : `启用计划：${plan.title}`}
+                    >
+                      {plan.isActive ? <Pause className="size-3.5" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
+                      {plan.isActive ? '暂停' : '启用'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(plan)}
+                      aria-label={`编辑计划：${plan.title}`}
+                    >
+                      <Pencil className="size-3.5" aria-hidden="true" />编辑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(plan)}
+                      className="text-destructive hover:text-destructive"
+                      aria-label={`删除计划：${plan.title}`}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden="true" />删除
+                    </Button>
+                  </>
+                )}
               </div>
             </article>
           </li>

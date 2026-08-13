@@ -6,14 +6,17 @@ import {
   isDailySuggestionV2,
   isLearningAnalysisV2,
   isPlanDraftV2,
+  isWordsPlanRecommendationV2,
   parseDailySuggestionV2,
   parseLearningAnalysisV2,
   parsePlanDraftV2,
+  parseWordsPlanRecommendationV2,
   parseStructuredAiOutput,
   parseStructuredAiOutputJson,
   type DailySuggestionV2,
   type LearningAnalysisV2,
   type PlanDraftV2,
+  type WordsPlanRecommendationV2,
 } from './structuredOutputs'
 
 function dailySuggestion(): DailySuggestionV2 {
@@ -84,6 +87,24 @@ function planDraft(): PlanDraftV2 {
   }
 }
 
+function wordsPlanRecommendation(): WordsPlanRecommendationV2 {
+  return {
+    schemaVersion: 2,
+    kind: 'words_plan_recommendation',
+    targetDate: '2026-08-13',
+    studyMode: 'mixed',
+    targetCount: 30,
+    reviewWords: 18,
+    newWords: 12,
+    estimatedMinutes: 25,
+    confidence: 'medium',
+    summary: '先完成到期复习，再加入适量新词，避免和当天其他计划互相挤压。',
+    evidence: ['Words 目标日前有 35 个到期词。', 'Tracker 近 7 天完成率为 75%。'],
+    risks: ['当天还有两个未完成计划。'],
+    limitations: ['Words 仅覆盖已经同步到云端的数据。'],
+  }
+}
+
 describe('structured AI output contracts', () => {
   it('parses and normalizes valid purpose-specific V2 content', () => {
     expect(parseDailySuggestionV2({
@@ -95,6 +116,8 @@ describe('structured AI output contracts', () => {
     expect(isLearningAnalysisV2(learningAnalysis())).toBe(true)
     expect(parsePlanDraftV2(planDraft())).toEqual(planDraft())
     expect(isPlanDraftV2(planDraft())).toBe(true)
+    expect(parseWordsPlanRecommendationV2(wordsPlanRecommendation())).toEqual(wordsPlanRecommendation())
+    expect(isWordsPlanRecommendationV2(wordsPlanRecommendation())).toBe(true)
   })
 
   it('rejects extra or missing keys, invalid enums, array counts and field limits', () => {
@@ -146,6 +169,18 @@ describe('structured AI output contracts', () => {
       ...planDraft(),
       plans: Array.from({ length: 5 }, () => planDraft().plans[0]),
     })).toThrow(/between 1 and 4/)
+    expect(() => parseWordsPlanRecommendationV2({
+      ...wordsPlanRecommendation(),
+      targetCount: 31,
+    })).toThrow(/split/)
+    expect(() => parseWordsPlanRecommendationV2({
+      ...wordsPlanRecommendation(),
+      studyMode: 'review',
+    })).toThrow(/review mode/)
+    expect(() => parseWordsPlanRecommendationV2({
+      ...wordsPlanRecommendation(),
+      evidence: ['只有一条'],
+    })).toThrow(/at least 2/)
   })
 
   it('accepts a one-time draft only with its concrete calendar date', () => {
@@ -174,6 +209,7 @@ describe('structured AI output contracts', () => {
     expect(parseStructuredAiOutput(dailySuggestion(), 'daily_suggestion')).toEqual(dailySuggestion())
     expect(() => parseStructuredAiOutput(learningAnalysis(), 'daily_suggestion')).toThrow()
     expect(parseStructuredAiOutput(planDraft(), 'plan_draft')).toEqual(planDraft())
+    expect(parseStructuredAiOutput(wordsPlanRecommendation(), 'words_plan_recommendation')).toEqual(wordsPlanRecommendation())
 
     const fenced = `\`\`\`json\n${JSON.stringify(dailySuggestion())}\n\`\`\``
     expect(parseStructuredAiOutputJson(fenced, 'daily_suggestion')).toEqual(dailySuggestion())

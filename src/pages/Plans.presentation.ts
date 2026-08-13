@@ -59,6 +59,9 @@ export function formatPlanSchedule(plan: StudyPlan): string {
 
 export function formatPlanTimeAndDuration(plan: StudyPlan): string {
   const parts = [
+    plan.targetCount
+      ? plan.category === 'vocabulary' ? `${plan.targetCount} 词` : `目标 ${plan.targetCount}`
+      : null,
     plan.targetTime,
     plan.targetDuration ? `约 ${plan.targetDuration} 分钟` : null,
   ].filter(Boolean)

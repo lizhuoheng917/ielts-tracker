@@ -120,4 +120,22 @@ describe('AI plan confirmation card', () => {
     expect(html).toContain('已存在，未重复添加')
     expect(html).not.toContain('确认加入计划')
   })
+
+  it('routes restored vocabulary drafts to Vocabulary Center instead of confirming them', () => {
+    const html = renderToStaticMarkup(
+      <AIConfirmCard
+        draft={{ ...draft, payload: { ...draft.payload, category: 'vocabulary' } }}
+        cloudMode="cloud"
+        onCloudModeChange={vi.fn()}
+        onConfirm={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('历史 AI 词汇草稿')
+    expect(html).toContain('href="/words"')
+    expect(html).toContain('前往词汇中心')
+    expect(html).not.toContain('确认加入计划')
+    expect(html).not.toContain('保存位置：同步云端')
+  })
 })

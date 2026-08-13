@@ -1,4 +1,5 @@
 import type { StudyPlan } from '@/lib/types'
+import { isPlanCenterCreationCategory } from '@/lib/planOwnership'
 
 import type { AiCommandContext, AiCommandDraft } from './contracts'
 import { parsePlanDraftV2, type PlanDraftV2 } from './structuredOutputs'
@@ -124,7 +125,7 @@ export function createPlanCommandDrafts(
     generatedAt.getTime() + (options.expiresInMs ?? 24 * 60 * 60 * 1_000),
   ).toISOString()
   const nextId = options.createId ?? createId
-  return content.plans.map((plan) => {
+  return content.plans.filter((plan) => isPlanCenterCreationCategory(plan.category)).map((plan) => {
     const draftId = nextId()
     return parsePlanCreateCommandDraft({
       schemaVersion: 1,
