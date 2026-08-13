@@ -25,12 +25,18 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { StudyPlan } from '@/lib/types'
+import type { LexiCrossProductHandoffV1 } from '@/contracts/lexiCrossProduct'
 import { WORDS_HUB_NEW_PLAN_ID } from './wordsHub'
+import { WordsPlanReceiptStatus } from './WordsPlanReceiptStatus'
 
 type Props = {
   plans: readonly StudyPlan[]
   selectedPlan: StudyPlan | null
+  selectedReceipt?: LexiCrossProductHandoffV1 | null
+  receiptLoading?: boolean
+  receiptError?: string
   onSelectPlan: (planId: string) => void
+  onRefreshReceipt?: () => void
   onDeletePlan: () => void
   onStartManual: () => void
   onStartAi: () => void
@@ -40,7 +46,11 @@ type Props = {
 export function WordsCollaborationPanel({
   plans,
   selectedPlan,
+  selectedReceipt,
+  receiptLoading,
+  receiptError,
   onSelectPlan,
+  onRefreshReceipt,
   onDeletePlan,
   onStartManual,
   onStartAi,
@@ -127,6 +137,16 @@ export function WordsCollaborationPanel({
           )}
         </div>
       </div>
+
+      {selectedPlan && (
+        <WordsPlanReceiptStatus
+          receipt={selectedReceipt}
+          loading={receiptLoading}
+          error={receiptError}
+          onRefresh={onRefreshReceipt}
+          className="mt-2.5"
+        />
+      )}
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <Button

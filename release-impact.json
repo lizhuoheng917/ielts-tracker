@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-13-mobile-dialog-and-plan-navigation",
+  "release": "2026-08-13-words-plan-draft-and-receipt-loop",
   "Frontend": {
     "status": "changed",
-    "reason": "Mobile dialog controls now share bounded full-width input, textarea and select primitives. The vocabulary-plan dialog constrains every grid item and scroll region to the viewport so native date and time controls cannot widen the modal or create horizontal panning. Plan Center also removes its redundant page-level Vocabulary Center promotion while retaining contextual management actions on vocabulary plans."
+    "reason": "The Tracker vocabulary-center AI dialog no longer requests AI when opened and restores a 24-hour account-and-plan-scoped session draft. Tracker now batch-loads the newest short-lived Words decision for vocabulary plans, displays pending, accepted, rejected or expired status in Vocabulary Center and Plan Center, refreshes after a send or browser return without polling, and keeps account-binding checks before correlating local plan IDs."
   },
   "Backend": {
-    "status": "reviewed-not-needed",
-    "reason": "This is a CSS layout correction only. Plan fields, local persistence, cloud sync, AI requests, Words handoff contracts and database behavior are unchanged."
+    "status": "changed",
+    "reason": "A backward-compatible owner-scoped RPC returns only the newest compact plan-intent row for at most 50 requested source references. It reuses the existing capped handoff table, adds no table, column, index, snapshot or learning copy, retains terminal decisions for seven days, and preserves direct-table revocation plus authenticated-account checks."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "No status, analytics, policy, quota or remotely manageable value changes, so Lexi Control requires no corresponding update."
+    "reason": "Reviewed Lexi Control and its admin RPC boundaries. Plan receipts are transient owner-only workflow feedback with no policy, quota, moderation, support or remotely manageable value; granting administrators a new read path would expose learner workflow without an operational action, so no Control surface is added."
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "This manifest belongs to the coordinated Tracker production release. The exact verified commit is pushed to GitHub main and deployed to the ielts-tracker Cloudflare Pages Production/main environment; the deployment ID and source SHA are recorded in the release commit that follows this manifest update."
+    "status": "not-deployed",
+    "reason": "Local coordinated release candidate only. The new Supabase migration, Words release unit and Tracker frontend have not been pushed, applied or deployed; production remains unchanged."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The complete Tracker release gate passed typecheck, lint, 83 test files and 510 tests, production build and bundle checks. Browser acceptance at a 390-pixel-class mobile viewport confirmed no horizontal overflow, no page-level Vocabulary Center card in Plan Center, and retained contextual vocabulary-plan management actions in the implementation."
+    "reason": "The complete Tracker release gate passed typecheck, lint, 85 test files and 520 tests, production build and bundle checks. The coordinated Words release gate also passed learner, Control and Account builds plus all migration, RLS, account-isolation, sync, AI and security regressions. Browser acceptance confirmed pending and accepted receipt states, accurate copy, no console errors, and no dialog-level horizontal overflow at a mobile-class viewport."
   }
 }

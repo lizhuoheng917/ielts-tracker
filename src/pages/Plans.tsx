@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@/auth/authContext'
 import type { PlanExecution, StudyPlan } from '@/lib/types'
+import type { LexiCrossProductHandoffV1 } from '@/contracts/lexiCrossProduct'
 import { usePlanStore } from '@/stores/planStore'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 import { listAiArtifactsForAccess } from '@/ai/artifactRepository'
@@ -102,6 +104,11 @@ import {
   type TrackerContentCloudMode,
 } from '@/sync/trackerContentCloudPolicy'
 import { createWordsHubHref } from '@/features/words-plan-intent/wordsHub'
+import { useWordsPlanReceipts } from '@/features/words-plan-intent/useWordsPlanReceipts'
+import {
+  WordsPlanReceiptBadge,
+  WordsPlanReceiptStatus,
+} from '@/features/words-plan-intent/WordsPlanReceiptStatus'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   once: '单次任务',
@@ -161,6 +168,7 @@ function getTodayStr(): string {
 
 export default function Plans() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const plans = usePlanStore((s) => s.plans)
   const executions = usePlanStore((s) => s.executions)
   const addPlan = usePlanStore((s) => s.addPlan)
@@ -180,7 +188,9 @@ export default function Plans() {
   const setExecutionForDate = usePlanStore((s) => s.setExecutionForDate)
   const aiDefaultRangeDays = useAIPrivacyStore((s) => s.defaultRangeDays)
   const includePriorAIArtifacts = useAIPrivacyStore((s) => s.includePriorAIArtifacts)
-
+  const vocabularyTemplatePreview = import.meta.env.DEV
+    && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('preview') === 'vocabulary-template'
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formTitle, setFormTitle] = useState('')
@@ -362,6 +372,20 @@ export default function Plans() {
     () => paginateItems(filteredPlans, resolvedPage),
     [filteredPlans, resolvedPage],
   )
+  const visibleVocabularyPlanIds = useMemo(
+    () => [...new Set([
+      ...paginatedPlans.filter(isVocabularyPlan).map(plan => plan.id),
+      ...(selectedPlan && isVocabularyPlan(selectedPlan) ? [selectedPlan.id] : []),
+      ...(vocabularyTemplatePreview ? ['preview-vocabulary-template-plan'] : []),
+    ])],
+    [paginatedPlans, selectedPlan, vocabularyTemplatePreview],
+  )
+  const vocabularyReceipts = useWordsPlanReceipts({
+    userId: user?.id ?? null,
+    sourceRefs: visibleVocabularyPlanIds,
+    preview: vocabularyTemplatePreview,
+    previewStatus: 'accepted',
+  })
 
   useEffect(() => {
     setCurrentPage(1)
@@ -784,6 +808,7 @@ export default function Plans() {
 
         <PlanList
           plans={paginatedPlans}
+          wordsReceipts={vocabularyReceipts.receipts}
           hasAnyPlans={plans.length > 0}
           hasActiveFilters={hasActiveFilters}
           onAdd={openAdd}
@@ -1273,7 +1298,13 @@ export default function Plans() {
                 )}
               </div>
               {selectedPlan.category === 'vocabulary' && (
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                  <WordsPlanReceiptStatus
+                    receipt={vocabularyReceipts.receipts.get(selectedPlan.id)}
+                    loading={vocabularyReceipts.loading}
+                    error={vocabularyReceipts.error}
+                    onRefresh={() => { void vocabularyReceipts.refresh() }}
+                  />
                   <div className="flex items-start gap-3">
                     <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                       <ArrowUpRight className="size-4" aria-hidden="true" />
@@ -1310,6 +1341,7 @@ export default function Plans() {
 
 interface PlanListProps {
   plans: StudyPlan[]
+  wordsReceipts: ReadonlyMap<string, LexiCrossProductHandoffV1>
   hasAnyPlans: boolean
   hasActiveFilters: boolean
   onAdd: () => void
@@ -1446,6 +1478,7 @@ function ScheduleOverviewRow({
 
 function PlanList({
   plans,
+  wordsReceipts,
   hasAnyPlans,
   hasActiveFilters,
   onAdd,
@@ -1497,7 +1530,7 @@ function PlanList({
             <col className="w-28" />
             <col className="w-44" />
             <col className="w-40" />
-            <col className="w-24" />
+            <col className="w-40" />
             <col className="w-32" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-card/95 text-xs text-muted-foreground shadow-[0_1px_0_0_var(--border)] backdrop-blur">
@@ -1543,17 +1576,22 @@ function PlanList({
                   {formatPlanTimeAndDuration(plan)}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'text-xs',
-                      plan.isActive
-                        ? 'border-success-border bg-success-surface text-success'
-                        : 'border-border bg-surface-subtle text-muted-foreground',
+                  <div className="flex flex-col items-start gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-xs',
+                        plan.isActive
+                          ? 'border-success-border bg-success-surface text-success'
+                          : 'border-border bg-surface-subtle text-muted-foreground',
+                      )}
+                    >
+                      {plan.isActive ? '使用中' : '已暂停'}
+                    </Badge>
+                    {isVocabularyPlan(plan) && (
+                      <WordsPlanReceiptBadge receipt={wordsReceipts.get(plan.id)} />
                     )}
-                  >
-                    {plan.isActive ? '使用中' : '已暂停'}
-                  </Badge>
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex justify-end gap-0.5">
@@ -1642,6 +1680,10 @@ function PlanList({
                   {plan.isActive ? '使用中' : '已暂停'}
                 </Badge>
               </div>
+
+              {isVocabularyPlan(plan) && wordsReceipts.has(plan.id) && (
+                <WordsPlanReceiptBadge receipt={wordsReceipts.get(plan.id)} />
+              )}
 
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline" className={cn('text-xs', getCategoryBadgeClass(plan.category))}>

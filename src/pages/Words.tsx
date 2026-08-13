@@ -74,6 +74,7 @@ import {
   WORDS_HUB_SOURCE_PLAN_PARAM,
 } from '@/features/words-plan-intent/wordsHub'
 import { parseWordsPlanRecommendationTaskContext } from '@/features/words-plan-intent/wordsPlanRecommendationView'
+import { useWordsPlanReceipts } from '@/features/words-plan-intent/useWordsPlanReceipts'
 
 // ===== Helper Functions =====
 
@@ -231,6 +232,11 @@ export default function Words() {
     [plans, previewPlan, wordsHubPreview],
   )
   const selectedPlan = resolveWordsHubVocabularyPlan(vocabularyPlans, selectedPlanId)
+  const planReceipts = useWordsPlanReceipts({
+    userId: user?.id ?? null,
+    sourceRefs: selectedPlan ? [selectedPlan.id] : [],
+    preview: wordsHubPreview,
+  })
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -556,7 +562,11 @@ export default function Words() {
       <WordsCollaborationPanel
         plans={vocabularyPlans}
         selectedPlan={selectedPlan}
+        selectedReceipt={selectedPlan ? planReceipts.receipts.get(selectedPlan.id) : null}
+        receiptLoading={planReceipts.loading}
+        receiptError={planReceipts.error}
         onSelectPlan={setSelectedPlanId}
+        onRefreshReceipt={() => { void planReceipts.refresh() }}
         onDeletePlan={() => selectedPlan && setPlanDeleteTarget(selectedPlan)}
         onStartManual={() => {
           setPlanIntentMode('manual')
@@ -905,6 +915,10 @@ export default function Words() {
         wordsUrl={LEXI_WORDS_URL}
         preview={wordsHubPreview}
         onPlanSaved={setSelectedPlanId}
+        onIntentSent={(planId) => {
+          setSelectedPlanId(planId)
+          void planReceipts.refresh()
+        }}
         onOpenChange={setPlanIntentOpen}
       />
 

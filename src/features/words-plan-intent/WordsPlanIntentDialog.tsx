@@ -58,6 +58,12 @@ import {
 } from '@/sync/trackerContentCloudPolicy'
 import { createWordsPlanIntent } from './wordsPlanIntent'
 import {
+  clearWordsPlanRecommendationDraft,
+  readWordsPlanRecommendationDraft,
+  saveWordsPlanRecommendationDraft,
+  type WordsPlanRecommendationDraftForm,
+} from './wordsPlanRecommendationDraft'
+import {
   createWordsPlanRecommendationPreview,
   parseWordsPlanRecommendationTaskContext,
   resolveWordsPlanningTimeZone,
@@ -90,6 +96,7 @@ type Props = {
   wordsUrl: string | null
   preview?: boolean
   onPlanSaved?: (planId: string) => void
+  onIntentSent?: (planId: string) => void
   onOpenChange: (open: boolean) => void
 }
 
@@ -158,6 +165,7 @@ export function WordsPlanIntentDialog({
   wordsUrl,
   preview = false,
   onPlanSaved,
+  onIntentSent,
   onOpenChange,
 }: Props) {
   const today = toLocalDate()
@@ -170,6 +178,7 @@ export function WordsPlanIntentDialog({
   const timerRecords = useTimerStore((state) => state.records)
   const artifactAccess = useAiArtifactAccess()
   const scopeKey = learnerAiTaskScopeKey(artifactAccess)
+  const draftScopeKey = preview ? 'preview' : scopeKey
   const recommendationTaskKey = scopeKey
     ? learnerAiTaskKey(
         'words_plan_recommendation',
@@ -192,9 +201,11 @@ export function WordsPlanIntentDialog({
   const [sent, setSent] = useState(false)
   const [loadingContext, setLoadingContext] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
-  const [previewRecommendation, setPreviewRecommendation] = useState<WordsPlanRecommendationV2 | null>(null)
+  const [localRecommendation, setLocalRecommendation] = useState<WordsPlanRecommendationV2 | null>(null)
   const [adoptedFingerprint, setAdoptedFingerprint] = useState('')
-  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(false)
+  const [draftGeneratedAt, setDraftGeneratedAt] = useState('')
+  const [draftRestored, setDraftRestored] = useState(false)
+  const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const operationIdRef = useRef(newOperationId())
   const savedPlanIdRef = useRef('')
   const submittedFingerprintRef = useRef('')
@@ -208,35 +219,62 @@ export function WordsPlanIntentDialog({
       initializedDialogRef.current = ''
       return
     }
-    const dialogIdentity = `${mode}:${plan?.id ?? 'new'}`
+    const dialogIdentity = `${mode}:${plan?.id ?? 'new'}:${draftScopeKey ?? 'no-scope'}`
     if (initializedDialogRef.current === dialogIdentity) return
     initializedDialogRef.current = dialogIdentity
-    const nextTargetDate = defaultTargetDate(plan, today, lastDate)
+    const restoredDraft = mode === 'ai' && draftScopeKey
+      ? readWordsPlanRecommendationDraft({
+          scopeKey: draftScopeKey,
+          sourcePlanId: plan?.id ?? null,
+        })
+      : null
+    const usableDraft = restoredDraft
+      && restoredDraft.form.targetDate >= today
+      && restoredDraft.form.targetDate <= lastDate
+      ? restoredDraft
+      : null
+    if (restoredDraft && !usableDraft && draftScopeKey) {
+      clearWordsPlanRecommendationDraft({ scopeKey: draftScopeKey, sourcePlanId: plan?.id ?? null })
+    }
+    const nextTargetDate = usableDraft?.form.targetDate
+      ?? defaultTargetDate(plan, today, lastDate)
     setTargetDate(nextTargetDate)
-    setPlanTitle(plan?.title || defaultVocabularyPlanTitle(nextTargetDate))
-    setTargetTime(plan?.targetTime || '')
-    setTargetCount(String(defaultTargetCount(plan)))
-    setTargetDuration(String(defaultTargetDuration(plan)))
-    setStudyMode('mixed')
-    setCloudMode(plan
+    setPlanTitle(usableDraft?.form.planTitle ?? plan?.title ?? defaultVocabularyPlanTitle(nextTargetDate))
+    setTargetTime(usableDraft?.form.targetTime ?? plan?.targetTime ?? '')
+    setTargetCount(String(usableDraft?.form.targetCount ?? defaultTargetCount(plan)))
+    setTargetDuration(String(usableDraft?.form.targetDuration ?? defaultTargetDuration(plan)))
+    setStudyMode(usableDraft?.form.studyMode ?? 'mixed')
+    setCloudMode(usableDraft?.form.cloudMode ?? (plan
       ? trackerContentCloudMode({ entityKind: 'study_plan', entityId: plan.id })
-      : 'local')
+      : 'local'))
     setSaving(false)
     setError('')
     setSent(false)
     setLoadingContext(false)
     setAnalysisError('')
-    setPreviewRecommendation(null)
-    setAdoptedFingerprint('')
-    setPendingAutoGenerate(mode === 'ai')
+    setLocalRecommendation(usableDraft?.recommendation ?? null)
+    setDraftGeneratedAt(usableDraft?.generatedAt ?? '')
+    setDraftRestored(Boolean(usableDraft))
+    setDraftStorageWarning('')
+    const restoredFingerprint = usableDraft
+      ? wordsPlanFormFingerprint(
+          usableDraft.recommendation.targetDate,
+          usableDraft.recommendation.targetCount,
+          usableDraft.recommendation.studyMode,
+        )
+      : ''
+    setAdoptedFingerprint(restoredFingerprint)
     operationIdRef.current = newOperationId()
     savedPlanIdRef.current = plan?.id ?? ''
     submittedFingerprintRef.current = ''
-    appliedRecommendationRef.current = ''
-  }, [lastDate, mode, open, plan, today])
+    appliedRecommendationRef.current = restoredFingerprint
+  }, [draftScopeKey, lastDate, mode, open, plan, today])
 
   const closeDialog = () => {
     if (saving) return
+    if (!sent && mode === 'ai' && recommendation && draftGeneratedAt) {
+      persistDraft(recommendation, draftGeneratedAt)
+    }
     if (savedPlanIdRef.current) onPlanSaved?.(savedPlanIdRef.current)
     onOpenChange(false)
   }
@@ -252,8 +290,8 @@ export function WordsPlanIntentDialog({
     && isWordsPlanRecommendationV2(recommendationTask.result?.content)
     ? recommendationTask.result.content
     : null
-  const recommendation = previewRecommendation?.targetDate === targetDate
-    ? previewRecommendation
+  const recommendation = localRecommendation?.targetDate === targetDate
+    ? localRecommendation
     : taskRecommendation
   const taskRunning = taskMatchesForm
     && (recommendationTask?.status === 'running' || recommendationTask?.status === 'stopping')
@@ -322,13 +360,60 @@ export function WordsPlanIntentDialog({
     && currentFormFingerprint !== recommendationFingerprint,
   )
 
+  const currentDraftForm = useCallback((): WordsPlanRecommendationDraftForm | null => {
+    const count = Number(targetCount)
+    const duration = Number(targetDuration)
+    if (
+      !isLocalDate(targetDate)
+      || !planTitle.trim()
+      || planTitle.length > 60
+      || (targetTime !== '' && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(targetTime))
+      || !Number.isInteger(count)
+      || count < 1
+      || count > 1_000
+      || !Number.isInteger(duration)
+      || duration < 5
+      || duration > 180
+    ) return null
+    return {
+      targetDate,
+      planTitle,
+      targetTime,
+      targetCount: count,
+      targetDuration: duration,
+      studyMode,
+      cloudMode,
+    }
+  }, [cloudMode, planTitle, studyMode, targetCount, targetDate, targetDuration, targetTime])
+
+  const persistDraft = useCallback((
+    nextRecommendation: WordsPlanRecommendationV2,
+    generatedAt: string,
+    formOverride?: WordsPlanRecommendationDraftForm,
+  ): boolean => {
+    if (!draftScopeKey) return false
+    const form = formOverride ?? currentDraftForm()
+    if (!form || form.targetDate !== nextRecommendation.targetDate) return false
+    return saveWordsPlanRecommendationDraft({
+      scopeKey: draftScopeKey,
+      sourcePlanId: plan?.id ?? null,
+      generatedAt,
+      recommendation: nextRecommendation,
+      form,
+    })
+  }, [currentDraftForm, draftScopeKey, plan?.id])
+
   const analyze = useCallback(async () => {
     if (dateInvalid || loadingContext || taskRunning) return
     setAnalysisError('')
-    setAdoptedFingerprint('')
+    setDraftStorageWarning('')
 
     if (preview) {
-      setPreviewRecommendation(createWordsPlanRecommendationPreview(targetDate))
+      setAdoptedFingerprint('')
+      appliedRecommendationRef.current = ''
+      setLocalRecommendation(createWordsPlanRecommendationPreview(targetDate))
+      setDraftGeneratedAt(new Date().toISOString())
+      setDraftRestored(false)
       return
     }
     if (
@@ -376,6 +461,27 @@ export function WordsPlanIntentDialog({
           snapshot,
           userInput: '',
         },
+        onSuccess: (result) => {
+          if (!isWordsPlanRecommendationV2(result.content)) return
+          const generatedAt = new Date().toISOString()
+          const generatedForm: WordsPlanRecommendationDraftForm = {
+            targetDate: result.content.targetDate,
+            planTitle,
+            targetTime,
+            targetCount: result.content.targetCount,
+            targetDuration: result.content.estimatedMinutes,
+            studyMode: result.content.studyMode,
+            cloudMode,
+          }
+          setAdoptedFingerprint('')
+          appliedRecommendationRef.current = ''
+          setLocalRecommendation(result.content)
+          setDraftGeneratedAt(generatedAt)
+          setDraftRestored(false)
+          if (!persistDraft(result.content, generatedAt, generatedForm)) {
+            setDraftStorageWarning('计划已生成，但浏览器暂时无法保存这份草稿；关闭前请先确认并发送。')
+          }
+        },
       })
     } catch {
       if (contextRequestRef.current === requestVersion) {
@@ -386,9 +492,12 @@ export function WordsPlanIntentDialog({
     }
   }, [
     artifactAccess,
+    cloudMode,
     dateInvalid,
     loadingContext,
+    persistDraft,
     plan,
+    planTitle,
     planExecutions,
     plans,
     practiceRecords,
@@ -396,17 +505,12 @@ export function WordsPlanIntentDialog({
     recommendationTaskKey,
     scopeKey,
     targetDate,
+    targetTime,
     taskRunning,
     timerRecords,
     userId,
     wordRecords,
   ])
-
-  useEffect(() => {
-    if (!open || mode !== 'ai' || !pendingAutoGenerate) return
-    setPendingAutoGenerate(false)
-    void analyze()
-  }, [analyze, mode, open, pendingAutoGenerate])
 
   useEffect(() => {
     if (
@@ -423,6 +527,32 @@ export function WordsPlanIntentDialog({
     setError('')
     appliedRecommendationRef.current = recommendationFingerprint
   }, [analysisPending, mode, recommendation, recommendationFingerprint])
+
+  useEffect(() => {
+    if (
+      !open
+      || sent
+      || mode !== 'ai'
+      || analysisPending
+      || !recommendation
+      || !draftGeneratedAt
+      || recommendation.targetDate !== targetDate
+    ) return
+    if (!persistDraft(recommendation, draftGeneratedAt)) {
+      setDraftStorageWarning('计划已生成，但浏览器暂时无法更新本地草稿；关闭前请先确认并发送。')
+      return
+    }
+    setDraftStorageWarning('')
+  }, [
+    analysisPending,
+    draftGeneratedAt,
+    mode,
+    open,
+    persistDraft,
+    recommendation,
+    sent,
+    targetDate,
+  ])
 
   const submit = async () => {
     if (!canSubmit) return
@@ -464,6 +594,16 @@ export function WordsPlanIntentDialog({
         })
         savedPlanIdRef.current = result.planId
       }
+      if (mode === 'ai' && draftScopeKey) {
+        clearWordsPlanRecommendationDraft({
+          scopeKey: draftScopeKey,
+          sourcePlanId: plan?.id ?? null,
+        })
+      }
+      if (mode === 'ai' && recommendationTaskKey) {
+        learnerAiTaskCoordinator.clearTerminalTask(recommendationTaskKey)
+      }
+      if (savedPlanIdRef.current) onIntentSent?.(savedPlanIdRef.current)
       setSent(true)
     } catch (caught) {
       if (caught instanceof VocabularyPlanWorkflowError && caught.savedPlanId) {
@@ -489,7 +629,7 @@ export function WordsPlanIntentDialog({
           </DialogTitle>
           <DialogDescription className="leading-5">
             {mode === 'ai'
-              ? '综合 Words 与 Tracker 的最新进度生成草稿，由你确认后再发送。'
+              ? '先查看本地暂存内容；只有明确点击生成或重新生成时才会使用 AI 额度。'
               : '填写名称、日期、目标词数与用时，确认后保存并发送给 Words。'}
           </DialogDescription>
         </DialogHeader>
@@ -536,9 +676,14 @@ export function WordsPlanIntentDialog({
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 id="words-plan-ai-heading" className="font-semibold text-foreground">根据双方进度生成</h3>
                       <span className="rounded-full border border-primary/20 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">自动填入，不自动发送</span>
+                      {draftRestored && (
+                        <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                          上次本地暂存
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      参考 Words 学习状态，以及 Tracker 的近期进度、当天负荷与过往词汇计划表现。
+                      打开页面不会自动调用 AI。需要最新进度时，由你主动生成或重新生成。
                     </p>
                   </div>
                 </div>
@@ -563,12 +708,26 @@ export function WordsPlanIntentDialog({
                   </div>
                 )}
 
+                {draftStorageWarning && !analysisPending && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-3 text-sm leading-5 text-amber-800 dark:text-amber-200" role="alert">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <span>{draftStorageWarning}</span>
+                  </div>
+                )}
+
                 {recommendation && !analysisPending && (
                   <div className="space-y-4 rounded-2xl border border-primary/20 bg-background p-4 shadow-sm">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className="text-xs font-medium text-primary">AI 生成的词汇计划</p>
-                        <p className="mt-1 text-sm leading-6 text-foreground">{recommendation.summary}</p>
+                      <p className="text-xs font-medium text-primary">
+                        {draftRestored ? '上次暂存的 AI 词汇计划' : 'AI 生成的词汇计划'}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-foreground">{recommendation.summary}</p>
+                      {draftRestored && (
+                        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                          本次打开未消耗新额度；如需按最新进度分析，请点击下方重新生成。
+                        </p>
+                      )}
                       </div>
                       <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
                         {WORDS_PLAN_CONFIDENCE_LABELS[recommendation.confidence]}
@@ -623,11 +782,15 @@ export function WordsPlanIntentDialog({
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300" role="status">
                         <Check className="size-4" aria-hidden="true" />
-                        {recommendationApplied ? '已填入下方，可继续修改' : '正在更新计划内容'}
+                        {recommendationApplied
+                          ? '已填入下方，可继续修改'
+                          : recommendationCustomized
+                            ? '已保留下方的手动修改'
+                            : '正在更新计划内容'}
                       </p>
                       <Button type="button" variant="outline" onClick={() => void analyze()} className="w-full sm:w-auto">
                         <RefreshCw className="size-4" aria-hidden="true" />
-                        重新生成
+                        重新生成（消耗额度）
                       </Button>
                     </div>
                   </div>
@@ -643,8 +806,13 @@ export function WordsPlanIntentDialog({
                       className="w-full border-primary/25 bg-background hover:bg-primary/5"
                     >
                       <Sparkles className="size-4 text-primary" aria-hidden="true" />
-                      根据双方进度生成计划
+                      确认生成计划（消耗额度）
                     </Button>
+                    {!accountMessage && (
+                      <p className="text-center text-[11px] leading-5 text-muted-foreground">
+                        只有点击上方按钮后才会发起 AI 请求。
+                      </p>
+                    )}
                     {accountMessage && (
                       <p className="text-xs leading-5 text-muted-foreground">{accountMessage}</p>
                     )}
@@ -696,7 +864,19 @@ export function WordsPlanIntentDialog({
                           if (!plan || !planTitle.trim() || planTitle === previousDefault) {
                             setPlanTitle(defaultVocabularyPlanTitle(nextDate))
                           }
-                          setPreviewRecommendation(null)
+                          setLocalRecommendation(null)
+                          setDraftGeneratedAt('')
+                          setDraftRestored(false)
+                          setDraftStorageWarning('')
+                          if (draftScopeKey) {
+                            clearWordsPlanRecommendationDraft({
+                              scopeKey: draftScopeKey,
+                              sourcePlanId: plan?.id ?? null,
+                            })
+                          }
+                          if (recommendationTaskKey) {
+                            learnerAiTaskCoordinator.clearTerminalTask(recommendationTaskKey)
+                          }
                           setAnalysisError('')
                           setAdoptedFingerprint('')
                         }}
