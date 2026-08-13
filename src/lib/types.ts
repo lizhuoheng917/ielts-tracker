@@ -118,6 +118,9 @@ export interface Settings {
   examDate?: string // YYYY-MM-DD
   showExamCountdown: boolean // 是否在主页显示考试倒计时
   showAiSuggestions: boolean // 是否在主页显示 AI 学习建议
+  showWordsDailySummary: boolean // 是否在主页显示 Words 词汇学习摘要
+  dashboardCardOrder: import('@/features/dashboard/dashboardLayout').DashboardCardId[]
+  dashboardCardVisibility: import('@/features/dashboard/dashboardLayout').DashboardCardVisibility
   theme: 'light' | 'dark' | 'system'
   lastCheckinDate?: string // YYYY-MM-DD
 }

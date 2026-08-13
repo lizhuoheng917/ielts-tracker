@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-13-words-plan-draft-and-receipt-loop",
+  "release": "2026-08-14-words-execution-feedback-ai-calibration-and-dashboard-personalization",
   "Frontend": {
     "status": "changed",
-    "reason": "The Tracker vocabulary-center AI dialog no longer requests AI when opened and restores a 24-hour account-and-plan-scoped session draft. Tracker now batch-loads the newest short-lived Words decision for vocabulary plans, displays pending, accepted, rejected or expired status in Vocabulary Center and Plan Center, refreshes after a send or browser return without polling, and keeps account-binding checks before correlating local plan IDs."
+    "reason": "Tracker now blocks explicit Words-plan generation while quota is loading, disabled or exhausted, while keeping manual planning available. Vocabulary Center shows an on-demand Words today summary with completed, target and remaining counts without polling. AI recommendation snapshots derive a 30-day target-attainment signal from paired Tracker target and actual counts, applying a conservative total-word ceiling only after at least three comparable executions. Settings now provides a compact homepage-personalization entry above AI Data Permissions. Its dialog keeps the title and metric overview fixed while users can independently show, hide and reorder eight feature cards; Dashboard renders only the resulting layout. The exam target area only edits the date, and countdown visibility is managed exclusively in this dialog."
   },
   "Backend": {
     "status": "changed",
-    "reason": "A backward-compatible owner-scoped RPC returns only the newest compact plan-intent row for at most 50 requested source references. It reuses the existing capped handoff table, adds no table, column, index, snapshot or learning copy, retains terminal decisions for seven days, and preserves direct-table revocation plus authenticated-account checks."
+    "reason": "Reviewed the existing owner-scoped lexi_get_words_planning_context RPC and reused its non-persisted numeric projection for the progress card, so no table, migration, index or extra snapshot is added. The paired Lexi AI Edge Function accepts the new calibrated aggregate fields and maximumTotalWords bound while retaining backward compatibility with legacy Tracker snapshots. Homepage visibility and order remain device-local and require no schema, RPC, RLS or Edge Function change; hiding the Words summary prevents the existing summary RPC from being requested."
   },
   "Admin": {
     "status": "reviewed-not-needed",
-    "reason": "Reviewed Lexi Control and its admin RPC boundaries. Plan receipts are transient owner-only workflow feedback with no policy, quota, moderation, support or remotely manageable value; granting administrators a new read path would expose learner workflow without an operational action, so no Control surface is added."
+    "reason": "Reviewed Lexi Control and its existing AI policy and quota controls. The new values are per-request derived aggregates, not persisted administrator-manageable state; the current words_plan_recommendation enable switch and daily quota remain sufficient. Homepage card visibility and order are individual device presentation choices, so no Control UI or admin RPC change is needed."
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "Production Supabase applied local migration 20260813110754_lexi_cross_product_plan_receipts.sql as remote migration 20260813132108. Runtime-changing commits d066e86d58a0d17856032686fa67a47a13722dfe for Tracker and 18b43105215092355706eec3e56235b78c682f58 for the paired Words, Control and Account surfaces were deployed and verified; this record-only closeout contains no runtime change and is included in the final source-parity deployment. Production endpoints, signed-in read-only surfaces and the explicit AI-generation gate were verified."
+    "status": "not-deployed",
+    "reason": "This is a local coordinated implementation and validation handoff. No production Supabase function or Cloudflare Pages deployment has been performed in this change."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The complete Tracker release gate passed typecheck, lint, 85 test files and 520 tests, production build and bundle checks. The coordinated Words release gate also passed learner, Control and Account builds plus all migration, RLS, account-isolation, sync, AI and security regressions. Production SQL checks rejected anonymous, missing-JWT, cross-account and over-limit reads while allowing an authenticated owner read. A freshly reloaded signed-in Tracker page kept the AI dialog idle for five seconds until an explicit generate action; Words, Tracker, Control and Account surfaces loaded without creating learning data. The current account had no remaining AI quota, so a real generate-send-decide-receipt cycle remains a named non-blocking follow-up."
+    "reason": "Tracker release verification passed impact review, typecheck, lint, 86 test files with 534 tests, production build and bundle safety checks. Targeted layout, backup, sync and Words-summary tests also passed. Browser validation confirmed the compact Settings entry, dedicated dialog, fixed-card labels, ordering, hiding, Dashboard mapping and default reset. The coordinated Words release gate had already passed after its latest code change; production smoke testing remains part of the later deployment step."
   }
 }

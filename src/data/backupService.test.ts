@@ -21,6 +21,10 @@ import {
   type BackupV3,
 } from './backupTypes'
 import { BackupValidationError, parseBackupJson } from './backupValidation'
+import {
+  DEFAULT_DASHBOARD_CARD_ORDER,
+  DEFAULT_DASHBOARD_CARD_VISIBILITY,
+} from '@/features/dashboard/dashboardLayout'
 
 const EXPORTED_AT = '2026-08-02T00:00:00.000Z'
 const ACCOUNT_USER_ID = '11111111-1111-4111-8111-111111111111'
@@ -165,6 +169,9 @@ function emptyData(): BackupDataV3 {
     settings: {
       showExamCountdown: true,
       showAiSuggestions: true,
+      showWordsDailySummary: true,
+      dashboardCardOrder: [...DEFAULT_DASHBOARD_CARD_ORDER],
+      dashboardCardVisibility: { ...DEFAULT_DASHBOARD_CARD_VISIBILITY },
       theme: 'light',
     },
   }
@@ -289,6 +296,46 @@ describe('backup v3', () => {
     expect(result.backup.data.aiArtifacts.every(
       (artifact) => artifact.owner.scope === 'local',
     )).toBe(true)
+  })
+
+  it('preserves the dashboard summary preference and defaults older V3 archives to visible', () => {
+    const data = emptyData()
+    data.settings.showWordsDailySummary = false
+    data.settings.dashboardCardVisibility['words-summary'] = false
+
+    const archive = createBackupV3(adapterFor(data), EXPORTED_AT)
+    const currentResult = parseBackupJson(JSON.stringify(archive), emptyData()).backup.data.settings
+    expect(currentResult.showWordsDailySummary).toBe(false)
+    expect(currentResult.dashboardCardVisibility['words-summary']).toBe(false)
+
+    delete (archive.data.settings as Partial<typeof archive.data.settings>).dashboardCardOrder
+    delete (archive.data.settings as Partial<typeof archive.data.settings>).dashboardCardVisibility
+    const legacyResult = parseBackupJson(JSON.stringify(archive), emptyData()).backup.data.settings
+    expect(legacyResult.showWordsDailySummary).toBe(false)
+    expect(legacyResult.dashboardCardVisibility['words-summary']).toBe(false)
+
+    delete (archive.data.settings as Partial<typeof archive.data.settings>).showWordsDailySummary
+    expect(parseBackupJson(JSON.stringify(archive), emptyData())
+      .backup.data.settings.showWordsDailySummary).toBe(true)
+  })
+
+  it('round-trips dashboard card order and visibility', () => {
+    const data = emptyData()
+    data.settings.dashboardCardOrder = [
+      'today-tasks',
+      'words-summary',
+      'exam-countdown',
+      'ai-suggestions',
+      'recent-activity',
+      'recent-achievements',
+      'level-progress',
+      'latest-diary',
+    ]
+    data.settings.dashboardCardVisibility['recent-activity'] = false
+
+    const result = parseBackupJson(serializeBackupV3(adapterFor(data)), emptyData())
+    expect(result.backup.data.settings.dashboardCardOrder[0]).toBe('today-tasks')
+    expect(result.backup.data.settings.dashboardCardVisibility['recent-activity']).toBe(false)
   })
 
   it('round-trips strict plan drafts and durable idempotency receipts', () => {
@@ -594,6 +641,8 @@ describe('backup v3', () => {
       reports: [structuredLegacyReport()],
       settings: {
         examDate: '2026-09-01',
+        showExamCountdown: false,
+        showAiSuggestions: false,
         theme: 'dark',
         lastCheckinDate: '2026-07-31',
       },
@@ -618,6 +667,8 @@ describe('backup v3', () => {
       '2026-07-30',
       '2026-07-31',
     ])
+    expect(result.backup.data.settings.dashboardCardVisibility['exam-countdown']).toBe(false)
+    expect(result.backup.data.settings.dashboardCardVisibility['ai-suggestions']).toBe(false)
     expect(JSON.stringify(result.backup)).not.toContain('legacy-secret-must-be-ignored')
     expect(JSON.stringify(result.backup)).not.toContain('https://legacy.test/v1')
     expect(JSON.stringify(result.backup)).not.toContain('legacy-model')

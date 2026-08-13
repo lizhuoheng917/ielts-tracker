@@ -21,6 +21,7 @@ export const BACKUP_VERSION = 3 as const
 export interface BackupSettings extends Settings {
   showExamCountdown: boolean
   showAiSuggestions: boolean
+  showWordsDailySummary: boolean
 }
 
 /**

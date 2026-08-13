@@ -27,12 +27,15 @@ import {
 import type { StudyPlan } from '@/lib/types'
 import type { LexiCrossProductHandoffV1 } from '@/contracts/lexiCrossProduct'
 import { WORDS_HUB_NEW_PLAN_ID } from './wordsHub'
+import { WordsExecutionProgress } from './WordsExecutionProgress'
 import { WordsPlanReceiptStatus } from './WordsPlanReceiptStatus'
 
 type Props = {
   plans: readonly StudyPlan[]
   selectedPlan: StudyPlan | null
   selectedReceipt?: LexiCrossProductHandoffV1 | null
+  userId: string | null
+  preview?: boolean
   receiptLoading?: boolean
   receiptError?: string
   onSelectPlan: (planId: string) => void
@@ -47,6 +50,8 @@ export function WordsCollaborationPanel({
   plans,
   selectedPlan,
   selectedReceipt,
+  userId,
+  preview = false,
   receiptLoading,
   receiptError,
   onSelectPlan,
@@ -105,6 +110,8 @@ export function WordsCollaborationPanel({
           查看计划中心
         </Button>
       </div>
+
+      <WordsExecutionProgress userId={userId} preview={preview} />
 
       <div className="mt-3 flex min-w-0 flex-col gap-1.5 rounded-xl border border-border/75 bg-background/65 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className="shrink-0 text-xs font-medium text-muted-foreground">保存方式</span>

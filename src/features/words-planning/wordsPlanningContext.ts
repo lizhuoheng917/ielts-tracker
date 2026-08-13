@@ -10,6 +10,17 @@ export type WordsPlanningContextInvoker = (input: {
   timeZone: string
 }) => Promise<unknown>
 
+export interface WordsExecutionProgress {
+  plannedWords: number
+  completedWords: number
+  remainingWords: number
+  completionRate: number | null
+  plannedNewWords: number
+  completedNewWords: number
+  plannedReviewWords: number
+  completedReviewWords: number
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -227,5 +238,25 @@ export function createWordsPlanningContextPreview(
       completedNewWords: 4,
       completedReviewWords: 8,
     },
+  }
+}
+
+/** Derives display-only progress without storing another cross-product snapshot. */
+export function describeWordsExecutionProgress(
+  context: LexiWordsPlanningContextV1,
+): WordsExecutionProgress {
+  const plannedWords = context.targetDay.plannedNewWords + context.targetDay.plannedReviewWords
+  const completedWords = context.targetDay.completedNewWords + context.targetDay.completedReviewWords
+  return {
+    plannedWords,
+    completedWords,
+    remainingWords: Math.max(0, plannedWords - completedWords),
+    completionRate: plannedWords > 0
+      ? Math.round(completedWords / plannedWords * 100)
+      : null,
+    plannedNewWords: context.targetDay.plannedNewWords,
+    completedNewWords: context.targetDay.completedNewWords,
+    plannedReviewWords: context.targetDay.plannedReviewWords,
+    completedReviewWords: context.targetDay.completedReviewWords,
   }
 }

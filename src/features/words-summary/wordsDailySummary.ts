@@ -18,6 +18,7 @@ export type WordsDailySummaryInvoker = (input: {
 }) => Promise<unknown>
 
 type UseWordsDailySummaryOptions = {
+  active?: boolean
   userId: string | null
   studyDate: string
   previewSummary?: LexiWordsDailySummaryV1 | null
@@ -133,6 +134,7 @@ export async function loadWordsDailySummary(
  * user action. It never polls, persists, or copies Words data into Tracker.
  */
 export function useWordsDailySummary({
+  active = true,
   userId,
   studyDate,
   previewSummary = null,
@@ -150,6 +152,10 @@ export function useWordsDailySummary({
   const refresh = useCallback(async () => {
     const version = ++requestVersion.current
 
+    if (!active) {
+      setState({ status: 'idle', summary: null, refreshedAt: null })
+      return
+    }
     if (previewSummary) {
       setState({
         status: 'ready',
@@ -176,7 +182,7 @@ export function useWordsDailySummary({
       if (version !== requestVersion.current) return
       setState({ status: 'unavailable', summary: null, refreshedAt: null })
     }
-  }, [previewSummary, studyDate, userId])
+  }, [active, previewSummary, studyDate, userId])
 
   useEffect(() => {
     void refresh()

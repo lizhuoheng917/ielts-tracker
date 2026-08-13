@@ -28,6 +28,10 @@ import type { ChatMessageRecord } from '@/stores/chatStore'
 import type { AnalysisReport } from '@/stores/reportStore'
 import type { WritingReport } from '@/stores/writingReportStore'
 import {
+  normalizeDashboardCardOrder,
+  normalizeDashboardCardVisibility,
+} from '@/features/dashboard/dashboardLayout'
+import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
   type BackupDataV3,
@@ -516,6 +520,24 @@ function validateSettings(value: unknown, path: string): BackupSettings {
   if (object.examDate !== undefined) asLocalDate(object.examDate, `${path}.examDate`)
   asBoolean(object.showExamCountdown, `${path}.showExamCountdown`)
   asBoolean(object.showAiSuggestions, `${path}.showAiSuggestions`)
+  if (object.showWordsDailySummary === undefined) {
+    object.showWordsDailySummary = true
+  } else {
+    asBoolean(object.showWordsDailySummary, `${path}.showWordsDailySummary`)
+  }
+  object.dashboardCardOrder = normalizeDashboardCardOrder(object.dashboardCardOrder)
+  const dashboardCardVisibility = normalizeDashboardCardVisibility(
+    object.dashboardCardVisibility,
+    {
+      'words-summary': object.showWordsDailySummary as boolean,
+      'exam-countdown': object.showExamCountdown as boolean,
+      'ai-suggestions': object.showAiSuggestions as boolean,
+    },
+  )
+  object.dashboardCardVisibility = dashboardCardVisibility
+  object.showWordsDailySummary = dashboardCardVisibility['words-summary']
+  object.showExamCountdown = dashboardCardVisibility['exam-countdown']
+  object.showAiSuggestions = dashboardCardVisibility['ai-suggestions']
   asEnum(object.theme, THEMES, `${path}.theme`)
   if (object.lastCheckinDate !== undefined) {
     asLocalDate(object.lastCheckinDate, `${path}.lastCheckinDate`)
@@ -699,6 +721,31 @@ function validateLegacySettings(value: unknown, current: BackupSettings): Backup
   if (object.showAiSuggestions !== undefined) {
     next.showAiSuggestions = asBoolean(object.showAiSuggestions, '$.settings.showAiSuggestions')
   }
+  if (object.showWordsDailySummary !== undefined) {
+    next.showWordsDailySummary = asBoolean(
+      object.showWordsDailySummary,
+      '$.settings.showWordsDailySummary',
+    )
+  }
+  if (object.dashboardCardOrder !== undefined) {
+    next.dashboardCardOrder = normalizeDashboardCardOrder(object.dashboardCardOrder)
+  }
+  if (object.dashboardCardVisibility !== undefined) {
+    next.dashboardCardVisibility = normalizeDashboardCardVisibility(
+      object.dashboardCardVisibility,
+      next.dashboardCardVisibility,
+    )
+  } else {
+    next.dashboardCardVisibility = {
+      ...next.dashboardCardVisibility,
+      'words-summary': next.showWordsDailySummary,
+      'exam-countdown': next.showExamCountdown,
+      'ai-suggestions': next.showAiSuggestions,
+    }
+  }
+  next.showWordsDailySummary = next.dashboardCardVisibility['words-summary']
+  next.showExamCountdown = next.dashboardCardVisibility['exam-countdown']
+  next.showAiSuggestions = next.dashboardCardVisibility['ai-suggestions']
   if (object.theme !== undefined) next.theme = asEnum(object.theme, THEMES, '$.settings.theme')
   if (object.lastCheckinDate !== undefined) {
     next.lastCheckinDate = asLocalDate(object.lastCheckinDate, '$.settings.lastCheckinDate')

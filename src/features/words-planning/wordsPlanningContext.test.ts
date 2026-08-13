@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createWordsPlanningContextPreview,
+  describeWordsExecutionProgress,
   loadWordsPlanningContext,
   parseWordsPlanningContext,
 } from './wordsPlanningContext'
@@ -55,5 +56,36 @@ describe('Words planning context boundary', () => {
     await expect(loadWordsPlanningContext('user-701', '13/08/2026', timeZone, invoke)).rejects.toThrow(/invalid/)
     await expect(loadWordsPlanningContext('user-701', targetDate, 'x'.repeat(65), invoke)).rejects.toThrow(/invalid/)
     expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('derives today progress from the existing non-persisted summary', () => {
+    const context = createWordsPlanningContextPreview(targetDate, timeZone)
+    expect(describeWordsExecutionProgress(context)).toEqual({
+      plannedWords: 30,
+      completedWords: 12,
+      remainingWords: 18,
+      completionRate: 40,
+      plannedNewWords: 12,
+      completedNewWords: 4,
+      plannedReviewWords: 18,
+      completedReviewWords: 8,
+    })
+  })
+
+  it('describes a day without a confirmed Words target without inventing progress', () => {
+    const context = createWordsPlanningContextPreview(targetDate, timeZone)
+    context.targetDay = {
+      ...context.targetDay,
+      plannedNewWords: 0,
+      plannedReviewWords: 0,
+      completedNewWords: 0,
+      completedReviewWords: 0,
+    }
+    expect(describeWordsExecutionProgress(context)).toMatchObject({
+      plannedWords: 0,
+      completedWords: 0,
+      remainingWords: 0,
+      completionRate: null,
+    })
   })
 })

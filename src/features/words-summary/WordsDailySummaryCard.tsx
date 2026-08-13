@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import type { WordsDailySummaryState } from './wordsDailySummary'
 
 type WordsDailySummaryCardProps = {
+  className?: string
   state: WordsDailySummaryState
   wordsUrl: string | null
   onRefresh: () => void
@@ -57,6 +58,7 @@ function WordsLink({ wordsUrl }: { wordsUrl: string | null }) {
 }
 
 export function WordsDailySummaryCard({
+  className,
   state,
   wordsUrl,
   onRefresh,
@@ -65,7 +67,7 @@ export function WordsDailySummaryCard({
   const refreshedAt = formatRefreshedAt(state.refreshedAt)
 
   return (
-    <section aria-labelledby="words-daily-summary-title">
+    <section aria-labelledby="words-daily-summary-title" className={className}>
       <Card className="overflow-hidden border-emerald-600/18 bg-[linear-gradient(135deg,color-mix(in_oklch,var(--card),#ecfdf5_58%),var(--card)_68%)] py-0 shadow-sm dark:border-emerald-300/12 dark:bg-[linear-gradient(135deg,color-mix(in_oklch,var(--card),#064e3b_18%),var(--card)_72%)]">
         <CardContent className="grid p-0 md:grid-cols-[minmax(13rem,0.72fr)_minmax(0,1.28fr)]">
           <div className="flex flex-col items-start border-b border-emerald-950/8 px-4 py-4 sm:px-5 md:border-b-0 md:border-r dark:border-white/8">

@@ -18,6 +18,13 @@ import {
   CANONICAL_MUTATION_EPOCH_KEY,
   CANONICAL_MUTATION_LEASE_KEY,
 } from '@/data/canonicalMutationCoordinator'
+import {
+  DEFAULT_DASHBOARD_CARD_ORDER,
+  DEFAULT_DASHBOARD_CARD_VISIBILITY,
+  moveDashboardCard,
+  normalizeDashboardSettings,
+  type DashboardCardId,
+} from '@/features/dashboard/dashboardLayout'
 
 interface CompleteCheckinOptions {
   recordActivity?: boolean
@@ -28,6 +35,10 @@ interface SettingsStore extends Settings {
   clearExamDate: () => void
   setShowExamCountdown: (show: boolean) => void
   setShowAiSuggestions: (show: boolean) => void
+  setShowWordsDailySummary: (show: boolean) => void
+  setDashboardCardVisibility: (cardId: DashboardCardId, show: boolean) => void
+  moveDashboardCard: (cardId: DashboardCardId, direction: 'up' | 'down') => void
+  resetDashboardCards: () => void
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   toggleTheme: () => void
   checkIn: () => boolean // 返回是否打卡成功（false = 今天已打过卡）
@@ -42,8 +53,46 @@ export const useSettingsStore = create<SettingsStore>()(
       ...DEFAULT_SETTINGS,
       setExamDate: (date) => set({ examDate: date }),
       clearExamDate: () => set((state) => ({ ...state, examDate: undefined })),
-      setShowExamCountdown: (show) => set({ showExamCountdown: show }),
-      setShowAiSuggestions: (show) => set({ showAiSuggestions: show }),
+      setShowExamCountdown: (show) => set((state) => ({
+        showExamCountdown: show,
+        dashboardCardVisibility: {
+          ...state.dashboardCardVisibility,
+          'exam-countdown': show,
+        },
+      })),
+      setShowAiSuggestions: (show) => set((state) => ({
+        showAiSuggestions: show,
+        dashboardCardVisibility: {
+          ...state.dashboardCardVisibility,
+          'ai-suggestions': show,
+        },
+      })),
+      setShowWordsDailySummary: (show) => set((state) => ({
+        showWordsDailySummary: show,
+        dashboardCardVisibility: {
+          ...state.dashboardCardVisibility,
+          'words-summary': show,
+        },
+      })),
+      setDashboardCardVisibility: (cardId, show) => set((state) => ({
+        showExamCountdown: cardId === 'exam-countdown' ? show : state.showExamCountdown,
+        showAiSuggestions: cardId === 'ai-suggestions' ? show : state.showAiSuggestions,
+        showWordsDailySummary: cardId === 'words-summary' ? show : state.showWordsDailySummary,
+        dashboardCardVisibility: {
+          ...state.dashboardCardVisibility,
+          [cardId]: show,
+        },
+      })),
+      moveDashboardCard: (cardId, direction) => set((state) => ({
+        dashboardCardOrder: moveDashboardCard(state.dashboardCardOrder, cardId, direction),
+      })),
+      resetDashboardCards: () => set({
+        showExamCountdown: true,
+        showAiSuggestions: true,
+        showWordsDailySummary: true,
+        dashboardCardOrder: [...DEFAULT_DASHBOARD_CARD_ORDER],
+        dashboardCardVisibility: { ...DEFAULT_DASHBOARD_CARD_VISIBILITY },
+      }),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       checkIn: () => {
@@ -136,6 +185,31 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: `${STORAGE_PREFIX}:settings`,
       storage: createJSONStorage(() => localStorage),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState && typeof persistedState === 'object'
+          ? persistedState as Partial<SettingsStore>
+          : {}
+        const legacyVisibility = {
+          'words-summary': persisted.showWordsDailySummary ?? currentState.showWordsDailySummary,
+          'exam-countdown': persisted.showExamCountdown ?? currentState.showExamCountdown,
+          'ai-suggestions': persisted.showAiSuggestions ?? currentState.showAiSuggestions,
+        }
+        const dashboardSettings = normalizeDashboardSettings({
+          order: persisted.dashboardCardOrder,
+          visibility: persisted.dashboardCardVisibility,
+          legacyVisibility,
+        })
+
+        return {
+          ...currentState,
+          ...persisted,
+          showWordsDailySummary: dashboardSettings.visibility['words-summary'],
+          showExamCountdown: dashboardSettings.visibility['exam-countdown'],
+          showAiSuggestions: dashboardSettings.visibility['ai-suggestions'],
+          dashboardCardOrder: dashboardSettings.order,
+          dashboardCardVisibility: dashboardSettings.visibility,
+        }
+      },
     }
   )
 )

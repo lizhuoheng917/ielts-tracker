@@ -18,6 +18,10 @@ import {
   learnerAiTaskScopeKey,
   useLearnerAiTaskState,
 } from '@/ai/learnerAiTaskCoordinator'
+import {
+  managedAiQuotaActionState,
+  type ManagedAiQuotaState,
+} from '@/ai/managedAiQuota'
 import { isWordsPlanRecommendationV2, type WordsPlanRecommendationV2 } from '@/ai/structuredOutputs'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { buildWordsPlanRecommendationSnapshot } from '@/ai/wordsPlanRecommendation'
@@ -206,6 +210,7 @@ export function WordsPlanIntentDialog({
   const [draftGeneratedAt, setDraftGeneratedAt] = useState('')
   const [draftRestored, setDraftRestored] = useState(false)
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
+  const [quotaState, setQuotaState] = useState<ManagedAiQuotaState>({ status: 'idle', quota: null })
   const operationIdRef = useRef(newOperationId())
   const savedPlanIdRef = useRef('')
   const submittedFingerprintRef = useRef('')
@@ -217,6 +222,7 @@ export function WordsPlanIntentDialog({
     if (!open) {
       contextRequestRef.current += 1
       initializedDialogRef.current = ''
+      setQuotaState({ status: 'idle', quota: null })
       return
     }
     const dialogIdentity = `${mode}:${plan?.id ?? 'new'}:${draftScopeKey ?? 'no-scope'}`
@@ -302,6 +308,16 @@ export function WordsPlanIntentDialog({
     : undefined
   const visibleAnalysisError = analysisError || taskFailure?.message || ''
   const accountMessage = preview ? '' : accountSafetyMessage(userId, artifactAccess)
+  const quotaAction = preview
+    ? { blocked: false, reason: null }
+    : managedAiQuotaActionState(quotaState)
+  const quotaActionLabel = quotaAction.reason === 'exhausted'
+    ? '今日 AI 额度已用完'
+    : quotaAction.reason === 'disabled'
+      ? '当前 AI 功能未开放'
+      : quotaAction.reason === 'loading'
+        ? '正在确认今日额度…'
+        : null
 
   useEffect(() => {
     if (
@@ -404,7 +420,7 @@ export function WordsPlanIntentDialog({
   }, [currentDraftForm, draftScopeKey, plan?.id])
 
   const analyze = useCallback(async () => {
-    if (dateInvalid || loadingContext || taskRunning) return
+    if (dateInvalid || loadingContext || taskRunning || quotaAction.blocked) return
     setAnalysisError('')
     setDraftStorageWarning('')
 
@@ -502,6 +518,7 @@ export function WordsPlanIntentDialog({
     plans,
     practiceRecords,
     preview,
+    quotaAction.blocked,
     recommendationTaskKey,
     scopeKey,
     targetDate,
@@ -692,6 +709,7 @@ export function WordsPlanIntentDialog({
                   purpose="words_plan_recommendation"
                   active={open && !preview}
                   pending={analysisPending}
+                  onStateChange={setQuotaState}
                 />
 
                 {analysisPending && (
@@ -788,9 +806,15 @@ export function WordsPlanIntentDialog({
                             ? '已保留下方的手动修改'
                             : '正在更新计划内容'}
                       </p>
-                      <Button type="button" variant="outline" onClick={() => void analyze()} className="w-full sm:w-auto">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void analyze()}
+                        disabled={quotaAction.blocked}
+                        className="w-full sm:w-auto"
+                      >
                         <RefreshCw className="size-4" aria-hidden="true" />
-                        重新生成（消耗额度）
+                        {quotaActionLabel ?? '重新生成（消耗额度）'}
                       </Button>
                     </div>
                   </div>
@@ -802,11 +826,11 @@ export function WordsPlanIntentDialog({
                       type="button"
                       variant="outline"
                       onClick={() => void analyze()}
-                      disabled={dateInvalid || Boolean(accountMessage)}
+                      disabled={dateInvalid || Boolean(accountMessage) || quotaAction.blocked}
                       className="w-full border-primary/25 bg-background hover:bg-primary/5"
                     >
                       <Sparkles className="size-4 text-primary" aria-hidden="true" />
-                      确认生成计划（消耗额度）
+                      {quotaActionLabel ?? '确认生成计划（消耗额度）'}
                     </Button>
                     {!accountMessage && (
                       <p className="text-center text-[11px] leading-5 text-muted-foreground">

@@ -1,6 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { differenceInCalendarDays } from 'date-fns'
 import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  BarChart3,
+  BookA,
+  BookOpen,
   CalendarDays,
   CircleHelp,
   Cloud,
@@ -10,10 +16,13 @@ import {
   Monitor,
   Moon,
   Palette,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
+  Star,
   Sun,
   Target,
+  ListTodo,
   UserRound,
 } from 'lucide-react'
 
@@ -40,12 +49,63 @@ import { useAIPrivacyStore, type AIContextRangeDays } from '@/stores/aiPrivacySt
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useTrackerSyncStatusStore } from '@/sync/trackerSyncStatusStore'
 import { FeedbackDialog } from '@/features/support'
+import {
+  normalizeDashboardCardOrder,
+  type DashboardCardId,
+} from '@/features/dashboard/dashboardLayout'
 
 const THEME_OPTIONS = [
   { value: 'light', label: '浅色', icon: Sun },
   { value: 'dark', label: '深色', icon: Moon },
   { value: 'system', label: '跟随系统', icon: Monitor },
 ] as const
+
+const DASHBOARD_CARD_OPTIONS: Record<DashboardCardId, {
+  title: string
+  description: string
+  icon: ReactNode
+}> = {
+  'words-summary': {
+    title: '词汇学习摘要',
+    description: 'Words 今日学习、掌握与待复习信息',
+    icon: <BookA />,
+  },
+  'exam-countdown': {
+    title: '考试倒计时',
+    description: '目标考试日期与 90 天备考进度',
+    icon: <CalendarDays />,
+  },
+  'ai-suggestions': {
+    title: 'AI 学习建议',
+    description: '根据学习记录生成可执行建议',
+    icon: <Sparkles />,
+  },
+  'today-tasks': {
+    title: '今日待办',
+    description: '今天需要完成的学习计划',
+    icon: <ListTodo />,
+  },
+  'recent-activity': {
+    title: '最近活跃度',
+    description: '过去 5 周的学习活跃情况',
+    icon: <BarChart3 />,
+  },
+  'recent-achievements': {
+    title: '最近成就',
+    description: '近期解锁的学习里程碑',
+    icon: <Target />,
+  },
+  'level-progress': {
+    title: '等级与经验',
+    description: '当前等级、经验与升级进度',
+    icon: <Star />,
+  },
+  'latest-diary': {
+    title: '最近学习日记',
+    description: '最近一次学习记录与感受',
+    icon: <BookOpen />,
+  },
+}
 
 interface SettingRowProps {
   icon: ReactNode
@@ -82,8 +142,11 @@ export default function Settings() {
   const examDate = useSettingsStore((state) => state.examDate)
   const setExamDate = useSettingsStore((state) => state.setExamDate)
   const clearExamDate = useSettingsStore((state) => state.clearExamDate)
-  const showExamCountdown = useSettingsStore((state) => state.showExamCountdown)
-  const setShowExamCountdown = useSettingsStore((state) => state.setShowExamCountdown)
+  const dashboardCardOrder = useSettingsStore((state) => state.dashboardCardOrder)
+  const dashboardCardVisibility = useSettingsStore((state) => state.dashboardCardVisibility)
+  const setDashboardCardVisibility = useSettingsStore((state) => state.setDashboardCardVisibility)
+  const moveDashboardCard = useSettingsStore((state) => state.moveDashboardCard)
+  const resetDashboardCards = useSettingsStore((state) => state.resetDashboardCards)
   const theme = useSettingsStore((state) => state.theme)
   const setTheme = useSettingsStore((state) => state.setTheme)
 
@@ -95,7 +158,11 @@ export default function Settings() {
   const setIncludePriorAIArtifacts = useAIPrivacyStore((state) => state.setIncludePriorAIArtifacts)
 
   const [aiHelpDialogOpen, setAiHelpDialogOpen] = useState(false)
+  const [homepagePersonalizationOpen, setHomepagePersonalizationOpen] = useState(false)
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
+
+  const visibleDashboardCardCount = Object.values(dashboardCardVisibility)
+    .filter(Boolean).length
 
   const daysUntilExam = useMemo(() => {
     if (!examDate) return null
@@ -240,7 +307,7 @@ export default function Settings() {
             <SectionHeader
               eyebrow="Exam"
               title="考试目标"
-              description="设置考试日期和主页倒计时。"
+              description="设置目标考试日期。"
               action={(
                 <span aria-hidden="true" className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
                   <Target className="size-4.5" />
@@ -248,7 +315,7 @@ export default function Settings() {
               )}
             />
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="space-y-2">
               <Label htmlFor="exam-date">考试日期</Label>
               <div className="grid gap-2 sm:grid-cols-[minmax(0,13rem)_1fr] sm:items-center">
@@ -270,24 +337,10 @@ export default function Settings() {
                     daysUntilExam === null ? 'bg-muted/50 text-muted-foreground' : 'bg-primary/10 font-semibold text-primary',
                   )}
                 >
-                  {daysUntilExam === null ? '设定后显示倒计时' : `距离考试 ${daysUntilExam} 天`}
+                  {daysUntilExam === null ? '设置后可在主页个性化中显示' : `距离考试 ${daysUntilExam} 天`}
                 </div>
               </div>
             </div>
-
-            <SettingRow
-              icon={<CalendarDays />}
-              title="主页倒计时"
-              description={examDate ? '在主页显示考试日期' : '设定考试日期后可开启'}
-              control={(
-                <Switch
-                  checked={showExamCountdown}
-                  onCheckedChange={setShowExamCountdown}
-                  disabled={!examDate}
-                  aria-label="在主页显示考试倒计时"
-                />
-              )}
-            />
           </CardContent>
         </Card>
 
@@ -332,6 +385,28 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card id="homepage-personalization">
+        <CardContent>
+          <button
+            type="button"
+            onClick={() => setHomepagePersonalizationOpen(true)}
+            className="flex min-h-[4.75rem] w-full items-center gap-3 rounded-xl border border-border/80 bg-background/70 px-3.5 py-3 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/40"
+            aria-haspopup="dialog"
+          >
+            <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Palette className="size-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold leading-5 text-foreground">主页个性化</span>
+              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                已启用 {visibleDashboardCardCount} / 8 张功能卡片 · 管理显示和顺序
+              </span>
+            </span>
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="border-b border-border/80">
@@ -462,6 +537,96 @@ export default function Settings() {
           window.requestAnimationFrame(() => openAccountDialog())
         }}
       />
+
+      <Dialog open={homepagePersonalizationOpen} onOpenChange={setHomepagePersonalizationOpen}>
+        <DialogContent className="flex max-h-[min(90dvh,48rem)] max-w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(92vw,38rem)]">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 sm:px-5">
+            <DialogTitle>主页个性化</DialogTitle>
+            <DialogDescription>主标题和数据概览固定显示；调整其他功能卡片的显示和排列顺序。</DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 space-y-3 overflow-y-auto px-3.5 py-4 sm:px-5">
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-2.5" aria-label="主页固定卡片">
+              {['主标题', '数据概览'].map((label, index) => (
+                <div key={label} className="flex min-h-10 items-center gap-2 rounded-lg bg-background/80 px-2.5 text-sm font-medium text-foreground sm:px-3">
+                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">{index + 1}</span>
+                  <span className="truncate">{label}</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground">固定</span>
+                </div>
+              ))}
+            </div>
+
+            <ol className="space-y-2" aria-label="可排序的主页卡片">
+              {normalizeDashboardCardOrder(dashboardCardOrder).map((cardId, index, order) => {
+                const option = DASHBOARD_CARD_OPTIONS[cardId]
+                const visible = dashboardCardVisibility[cardId]
+                const unavailable = cardId === 'exam-countdown' && !examDate
+                return (
+                  <li
+                    key={cardId}
+                    className={cn(
+                      'grid min-h-[4.5rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border px-2.5 py-2.5 transition-colors sm:gap-3 sm:px-3',
+                      visible ? 'border-border/80 bg-background/70' : 'border-border/60 bg-muted/30',
+                    )}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary [&>svg]:size-4" aria-hidden="true">
+                      {option.icon}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate font-medium leading-5 text-foreground">{option.title}</p>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{index + 1}</span>
+                      </div>
+                      <p className="mt-0.5 hidden truncate text-xs leading-5 text-muted-foreground min-[430px]:block">
+                        {unavailable ? '请先在考试目标中设置日期' : option.description}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => moveDashboardCard(cardId, 'up')}
+                        disabled={index === 0}
+                        aria-label={`上移${option.title}`}
+                        title="上移"
+                      >
+                        <ArrowUp aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => moveDashboardCard(cardId, 'down')}
+                        disabled={index === order.length - 1}
+                        aria-label={`下移${option.title}`}
+                        title="下移"
+                      >
+                        <ArrowDown aria-hidden="true" />
+                      </Button>
+                      <Switch
+                        checked={visible}
+                        onCheckedChange={(checked) => setDashboardCardVisibility(cardId, checked)}
+                        aria-label={`在主页显示${option.title}`}
+                      />
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+
+          <DialogFooter className="shrink-0 border-t border-border px-4 py-3 sm:px-5">
+            <Button type="button" variant="ghost" onClick={resetDashboardCards} className="w-full sm:w-auto">
+              <RotateCcw aria-hidden="true" />
+              恢复默认
+            </Button>
+            <Button type="button" onClick={() => setHomepagePersonalizationOpen(false)} className="w-full sm:w-auto">
+              完成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={aiHelpDialogOpen} onOpenChange={setAiHelpDialogOpen}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">

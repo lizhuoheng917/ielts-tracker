@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { Clock3, Gauge, Loader2 } from 'lucide-react'
 
 import {
   formatManagedAiQuotaResetAt,
+  type ManagedAiQuotaState,
   useManagedAiQuota,
 } from '@/ai/managedAiQuota'
 import type { ManagedAiPurpose } from '@/ai/gateway'
@@ -13,6 +15,7 @@ interface AiQuotaNoticeProps {
   active?: boolean
   /** A gateway request has been submitted; the displayed quota may be stale until it settles. */
   pending?: boolean
+  onStateChange?: (state: ManagedAiQuotaState) => void
   className?: string
 }
 
@@ -21,11 +24,15 @@ export function AiQuotaNotice({
   purpose,
   active = true,
   pending = false,
+  onStateChange,
   className,
 }: AiQuotaNoticeProps) {
   const { status: authStatus } = useAuth()
   const canReadQuota = active && authStatus === 'signed-in'
   const { state } = useManagedAiQuota(purpose, canReadQuota)
+  useEffect(() => {
+    onStateChange?.(state)
+  }, [onStateChange, state])
   if (!canReadQuota || state.status === 'idle') return null
 
   if (state.status === 'unavailable') {
@@ -69,6 +76,24 @@ export function AiQuotaNotice({
   }
 
   const resetTime = quota.resetAt ? formatManagedAiQuotaResetAt(quota.resetAt) : null
+  if (quota.remainingRequests === 0) {
+    return (
+      <div
+        className={cn('flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200', className)}
+        role="status"
+        aria-live="polite"
+      >
+        <Gauge className="size-3.5 shrink-0" aria-hidden="true" />
+        <span>今日 AI 额度已用完。</span>
+        {resetTime && (
+          <span className="inline-flex items-center gap-1">
+            <Clock3 className="size-3" aria-hidden="true" />
+            于本地时间 {resetTime} 重置
+          </span>
+        )}
+      </div>
+    )
+  }
   if (pending) {
     return (
       <div

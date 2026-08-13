@@ -16,6 +16,10 @@ import type {
   WordRecord,
 } from '@/lib/types'
 import type { TrackerPhase4bLocalSnapshot } from '@/sync/trackerPhase4bRecordSync'
+import {
+  DEFAULT_DASHBOARD_CARD_ORDER,
+  DEFAULT_DASHBOARD_CARD_VISIBILITY,
+} from '@/features/dashboard/dashboardLayout'
 
 const PLAN_STORAGE_KEY = 'ielts-tracker:studyPlans'
 const PRACTICE_STORAGE_KEY = 'ielts-tracker:practiceRecords'
@@ -240,6 +244,9 @@ beforeEach(() => {
     examDate: undefined,
     showExamCountdown: true,
     showAiSuggestions: true,
+    showWordsDailySummary: true,
+    dashboardCardOrder: [...DEFAULT_DASHBOARD_CARD_ORDER],
+    dashboardCardVisibility: { ...DEFAULT_DASHBOARD_CARD_VISIBILITY },
     theme: 'light',
     lastCheckinDate: undefined,
   })

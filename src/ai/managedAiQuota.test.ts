@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   formatManagedAiQuotaResetAt,
   loadManagedAiQuota,
+  managedAiQuotaActionState,
   parseManagedAiQuota,
 } from './managedAiQuota'
 
@@ -98,5 +99,55 @@ describe('managed AI quota preview contract', () => {
   it('formats only valid reset instants for the learner locale', () => {
     expect(formatManagedAiQuotaResetAt(resetAt)).toMatch(/\d{2}:\d{2}/)
     expect(formatManagedAiQuotaResetAt('not-a-time')).toBeNull()
+  })
+
+  it('blocks explicit generation while quota is unknown, disabled, or exhausted', () => {
+    expect(managedAiQuotaActionState({ status: 'loading', quota: null })).toEqual({
+      blocked: true,
+      reason: 'loading',
+    })
+    expect(managedAiQuotaActionState({
+      status: 'ready',
+      quota: {
+        schemaVersion: 1,
+        productId: 'tracker',
+        purpose: 'words_plan_recommendation',
+        enabled: false,
+        dailyRequestLimit: null,
+        remainingRequests: null,
+        resetAt: null,
+      },
+    })).toEqual({ blocked: true, reason: 'disabled' })
+    expect(managedAiQuotaActionState({
+      status: 'ready',
+      quota: {
+        schemaVersion: 1,
+        productId: 'tracker',
+        purpose: 'words_plan_recommendation',
+        enabled: true,
+        dailyRequestLimit: 4,
+        remainingRequests: 0,
+        resetAt,
+      },
+    })).toEqual({ blocked: true, reason: 'exhausted' })
+  })
+
+  it('keeps an unavailable preview and a positive balance non-blocking', () => {
+    expect(managedAiQuotaActionState({ status: 'unavailable', quota: null })).toEqual({
+      blocked: false,
+      reason: null,
+    })
+    expect(managedAiQuotaActionState({
+      status: 'ready',
+      quota: {
+        schemaVersion: 1,
+        productId: 'tracker',
+        purpose: 'words_plan_recommendation',
+        enabled: true,
+        dailyRequestLimit: 4,
+        remainingRequests: 2,
+        resetAt,
+      },
+    })).toEqual({ blocked: false, reason: null })
   })
 })

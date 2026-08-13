@@ -22,7 +22,35 @@ export interface ManagedAiQuotaState {
   quota: ManagedAiQuota | null
 }
 
+export interface ManagedAiQuotaActionState {
+  blocked: boolean
+  reason: 'loading' | 'disabled' | 'exhausted' | null
+}
+
 export type ManagedAiQuotaInvoker = (purpose: ManagedAiPurpose) => Promise<unknown>
+
+/**
+ * Keeps explicit AI actions from racing an unfinished quota read or consuming a
+ * request after the account has no requests left. An unavailable preview stays
+ * non-blocking because the gateway remains the authoritative admission check.
+ */
+export function managedAiQuotaActionState(
+  state: ManagedAiQuotaState,
+): ManagedAiQuotaActionState {
+  if (state.status === 'idle' || state.status === 'loading') {
+    return { blocked: true, reason: 'loading' }
+  }
+  if (state.status !== 'ready' || !state.quota) {
+    return { blocked: false, reason: null }
+  }
+  if (!state.quota.enabled) {
+    return { blocked: true, reason: 'disabled' }
+  }
+  if (state.quota.remainingRequests === 0) {
+    return { blocked: true, reason: 'exhausted' }
+  }
+  return { blocked: false, reason: null }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

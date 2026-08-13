@@ -321,18 +321,25 @@ function assertWordsPlanRecommendationContextData(snapshot: AiContextSnapshotV1)
   if (Number(recent.activeDays) > 7 || Number(recent.completedPlanExecutions) > Number(recent.recordedPlanExecutions)) fail('snapshot.data.tracker.recent7Days counts are inconsistent')
 
   const vocabularyHistory = record(tracker.vocabularyHistory30Days, 'snapshot.data.tracker.vocabularyHistory30Days')
-  exactKeys(vocabularyHistory, ['startDate', 'endDate', 'planCount', 'activePlanCount', 'plansWithTargetCount', 'medianTargetCount', 'recordedExecutions', 'completedExecutions', 'recordedCompletionRate', 'actualWordsLogged'], 'snapshot.data.tracker.vocabularyHistory30Days')
+  exactKeys(vocabularyHistory, ['startDate', 'endDate', 'planCount', 'activePlanCount', 'plansWithTargetCount', 'medianTargetCount', 'recordedExecutions', 'completedExecutions', 'recordedCompletionRate', 'actualWordsLogged', 'pairedExecutionCount', 'pairedPlannedWords', 'pairedActualWords', 'targetAttainmentRate', 'calibrationDirection', 'baselineTargetCount', 'calibratedTargetCount'], 'snapshot.data.tracker.vocabularyHistory30Days')
   localDate(vocabularyHistory.startDate, 'snapshot.data.tracker.vocabularyHistory30Days.startDate')
   localDate(vocabularyHistory.endDate, 'snapshot.data.tracker.vocabularyHistory30Days.endDate')
-  for (const key of ['planCount', 'activePlanCount', 'plansWithTargetCount', 'recordedExecutions', 'completedExecutions', 'actualWordsLogged'] as const) {
+  for (const key of ['planCount', 'activePlanCount', 'plansWithTargetCount', 'recordedExecutions', 'completedExecutions', 'actualWordsLogged', 'pairedExecutionCount', 'pairedPlannedWords', 'pairedActualWords'] as const) {
     finiteNumber(vocabularyHistory[key], `snapshot.data.tracker.vocabularyHistory30Days.${key}`, { integer: true, min: 0, max: 100_000_000 })
   }
   if (vocabularyHistory.medianTargetCount !== null) finiteNumber(vocabularyHistory.medianTargetCount, 'snapshot.data.tracker.vocabularyHistory30Days.medianTargetCount', { integer: true, min: 1, max: 1_000 })
   if (vocabularyHistory.recordedCompletionRate !== null) finiteNumber(vocabularyHistory.recordedCompletionRate, 'snapshot.data.tracker.vocabularyHistory30Days.recordedCompletionRate', { min: 0, max: 100 })
+  if (vocabularyHistory.targetAttainmentRate !== null) finiteNumber(vocabularyHistory.targetAttainmentRate, 'snapshot.data.tracker.vocabularyHistory30Days.targetAttainmentRate', { min: 0, max: 1_000 })
+  if (!['reduce', 'hold', 'increase', 'insufficient'].includes(String(vocabularyHistory.calibrationDirection))) fail('snapshot.data.tracker.vocabularyHistory30Days calibration direction is invalid')
+  finiteNumber(vocabularyHistory.baselineTargetCount, 'snapshot.data.tracker.vocabularyHistory30Days.baselineTargetCount', { integer: true, min: 1, max: 1_000 })
+  if (vocabularyHistory.calibratedTargetCount !== null) finiteNumber(vocabularyHistory.calibratedTargetCount, 'snapshot.data.tracker.vocabularyHistory30Days.calibratedTargetCount', { integer: true, min: 1, max: 1_000 })
   if (
     Number(vocabularyHistory.activePlanCount) > Number(vocabularyHistory.planCount)
     || Number(vocabularyHistory.plansWithTargetCount) > Number(vocabularyHistory.planCount)
     || Number(vocabularyHistory.completedExecutions) > Number(vocabularyHistory.recordedExecutions)
+    || Number(vocabularyHistory.pairedExecutionCount) > Number(vocabularyHistory.recordedExecutions)
+    || (Number(vocabularyHistory.pairedExecutionCount) === 0) !== (vocabularyHistory.targetAttainmentRate === null)
+    || (vocabularyHistory.calibrationDirection === 'insufficient') !== (vocabularyHistory.calibratedTargetCount === null)
     || (Number(vocabularyHistory.plansWithTargetCount) === 0) !== (vocabularyHistory.medianTargetCount === null)
   ) fail('snapshot.data.tracker.vocabularyHistory30Days counts are inconsistent')
 
@@ -357,7 +364,7 @@ function assertWordsPlanRecommendationContextData(snapshot: AiContextSnapshotV1)
   const inventory = countObject(words.inventory, 'snapshot.data.words.inventory', ['activeWordbooks', 'activeWords', 'newWords', 'learningWords', 'availableNewWords', 'masteredWords', 'dueNowWords', 'dueByTargetWords'])
   const wordsRecent = countObject(words.recent7Days, 'snapshot.data.words.recent7Days', ['activeDays', 'attempts', 'passed', 'durationMs', 'uniqueWordsStudied', 'wordStudyTouches'])
   const wordsTarget = countObject(words.targetDay, 'snapshot.data.words.targetDay', ['attempts', 'passed', 'durationMs', 'plannedNewWords', 'plannedReviewWords', 'completedNewWords', 'completedReviewWords'])
-  const bounds = countObject(words.recommendationBounds, 'snapshot.data.words.recommendationBounds', ['minimumReviewWords', 'maximumReviewWords', 'minimumNewWords', 'maximumNewWords'])
+  const bounds = countObject(words.recommendationBounds, 'snapshot.data.words.recommendationBounds', ['minimumReviewWords', 'maximumReviewWords', 'minimumNewWords', 'maximumNewWords', 'maximumTotalWords'])
   if (
     Number(inventory.newWords) + Number(inventory.learningWords) + Number(inventory.masteredWords) !== Number(inventory.activeWords)
     || Number(inventory.availableNewWords) !== Number(inventory.newWords) + Number(inventory.learningWords)
@@ -373,6 +380,8 @@ function assertWordsPlanRecommendationContextData(snapshot: AiContextSnapshotV1)
     || Number(bounds.minimumNewWords) !== Number(wordsTarget.completedNewWords)
     || Number(bounds.maximumReviewWords) !== Math.min(1_000, Number(bounds.minimumReviewWords) + Number(inventory.dueByTargetWords))
     || Number(bounds.maximumNewWords) !== Math.min(1_000, Number(bounds.minimumNewWords) + Number(inventory.availableNewWords))
+    || Number(bounds.maximumTotalWords) < Number(bounds.minimumReviewWords) + Number(bounds.minimumNewWords)
+    || Number(bounds.maximumTotalWords) > Math.min(1_000, Number(bounds.maximumReviewWords) + Number(bounds.maximumNewWords))
     || Number(bounds.minimumReviewWords) + Number(bounds.minimumNewWords) > 1_000
     || Number(bounds.maximumReviewWords) + Number(bounds.maximumNewWords) < 1
   ) fail('snapshot.data.words counts are inconsistent')

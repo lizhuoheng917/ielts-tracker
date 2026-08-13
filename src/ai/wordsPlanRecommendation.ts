@@ -57,6 +57,13 @@ export interface WordsPlanRecommendationContextDataV1 extends Record<string, unk
       completedExecutions: number
       recordedCompletionRate: number | null
       actualWordsLogged: number
+      pairedExecutionCount: number
+      pairedPlannedWords: number
+      pairedActualWords: number
+      targetAttainmentRate: number | null
+      calibrationDirection: 'reduce' | 'hold' | 'increase' | 'insufficient'
+      baselineTargetCount: number
+      calibratedTargetCount: number | null
     }
     targetDay: {
       scheduledPlanCount: number
@@ -79,6 +86,7 @@ export interface WordsPlanRecommendationContextDataV1 extends Record<string, unk
       maximumReviewWords: number
       minimumNewWords: number
       maximumNewWords: number
+      maximumTotalWords: number
     }
   }
 }
@@ -119,6 +127,25 @@ function medianInteger(values: readonly number[]): number | null {
   return sorted.length % 2 === 1
     ? sorted[middle]
     : Math.round((sorted[middle - 1] + sorted[middle]) / 2)
+}
+
+function calibrationDirection(
+  sampleSize: number,
+  targetAttainmentRate: number | null,
+): WordsPlanRecommendationContextDataV1['tracker']['vocabularyHistory30Days']['calibrationDirection'] {
+  if (sampleSize < 3 || targetAttainmentRate === null) return 'insufficient'
+  if (targetAttainmentRate < 60) return 'reduce'
+  if (targetAttainmentRate < 85) return 'hold'
+  return 'increase'
+}
+
+function calibratedTargetCount(
+  baselineTargetCount: number,
+  direction: WordsPlanRecommendationContextDataV1['tracker']['vocabularyHistory30Days']['calibrationDirection'],
+): number | null {
+  if (direction === 'insufficient') return null
+  const multiplier = direction === 'reduce' ? 0.8 : direction === 'increase' ? 1.1 : 1
+  return Math.max(1, Math.min(1_000, Math.round(baselineTargetCount * multiplier)))
 }
 
 export function buildWordsPlanRecommendationSnapshot(
@@ -168,6 +195,28 @@ export function buildWordsPlanRecommendationSnapshot(
     )
   ))
   const completedVocabularyExecutions = vocabularyExecutions.filter((record) => record.isCompleted)
+  const vocabularyPlanById = new Map(vocabularyPlans.map((plan) => [plan.id, plan]))
+  const vocabularyTargetByPlanId = new Map(vocabularyPlans.flatMap((plan) => {
+    const targetCount = boundedOptionalInteger(plan.targetCount, 1, 1_000)
+    return targetCount === null ? [] : [[plan.id, targetCount] as const]
+  }))
+  const pairedVocabularyExecutions = vocabularyExecutions.flatMap((execution) => {
+    const executionPlan = vocabularyPlanById.get(execution.planId)
+    const plannedWords = vocabularyTargetByPlanId.get(execution.planId)
+    const actualWords = boundedOptionalInteger(execution.actualCount, 0, 1_000)
+    const planUpdatedDate = executionPlan?.updatedAt.slice(0, 10)
+    return plannedWords === undefined
+      || actualWords === null
+      || !isLocalDate(planUpdatedDate)
+      || planUpdatedDate > execution.date
+      ? []
+      : [{ plannedWords, actualWords }]
+  })
+  const pairedPlannedWords = pairedVocabularyExecutions.reduce((total, item) => total + item.plannedWords, 0)
+  const pairedActualWords = pairedVocabularyExecutions.reduce((total, item) => total + item.actualWords, 0)
+  const targetAttainmentRate = pairedPlannedWords > 0
+    ? roundOne(Math.min(10, pairedActualWords / pairedPlannedWords) * 100)
+    : null
   const activeDates = new Set([
     ...recentWords.map((record) => record.date),
     ...recentPractice.map((record) => record.date),
@@ -202,6 +251,18 @@ export function buildWordsPlanRecommendationSnapshot(
   if (maximumReviewWords + maximumNewWords < 1) {
     throw new Error('Words cloud data has no recommendable vocabulary')
   }
+  const plannedWordsOnTargetDate = source.words.targetDay.plannedNewWords
+    + source.words.targetDay.plannedReviewWords
+  const baselineTargetCount = boundedOptionalInteger(source.sourcePlan.targetCount, 1, 1_000)
+    ?? medianInteger(vocabularyTargetCounts)
+    ?? (plannedWordsOnTargetDate > 0 ? Math.min(1_000, plannedWordsOnTargetDate) : 20)
+  const direction = calibrationDirection(pairedVocabularyExecutions.length, targetAttainmentRate)
+  const calibratedTarget = calibratedTargetCount(baselineTargetCount, direction)
+  const minimumTotalWords = minimumReviewWords + minimumNewWords
+  const availableTotalWords = Math.min(1_000, maximumReviewWords + maximumNewWords)
+  const maximumTotalWords = calibratedTarget === null
+    ? availableTotalWords
+    : Math.min(availableTotalWords, Math.max(minimumTotalWords, calibratedTarget))
 
   const data: WordsPlanRecommendationContextDataV1 = {
     targetDate: source.words.targetDate,
@@ -242,6 +303,13 @@ export function buildWordsPlanRecommendationSnapshot(
         actualWordsLogged: vocabularyExecutions.reduce((total, execution) => (
           total + (boundedOptionalInteger(execution.actualCount, 0, 1_000) ?? 0)
         ), 0),
+        pairedExecutionCount: pairedVocabularyExecutions.length,
+        pairedPlannedWords,
+        pairedActualWords,
+        targetAttainmentRate,
+        calibrationDirection: direction,
+        baselineTargetCount,
+        calibratedTargetCount: calibratedTarget,
       },
       targetDay: {
         scheduledPlanCount: targetPlans.length,
@@ -270,6 +338,7 @@ export function buildWordsPlanRecommendationSnapshot(
         maximumReviewWords,
         minimumNewWords,
         maximumNewWords,
+        maximumTotalWords,
       },
     },
   }
@@ -297,7 +366,7 @@ export function buildWordsPlanRecommendationSnapshot(
     createdAt,
     dataAsOf: source.words.generatedAt,
     freshness: { status: 'fresh', ageSeconds: 0, maxAgeSeconds: MAX_SNAPSHOT_AGE_SECONDS },
-    sourceRevision: `words-plan-recommendation-v1-${contextHash}`,
+    sourceRevision: `words-plan-recommendation-v2-${contextHash}`,
     contextHash,
     scopes: ['learning.summary', 'plans.summary', 'words.planning.summary'],
     privateScopes: [],
@@ -327,6 +396,7 @@ export function assertWordsPlanRecommendationMatchesContext(
     || recommendation.reviewWords > bounds.maximumReviewWords
     || recommendation.newWords < bounds.minimumNewWords
     || recommendation.newWords > bounds.maximumNewWords
+    || recommendation.targetCount > bounds.maximumTotalWords
   ) {
     throw new Error('Words plan recommendation exceeds the snapshot bounds')
   }

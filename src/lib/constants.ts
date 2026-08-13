@@ -1,5 +1,9 @@
 import type { Level, Achievement, AchievementState } from './types'
 import { SUBJECT_VISUALS } from './subjectVisuals'
+import {
+  DEFAULT_DASHBOARD_CARD_ORDER,
+  DEFAULT_DASHBOARD_CARD_VISIBILITY,
+} from '@/features/dashboard/dashboardLayout'
 
 // ===== 单词分类预设 =====
 export const DEFAULT_WORD_CATEGORIES = [
@@ -90,6 +94,9 @@ export const DEFAULT_SETTINGS = {
   theme: 'light' as const,
   showExamCountdown: true,
   showAiSuggestions: true,
+  showWordsDailySummary: true,
+  dashboardCardOrder: [...DEFAULT_DASHBOARD_CARD_ORDER],
+  dashboardCardVisibility: { ...DEFAULT_DASHBOARD_CARD_VISIBILITY },
 }
 
 // ===== 默认连续打卡数据 =====

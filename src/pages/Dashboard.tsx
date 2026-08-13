@@ -62,6 +62,12 @@ import {
   createWordsDailySummaryPreview,
   useWordsDailySummary,
 } from '@/features/words-summary/wordsDailySummary'
+import {
+  createDashboardCardRows,
+  dashboardCardColumnClass,
+  normalizeDashboardCardOrder,
+  type DashboardCardId,
+} from '@/features/dashboard/dashboardLayout'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useDiaryStore } from '@/stores/diaryStore'
 import { usePlanStore } from '@/stores/planStore'
@@ -155,8 +161,8 @@ export default function Dashboard() {
     : null
   const { openRequestedTaskKey } = useLearnerAiTaskState()
   const examDate = useSettingsStore((state) => state.examDate)
-  const showExamCountdown = useSettingsStore((state) => state.showExamCountdown)
-  const showAiSuggestions = useSettingsStore((state) => state.showAiSuggestions)
+  const dashboardCardOrder = useSettingsStore((state) => state.dashboardCardOrder)
+  const dashboardCardVisibility = useSettingsStore((state) => state.dashboardCardVisibility)
   const lastCheckinDate = useSettingsStore((state) => state.lastCheckinDate)
   const checkIn = useSettingsStore((state) => state.checkIn)
   const wordRecords = useWordStore((state) => state.records)
@@ -205,6 +211,7 @@ export default function Dashboard() {
     return preview === 'words-summary' ? createWordsDailySummaryPreview(today) : null
   }, [today])
   const { state: wordsSummaryState, refresh: refreshWordsSummary } = useWordsDailySummary({
+    active: dashboardCardVisibility['words-summary'],
     userId: authStatus === 'signed-in' ? (user?.id ?? null) : null,
     studyDate: today,
     previewSummary: wordsSummaryPreview,
@@ -404,6 +411,290 @@ export default function Dashboard() {
       ? 'bg-warning'
       : 'bg-success'
 
+  const visibleDashboardCardOrder = normalizeDashboardCardOrder(dashboardCardOrder)
+    .filter((cardId) => dashboardCardVisibility[cardId])
+    .filter((cardId) => cardId !== 'exam-countdown' || Boolean(examCountdown))
+  const dashboardCardRows = createDashboardCardRows(visibleDashboardCardOrder)
+
+  const renderDashboardCard = (cardId: DashboardCardId) => {
+    switch (cardId) {
+      case 'words-summary':
+        return (
+          <WordsDailySummaryCard
+            state={wordsSummaryState}
+            wordsUrl={LEXI_WORDS_URL}
+            onRefresh={() => void refreshWordsSummary()}
+          />
+        )
+      case 'exam-countdown':
+        if (!examCountdown) return null
+        return (
+          <Card size="sm" className="h-full">
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <CalendarDays className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold">考试倒计时</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {examDate ? format(parseLocalDate(examDate), 'yyyy年M月d日') : ''}
+                  </p>
+                </div>
+                <span className={cn('shrink-0 text-2xl font-bold tabular-nums', countdownTone)}>
+                  {examCountdown.daysLeft}<span className="ml-1 text-xs font-medium">天</span>
+                </span>
+              </div>
+              <div
+                className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="90 天备考周期进度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(examCountdown.progress)}
+              >
+                <div className={cn('h-full rounded-full', countdownBar)} style={{ width: `${examCountdown.progress}%` }} />
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'ai-suggestions':
+        return (
+          <Card size="sm" className="h-full border-primary/15 bg-primary/5">
+            <CardContent className="flex h-full items-center gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="size-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold">AI 学习建议</h2>
+                <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">根据现有学习记录生成可执行建议。</p>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAiSuggestionOpen(true)}>
+                查看<span className="hidden sm:inline">建议</span>
+                <ArrowRight aria-hidden="true" />
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      case 'today-tasks':
+        return (
+          <Card className="h-full">
+            <CardHeader>
+              <SectionHeader
+                title="今日待办"
+                description={todayPlans.length > 0 ? `${completedTodayCount} 项已完成，${remainingTodayCount} 项待完成` : '把计划拆成今天可以完成的小步骤'}
+                action={(
+                  <Link to="/plans" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+                    全部计划<ArrowRight aria-hidden="true" />
+                  </Link>
+                )}
+              />
+            </CardHeader>
+            <CardContent>
+              {visibleTodayPlans.length === 0 ? (
+                <EmptyState
+                  scene="tasks"
+                  density="compact"
+                  title="今天没有待办任务"
+                  description="创建或调整学习计划，让首页为你聚焦下一步。"
+                  action={(
+                    <Link to="/plans" className={buttonVariants({ size: 'sm' })}>安排今天</Link>
+                  )}
+                />
+              ) : (
+                <ul className="space-y-2" aria-label="今日学习待办">
+                  {visibleTodayPlans.map((plan) => (
+                    <li
+                      key={plan.id}
+                      className={cn(
+                        'flex min-h-12 items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-colors',
+                        plan.completed ? 'border-success-border bg-success-surface' : 'border-border bg-background hover:bg-accent/70',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => void togglePlanComplete(plan.id)}
+                        disabled={mutatingPlanIds.has(plan.id)}
+                        className="grid size-9 shrink-0 place-items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={plan.completed ? `将「${plan.title}」标记为未完成` : `将「${plan.title}」标记为已完成`}
+                        aria-pressed={plan.completed}
+                      >
+                        {plan.completed
+                          ? <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
+                          : <Circle className="size-5 text-muted-foreground" aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => showPlanDetail(plan)}
+                        className={cn(
+                          'min-w-0 flex-1 rounded-md py-1 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          plan.completed && 'text-muted-foreground line-through',
+                        )}
+                      >
+                        <span className="block truncate">{plan.title}</span>
+                      </button>
+                      {plan.targetTime && (
+                        <time className="shrink-0 text-xs font-medium tabular-nums text-primary" dateTime={plan.targetTime}>
+                          {plan.targetTime}
+                        </time>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {todayPlans.length > visibleTodayPlans.length && (
+                <p className="mt-3 text-xs text-muted-foreground">另有 {todayPlans.length - visibleTodayPlans.length} 项任务，请在计划页查看。</p>
+              )}
+            </CardContent>
+          </Card>
+        )
+      case 'recent-activity':
+        return (
+          <Card size="sm" className="h-full">
+            <CardHeader>
+              <SectionHeader title="最近活跃度" description="过去 5 周累计学习事件" />
+            </CardHeader>
+            <CardContent>
+              <div
+                className="grid grid-cols-[repeat(7,1.35rem)] justify-center gap-1.5 min-[380px]:grid-cols-[repeat(7,1.5rem)]"
+                aria-label="过去 5 周学习活跃度"
+              >
+                {WEEKDAY_LABELS.map((label) => (
+                  <span key={label} className="mb-0.5 text-center text-[11px] font-medium text-muted-foreground">{label}</span>
+                ))}
+                {heatmapCells.map((cell) => (
+                  <span
+                    key={cell.date}
+                    role="img"
+                    title={cell.isFuture ? `${cell.date}: 尚未到来` : `${cell.date}: ${cell.value} 次活动`}
+                    aria-label={cell.isFuture ? `${cell.date}，尚未到来` : `${cell.date}，${cell.value} 次活动`}
+                    className={cn(
+                      'aspect-square rounded-[4px]',
+                      cell.isToday && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+                    )}
+                    style={{ backgroundColor: cell.isFuture ? 'transparent' : HEATMAP_COLORS[cell.level] }}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-center gap-1 text-[11px] text-muted-foreground" aria-hidden="true">
+                <span className="mr-1">少</span>
+                {HEATMAP_COLORS.map((color) => (
+                  <span key={color} className="size-3 rounded-[3px]" style={{ backgroundColor: color }} />
+                ))}
+                <span className="ml-1">多</span>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'recent-achievements':
+        return (
+          <Card size="sm" className="h-full">
+            <CardHeader>
+              <CardTitle>最近成就</CardTitle>
+              <CardDescription>{unlockedBadges.length} / {BADGES.length} 已解锁</CardDescription>
+            </CardHeader>
+            <CardContent className="flex h-full flex-col justify-between gap-4">
+              {recentAchievements.length === 0 ? (
+                <EmptyState
+                  scene="achievements"
+                  density="compact"
+                  title="还没有解锁成就"
+                  description="完成学习和打卡后，里程碑会出现在这里。"
+                />
+              ) : (
+                <ul className="grid grid-cols-3 gap-2" aria-label="最近解锁的成就">
+                  {recentAchievements.map((badge) => (
+                    <li key={badge.id} className="rounded-xl border border-primary/10 bg-primary/5 p-2.5 text-center">
+                      <AchievementMark achievementId={badge.id} size="md" className="mx-auto" />
+                      <span className="mt-1 block truncate text-xs font-medium">{badge.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/achievements" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}>
+                查看全部成就<ArrowRight aria-hidden="true" />
+              </Link>
+            </CardContent>
+          </Card>
+        )
+      case 'level-progress':
+        return (
+          <Card size="sm" className="h-full">
+            <CardHeader>
+              <CardTitle>等级与经验</CardTitle>
+              <CardDescription>持续记录会累积经验值</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Star className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold">Lv.{levelInfo.level} {levelInfo.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                    {levelInfo.xpProgress.current} / {levelInfo.xpProgress.required} XP
+                  </p>
+                </div>
+              </div>
+              <div
+                className="mt-5 h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="当前等级经验进度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(Math.min(100, levelInfo.xpProgress.percentage))}
+              >
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${Math.min(100, levelInfo.xpProgress.percentage)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {levelInfo.xpProgress.percentage >= 100
+                  ? '已达到当前最高等级。'
+                  : `距离下一等级还需 ${Math.max(0, levelInfo.xpProgress.required - levelInfo.xpProgress.current)} XP。`}
+              </p>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setReportOpen(true)} className="mt-2">
+                <BarChart3 aria-hidden="true" />学习报告
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      case 'latest-diary':
+        return (
+          <Card size="sm" className="h-full">
+            <CardHeader>
+              <CardTitle>最近学习日记</CardTitle>
+              <CardDescription>记录状态，也记录方法</CardDescription>
+            </CardHeader>
+            <CardContent className="flex h-full flex-col justify-between gap-4">
+              {latestDiary ? (
+                <article className="rounded-xl border border-border/70 bg-secondary/40 p-3.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <BookOpen className="size-4" aria-hidden="true" />
+                    <time dateTime={latestDiary.date}>{format(parseLocalDate(latestDiary.date), 'yyyy年M月d日')}</time>
+                    <span aria-hidden="true">·</span>
+                    <span>{latestDiary.moodEmoji} {latestDiary.moodLabel}</span>
+                  </div>
+                  <p className="mt-3 line-clamp-3 text-sm leading-6">{latestDiary.contentPreview}</p>
+                </article>
+              ) : (
+                <EmptyState
+                  scene="diary"
+                  density="compact"
+                  title="还没有学习日记"
+                  description="写下今天的方法和感受，方便以后回看。"
+                />
+              )}
+              <Link to="/diary" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}>
+                查看全部日记<ArrowRight aria-hidden="true" />
+              </Link>
+            </CardContent>
+          </Card>
+        )
+    }
+  }
+
   return (
     <div className="space-y-5 md:space-y-6">
       <Card className="relative isolate overflow-hidden border-0 bg-gradient-to-br from-primary via-primary to-violet-600 py-0 text-primary-foreground shadow-md shadow-primary/15">
@@ -483,288 +774,16 @@ export default function Dashboard() {
         ]}
       />
 
-      <WordsDailySummaryCard
-        state={wordsSummaryState}
-        wordsUrl={LEXI_WORDS_URL}
-        onRefresh={() => void refreshWordsSummary()}
-      />
-
-      {((examCountdown && showExamCountdown) || showAiSuggestions) && (
-        <section
-          className={cn(
-            'grid gap-3',
-            examCountdown && showExamCountdown && showAiSuggestions && 'md:grid-cols-2',
-          )}
-          aria-label="备考工具"
-        >
-          {examCountdown && showExamCountdown && (
-            <Card size="sm">
-              <CardContent>
-                <div className="flex items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <CalendarDays className="size-4" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-sm font-semibold">考试倒计时</h2>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {examDate ? format(parseLocalDate(examDate), 'yyyy年M月d日') : ''}
-                    </p>
-                  </div>
-                  <span className={cn('shrink-0 text-2xl font-bold tabular-nums', countdownTone)}>
-                    {examCountdown.daysLeft}<span className="ml-1 text-xs font-medium">天</span>
-                  </span>
-                </div>
-                <div
-                  className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
-                  role="progressbar"
-                  aria-label="90 天备考周期进度"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={Math.round(examCountdown.progress)}
-                >
-                  <div className={cn('h-full rounded-full', countdownBar)} style={{ width: `${examCountdown.progress}%` }} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {showAiSuggestions && (
-            <Card size="sm" className="border-primary/15 bg-primary/5">
-              <CardContent className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Sparkles className="size-4.5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-semibold">AI 学习建议</h2>
-                  <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">根据现有学习记录生成可执行建议。</p>
-                </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setAiSuggestionOpen(true)}>
-                  查看<span className="hidden sm:inline">建议</span>
-                  <ArrowRight aria-hidden="true" />
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </section>
-      )}
-
-      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)]" aria-label="今日安排与活跃度">
-        <Card>
-          <CardHeader>
-            <SectionHeader
-              title="今日待办"
-              description={todayPlans.length > 0 ? `${completedTodayCount} 项已完成，${remainingTodayCount} 项待完成` : '把计划拆成今天可以完成的小步骤'}
-              action={(
-                <Link to="/plans" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-                  全部计划<ArrowRight aria-hidden="true" />
-                </Link>
-              )}
-            />
-          </CardHeader>
-          <CardContent>
-            {visibleTodayPlans.length === 0 ? (
-              <EmptyState
-                scene="tasks"
-                density="compact"
-                title="今天没有待办任务"
-                description="创建或调整学习计划，让首页为你聚焦下一步。"
-                action={(
-                  <Link to="/plans" className={buttonVariants({ size: 'sm' })}>安排今天</Link>
-                )}
-              />
-            ) : (
-              <ul className="space-y-2" aria-label="今日学习待办">
-                {visibleTodayPlans.map((plan) => (
-                  <li
-                    key={plan.id}
-                    className={cn(
-                      'flex min-h-12 items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-colors',
-                      plan.completed ? 'border-success-border bg-success-surface' : 'border-border bg-background hover:bg-accent/70',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => void togglePlanComplete(plan.id)}
-                      disabled={mutatingPlanIds.has(plan.id)}
-                      className="grid size-9 shrink-0 place-items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={plan.completed ? `将「${plan.title}」标记为未完成` : `将「${plan.title}」标记为已完成`}
-                      aria-pressed={plan.completed}
-                    >
-                      {plan.completed
-                        ? <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
-                        : <Circle className="size-5 text-muted-foreground" aria-hidden="true" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => showPlanDetail(plan)}
-                      className={cn(
-                        'min-w-0 flex-1 rounded-md py-1 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        plan.completed && 'text-muted-foreground line-through',
-                      )}
-                    >
-                      <span className="block truncate">{plan.title}</span>
-                    </button>
-                    {plan.targetTime && (
-                      <time className="shrink-0 text-xs font-medium tabular-nums text-primary" dateTime={plan.targetTime}>
-                        {plan.targetTime}
-                      </time>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {todayPlans.length > visibleTodayPlans.length && (
-              <p className="mt-3 text-xs text-muted-foreground">另有 {todayPlans.length - visibleTodayPlans.length} 项任务，请在计划页查看。</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card size="sm" className="self-start">
-          <CardHeader>
-            <SectionHeader title="最近活跃度" description="过去 5 周累计学习事件" />
-          </CardHeader>
-          <CardContent>
-            <div
-              className="grid grid-cols-[repeat(7,1.35rem)] justify-center gap-1.5 min-[380px]:grid-cols-[repeat(7,1.5rem)]"
-              aria-label="过去 5 周学习活跃度"
-            >
-              {WEEKDAY_LABELS.map((label) => (
-                <span key={label} className="mb-0.5 text-center text-[11px] font-medium text-muted-foreground">{label}</span>
-              ))}
-              {heatmapCells.map((cell) => (
-                <span
-                  key={cell.date}
-                  role="img"
-                  title={cell.isFuture ? `${cell.date}: 尚未到来` : `${cell.date}: ${cell.value} 次活动`}
-                  aria-label={cell.isFuture ? `${cell.date}，尚未到来` : `${cell.date}，${cell.value} 次活动`}
-                  className={cn(
-                    'aspect-square rounded-[4px]',
-                    cell.isToday && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-                  )}
-                  style={{ backgroundColor: cell.isFuture ? 'transparent' : HEATMAP_COLORS[cell.level] }}
-                />
-              ))}
-            </div>
-            <div className="mt-4 flex items-center justify-center gap-1 text-[11px] text-muted-foreground" aria-hidden="true">
-              <span className="mr-1">少</span>
-              {HEATMAP_COLORS.map((color) => (
-                <span key={color} className="size-3 rounded-[3px]" style={{ backgroundColor: color }} />
-              ))}
-              <span className="ml-1">多</span>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="space-y-3" aria-labelledby="growth-review-title">
-        <SectionHeader
-          title="成长回顾"
-          titleId="growth-review-title"
-          description="把短期行动沉淀成可回看的学习轨迹。"
-          action={(
-            <Button type="button" variant="outline" size="sm" onClick={() => setReportOpen(true)}>
-              <BarChart3 aria-hidden="true" />学习报告
-            </Button>
-          )}
-        />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle>最近成就</CardTitle>
-              <CardDescription>{unlockedBadges.length} / {BADGES.length} 已解锁</CardDescription>
-            </CardHeader>
-            <CardContent className="flex h-full flex-col justify-between gap-4">
-              {recentAchievements.length === 0 ? (
-                <EmptyState
-                  scene="achievements"
-                  density="compact"
-                  title="还没有解锁成就"
-                  description="完成学习和打卡后，里程碑会出现在这里。"
-                />
-              ) : (
-                <ul className="grid grid-cols-3 gap-2" aria-label="最近解锁的成就">
-                  {recentAchievements.map((badge) => (
-                    <li key={badge.id} className="rounded-xl border border-primary/10 bg-primary/5 p-2.5 text-center">
-                      <AchievementMark achievementId={badge.id} size="md" className="mx-auto" />
-                      <span className="mt-1 block truncate text-xs font-medium">{badge.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Link to="/achievements" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}>
-                查看全部成就<ArrowRight aria-hidden="true" />
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle>等级与经验</CardTitle>
-              <CardDescription>持续记录会累积经验值</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3">
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Star className="size-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-semibold">Lv.{levelInfo.level} {levelInfo.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                    {levelInfo.xpProgress.current} / {levelInfo.xpProgress.required} XP
-                  </p>
-                </div>
+      <section className="space-y-4" aria-label="主页功能卡片">
+        {dashboardCardRows.map((row, rowIndex) => (
+          <div key={`${row.join(':')}:${rowIndex}`} className="grid items-stretch gap-4 lg:grid-cols-12">
+            {row.map((cardId) => (
+              <div key={cardId} className={dashboardCardColumnClass(row, cardId)} data-dashboard-card={cardId}>
+                {renderDashboardCard(cardId)}
               </div>
-              <div
-                className="mt-5 h-2 overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-label="当前等级经验进度"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(Math.min(100, levelInfo.xpProgress.percentage))}
-              >
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${Math.min(100, levelInfo.xpProgress.percentage)}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {levelInfo.xpProgress.percentage >= 100
-                  ? '已达到当前最高等级。'
-                  : `距离下一等级还需 ${Math.max(0, levelInfo.xpProgress.required - levelInfo.xpProgress.current)} XP。`}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card size="sm" className="md:col-span-2 xl:col-span-1">
-            <CardHeader>
-              <CardTitle>最近学习日记</CardTitle>
-              <CardDescription>记录状态，也记录方法</CardDescription>
-            </CardHeader>
-            <CardContent className="flex h-full flex-col justify-between gap-4">
-              {latestDiary ? (
-                <article className="rounded-xl border border-border/70 bg-secondary/40 p-3.5">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                    <BookOpen className="size-4" aria-hidden="true" />
-                    <time dateTime={latestDiary.date}>{format(parseLocalDate(latestDiary.date), 'yyyy年M月d日')}</time>
-                    <span aria-hidden="true">·</span>
-                    <span>{latestDiary.moodEmoji} {latestDiary.moodLabel}</span>
-                  </div>
-                  <p className="mt-3 line-clamp-3 text-sm leading-6">{latestDiary.contentPreview}</p>
-                </article>
-              ) : (
-                <EmptyState
-                  scene="diary"
-                  density="compact"
-                  title="还没有学习日记"
-                  description="写下今天的方法和感受，方便以后回看。"
-                />
-              )}
-              <Link to="/diary" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}>
-                查看全部日记<ArrowRight aria-hidden="true" />
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
+            ))}
+          </div>
+        ))}
       </section>
 
       <Dialog open={aiSuggestionOpen} onOpenChange={setAiSuggestionOpen}>

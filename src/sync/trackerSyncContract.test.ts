@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  DEFAULT_DASHBOARD_CARD_ORDER,
+  DEFAULT_DASHBOARD_CARD_VISIBILITY,
+} from '@/features/dashboard/dashboardLayout'
 
 import type { StudyPlan, WordRecord } from '@/lib/types'
 import {
@@ -70,6 +74,9 @@ describe('Tracker low-storage sync contract', () => {
       examDate: '2026-11-01',
       showExamCountdown: true,
       showAiSuggestions: false,
+      showWordsDailySummary: false,
+      dashboardCardOrder: [...DEFAULT_DASHBOARD_CARD_ORDER],
+      dashboardCardVisibility: { ...DEFAULT_DASHBOARD_CARD_VISIBILITY },
       theme: 'dark',
       lastCheckinDate: '2026-08-02',
     })

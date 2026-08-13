@@ -562,6 +562,8 @@ export default function Words() {
       <WordsCollaborationPanel
         plans={vocabularyPlans}
         selectedPlan={selectedPlan}
+        userId={user?.id ?? null}
+        preview={wordsHubPreview}
         selectedReceipt={selectedPlan ? planReceipts.receipts.get(selectedPlan.id) : null}
         receiptLoading={planReceipts.loading}
         receiptError={planReceipts.error}

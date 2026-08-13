@@ -158,10 +158,17 @@ describe('Words plan recommendation', () => {
             completedExecutions: 1,
             recordedCompletionRate: 50,
             actualWordsLogged: 42,
+            pairedExecutionCount: 2,
+            pairedPlannedWords: 60,
+            pairedActualWords: 42,
+            targetAttainmentRate: 70,
+            calibrationDirection: 'insufficient',
+            baselineTargetCount: 24,
+            calibratedTargetCount: null,
           },
           targetDay: { scheduledPlanCount: 2, completedPlanCount: 1 },
         },
-        words: { recommendationBounds: { minimumReviewWords: 8, maximumReviewWords: 43, minimumNewWords: 4, maximumNewWords: 504 } },
+        words: { recommendationBounds: { minimumReviewWords: 8, maximumReviewWords: 43, minimumNewWords: 4, maximumNewWords: 504, maximumTotalWords: 547 } },
       },
     })
     expect(JSON.stringify(value)).not.toMatch(/雅思词汇|title|description|meaning|note/)
@@ -200,6 +207,69 @@ describe('Words plan recommendation', () => {
       reviewWords: 44,
       newWords: 11,
     }, value.data)).toThrow(/bounds/)
+  })
+
+  it('reduces the maximum total after repeated low target attainment', () => {
+    const sourcePlan = plan({ targetCount: 30 })
+    const historyPlan = plan({ id: 'history-plan', targetCount: 30 })
+    const value = buildWordsPlanRecommendationSnapshot({
+      sourcePlan,
+      plans: [sourcePlan, historyPlan],
+      planExecutions: [
+        { id: 'low-1', planId: historyPlan.id, date: '2026-08-10', isCompleted: true, actualCount: 15 },
+        { id: 'low-2', planId: historyPlan.id, date: '2026-08-11', isCompleted: true, actualCount: 15 },
+        { id: 'low-3', planId: historyPlan.id, date: '2026-08-12', isCompleted: true, actualCount: 12 },
+      ],
+      wordRecords: [],
+      practiceRecords: [],
+      timerRecords: [],
+      words: words(),
+    }, { now: NOW })
+
+    expect(value.data.tracker.vocabularyHistory30Days).toMatchObject({
+      pairedExecutionCount: 3,
+      pairedPlannedWords: 90,
+      pairedActualWords: 42,
+      targetAttainmentRate: 46.7,
+      calibrationDirection: 'reduce',
+      baselineTargetCount: 30,
+      calibratedTargetCount: 24,
+    })
+    expect(value.data.words.recommendationBounds.maximumTotalWords).toBe(24)
+    expect(() => assertWordsPlanRecommendationMatchesContext({
+      ...recommendation(),
+      targetCount: 25,
+      reviewWords: 18,
+      newWords: 7,
+    }, value.data)).toThrow(/bounds/)
+  })
+
+  it('ignores executions that predate the current plan target revision', () => {
+    const sourcePlan = plan({ targetCount: 30 })
+    const revisedPlan = plan({
+      id: 'revised-plan',
+      targetCount: 100,
+      updatedAt: '2026-08-12T08:00:00.000Z',
+    })
+    const value = buildWordsPlanRecommendationSnapshot({
+      sourcePlan,
+      plans: [sourcePlan, revisedPlan],
+      planExecutions: [
+        { id: 'before-revision', planId: revisedPlan.id, date: '2026-08-10', isCompleted: true, actualCount: 20 },
+        { id: 'after-revision', planId: revisedPlan.id, date: '2026-08-12', isCompleted: true, actualCount: 20 },
+      ],
+      wordRecords: [],
+      practiceRecords: [],
+      timerRecords: [],
+      words: words(),
+    }, { now: NOW })
+
+    expect(value.data.tracker.vocabularyHistory30Days).toMatchObject({
+      pairedExecutionCount: 1,
+      pairedPlannedWords: 100,
+      pairedActualWords: 20,
+      calibrationDirection: 'insufficient',
+    })
   })
 
   it('rejects an impossible daily floor before contacting AI', () => {
