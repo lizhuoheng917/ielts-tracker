@@ -557,26 +557,6 @@ export default function Plans() {
         )}
       />
 
-      <aside
-        className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
-        aria-label="词汇计划入口"
-      >
-        <p className="text-sm leading-5 text-muted-foreground">
-          <strong className="font-medium text-foreground">词汇计划已统一到词汇中心：</strong>
-          新建、AI 生成和修改都在那里完成；已有词汇计划仍保留在这里查看。
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full shrink-0 sm:w-auto"
-          onClick={() => navigate('/words')}
-        >
-          前往词汇中心
-          <ArrowUpRight className="size-3.5" aria-hidden="true" />
-        </Button>
-      </aside>
-
       {planMutationError && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

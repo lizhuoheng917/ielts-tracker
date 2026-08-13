@@ -479,7 +479,7 @@ export function WordsPlanIntentDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) closeDialog() }}>
-      <DialogContent className="flex max-h-[92dvh] max-w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(94vw,45rem)]">
+      <DialogContent className="flex max-h-[92dvh] w-[calc(100vw-1.5rem)] min-w-0 max-w-[45rem] flex-col gap-0 overflow-hidden overscroll-contain p-0 sm:w-[min(94vw,45rem)]">
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 md:px-6 md:py-5">
           <DialogTitle className="flex items-center gap-2">
             {mode === 'ai'
@@ -494,7 +494,7 @@ export function WordsPlanIntentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 space-y-5 overflow-y-auto px-4 py-5 md:px-6">
+        <div className="min-h-0 min-w-0 space-y-5 overflow-x-hidden overflow-y-auto px-4 py-5 md:px-6">
           {sent ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
@@ -653,7 +653,7 @@ export function WordsPlanIntentDialog({
               </section>
               )}
 
-              <section className="space-y-4" aria-labelledby="words-plan-final-heading">
+              <section className="min-w-0 space-y-4" aria-labelledby="words-plan-final-heading">
                 <div>
                   <h3 id="words-plan-final-heading" className="text-sm font-semibold text-foreground">
                     {mode === 'ai' ? '确认计划内容' : '填写计划内容'}
@@ -663,8 +663,8 @@ export function WordsPlanIntentDialog({
                   </p>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
+                <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="min-w-0 space-y-2 sm:col-span-2">
                     <Label htmlFor="words-plan-title">计划名称</Label>
                     <Input
                       id="words-plan-title"
@@ -677,11 +677,11 @@ export function WordsPlanIntentDialog({
                     />
                   </div>
 
-                  <div className="space-y-2 sm:col-span-2">
+                  <div className="min-w-0 space-y-2 sm:col-span-2">
                     <Label htmlFor="words-plan-date">
                       {plan?.frequency === 'daily' || plan?.frequency === 'weekly' ? '本次发送日期' : '目标日期'}
                     </Label>
-                    <div className="relative">
+                    <div className="relative min-w-0 max-w-full">
                       <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                       <Input
                         id="words-plan-date"
@@ -712,7 +712,7 @@ export function WordsPlanIntentDialog({
                     </p>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <Label htmlFor="words-plan-count">目标词数</Label>
                     <Input
                       id="words-plan-count"
@@ -727,9 +727,9 @@ export function WordsPlanIntentDialog({
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <Label htmlFor="words-plan-duration">预计用时</Label>
-                    <div className="relative">
+                    <div className="relative min-w-0 max-w-full">
                       <Input
                         id="words-plan-duration"
                         type="number"
@@ -746,7 +746,7 @@ export function WordsPlanIntentDialog({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <Label htmlFor="words-plan-time">开始时间（可选）</Label>
                     <Input
                       id="words-plan-time"
@@ -758,7 +758,7 @@ export function WordsPlanIntentDialog({
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <Label htmlFor="words-plan-mode">学习模式</Label>
                     <Select value={studyMode} onValueChange={(value) => setStudyMode(value as LexiWordsStudyMode)} disabled={saving}>
                       <SelectTrigger id="words-plan-mode" className="w-full"><SelectValue>{MODE_LABELS[studyMode]}</SelectValue></SelectTrigger>

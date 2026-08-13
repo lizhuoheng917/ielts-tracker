@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-13-vocabulary-plan-production",
+  "release": "2026-08-13-mobile-dialog-and-plan-navigation",
   "Frontend": {
     "status": "changed",
-    "reason": "Vocabulary Center now creates, updates or deletes one selected canonical Tracker vocabulary plan. The professional template stores title, schedule, count, duration and optional time, preserves recurring schedules, defaults new plans to local-only, and gives Plan Center a readable target-count presentation. The handoff always references the real saved plan ID and uncertain retries retain the same plan and operation IDs. Deletion reuses the existing plan transaction and warns that already-confirmed Words arrangements are not changed retroactively."
+    "reason": "Mobile dialog controls now share bounded full-width input, textarea and select primitives. The vocabulary-plan dialog constrains every grid item and scroll region to the viewport so native date and time controls cannot widen the modal or create horizontal panning. Plan Center also removes its redundant page-level Vocabulary Center promotion while retaining contextual management actions on vocabulary plans."
   },
   "Backend": {
-    "status": "changed",
-    "reason": "The paired AI gateway still provides the strict transient numeric recommendation path and generic plan generation still excludes vocabulary. This release reuses the existing owner-scoped plan-intent RPC, RLS, retention and Tracker Phase 4B plan-sync contract, including existing plan tombstones on deletion; no table, column, RPC, index, snapshot, AI prose history or recommendation history is added."
+    "status": "reviewed-not-needed",
+    "reason": "This is a CSS layout correction only. Plan fields, local persistence, cloud sync, AI requests, Words handoff contracts and database behavior are unchanged."
   },
   "Admin": {
-    "status": "changed",
-    "reason": "Reviewed with no additional Control surface or policy required. Local-first plan storage and deletion use the existing Tracker content-cloud policy when the learner explicitly selects cloud, and Vocabulary Center AI remains governed by the existing words_plan_recommendation purpose and independent quota. No generated recommendation body or duplicate plan history is added to administrator storage."
+    "status": "reviewed-not-needed",
+    "reason": "No status, analytics, policy, quota or remotely manageable value changes, so Lexi Control requires no corresponding update."
   },
   "Deployment": {
     "status": "deployed",
-    "reason": "Tracker production is deployed from verified commit d08fa99 as Cloudflare Pages deployment 4a769d08-b1a7-4efa-a662-9a99afbed49e. The paired Lexi Words, Control and Account surfaces are deployed from their coordinated commit 0d3e8d4, and the exact Supabase migrations plus lexi-ai-gateway v15 are active."
+    "reason": "This manifest belongs to the coordinated Tracker production release. The exact verified commit is pushed to GitHub main and deployed to the ielts-tracker Cloudflare Pages Production/main environment; the deployment ID and source SHA are recorded in the release commit that follows this manifest update."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The corrected release passed typecheck, lint, 83 test files and 510 tests, production build and bundle safety checks. Authenticated production QA verified shared-account Words summaries, canonical save-and-send, a 7-word Tracker request, Words safe projection to 12 reviews and zero new words, explicit rejection with no learning-data change, and Vocabulary Center deletion. The temporary plan and rejected handoff were removed, the Tracker account returned to its original four plans, and the four public surfaces completed final HTTP and browser console checks."
+    "reason": "The complete Tracker release gate passed typecheck, lint, 83 test files and 510 tests, production build and bundle checks. Browser acceptance at a 390-pixel-class mobile viewport confirmed no horizontal overflow, no page-level Vocabulary Center card in Plan Center, and retained contextual vocabulary-plan management actions in the implementation."
   }
 }
