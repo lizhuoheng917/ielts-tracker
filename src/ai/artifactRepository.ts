@@ -16,8 +16,10 @@ import {
   calculateWritingOverallBand,
   formatWritingSourceReference,
   formatWritingFeedbackAsMarkdown,
+  materializeStoredWritingSubmission,
   parseWritingFeedbackV2,
   parseWritingSubmission,
+  writingSubmissionUsesImage,
   type WritingBand,
   type WritingFeedbackV2,
   type WritingSubmission,
@@ -300,8 +302,9 @@ export function createWritingFeedbackArtifactV2(
   input: SaveWritingFeedbackArtifactInputV2,
   access: AiArtifactAccessV2,
 ): WritingFeedbackArtifactV2 {
-  const submission = parseWritingSubmission(input.submission)
-  const feedback = parseWritingFeedbackV2(input.feedback, submission)
+  const requestSubmission = parseWritingSubmission(input.submission)
+  const feedback = parseWritingFeedbackV2(input.feedback, requestSubmission)
+  const submission = materializeStoredWritingSubmission(requestSubmission, feedback)
   const overallBand = calculateWritingOverallBand(feedback)
   const taskLabel = submission.task === 'task1' ? 'Task 1' : 'Task 2'
   const moduleLabel = submission.module === 'academic' ? 'Academic' : 'General Training'
@@ -490,6 +493,9 @@ export function parseAiArtifactRecordV2(value: unknown): AiArtifactRecordV2 {
         throw new Error('Invalid writing feedback artifact fields')
       }
       const submission = parseWritingSubmission(content.submission)
+      if (writingSubmissionUsesImage(submission)) {
+        throw new Error('Writing prompt images cannot be persisted in AI artifacts')
+      }
       const feedback = parseWritingFeedbackV2(content.feedback, submission)
       const overallBand = calculateWritingOverallBand(feedback)
       if (content.overallBand !== overallBand) throw new Error('Invalid writing feedback overall band')
@@ -571,6 +577,17 @@ export function aiArtifactToMarkdown(artifact: AiArtifactRecordV2): string {
       if (submission.module === 'academic' && submission.task === 'task1') {
         lines.push('', '未提供原图，Task Achievement 仅作参考。')
       }
+    } else if (submission.schemaVersion === 4) {
+      lines.push(
+        '',
+        '## 深度分析题目',
+        '',
+        fenced(submission.promptSource.kind === 'text' ? submission.promptSource.text : '题目图片仅用于本次请求，未保存。'),
+        '',
+        submission.promptSource.kind === 'text' && submission.promptSource.origin === 'recognized_image'
+          ? '图片题目已识别；报告中只保留识别文字。'
+          : '用户提供题目文字。',
+      )
     } else {
       lines.push('', '## 原始题目', '', fenced(submission.promptText))
       if (submission.sourceMaterial.kind === 'text_description') {

@@ -16,6 +16,8 @@ interface AiQuotaNoticeProps {
   /** A gateway request has been submitted; the displayed quota may be stale until it settles. */
   pending?: boolean
   onStateChange?: (state: ManagedAiQuotaState) => void
+  /** Admission units consumed by the action currently shown in the dialog. */
+  costUnits?: 1 | 2
   className?: string
 }
 
@@ -25,6 +27,7 @@ export function AiQuotaNotice({
   active = true,
   pending = false,
   onStateChange,
+  costUnits = 1,
   className,
 }: AiQuotaNoticeProps) {
   const { status: authStatus } = useAuth()
@@ -76,7 +79,7 @@ export function AiQuotaNotice({
   }
 
   const resetTime = quota.resetAt ? formatManagedAiQuotaResetAt(quota.resetAt) : null
-  if (quota.remainingRequests === 0) {
+  if (quota.remainingRequests !== null && quota.remainingRequests < costUnits) {
     return (
       <div
         className={cn('flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200', className)}
@@ -84,7 +87,7 @@ export function AiQuotaNotice({
         aria-live="polite"
       >
         <Gauge className="size-3.5 shrink-0" aria-hidden="true" />
-        <span>今日 AI 额度已用完。</span>
+        <span>{costUnits === 2 && quota.remainingRequests === 1 ? '剩余额度不足以进行深度分析。' : '今日 AI 额度已用完。'}</span>
         {resetTime && (
           <span className="inline-flex items-center gap-1">
             <Clock3 className="size-3" aria-hidden="true" />
@@ -102,7 +105,7 @@ export function AiQuotaNotice({
         aria-live="polite"
       >
         <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
-        <span>请求已提交，今日 AI 次数正在同步。</span>
+        <span>请求已提交，今日 AI 额度正在同步。</span>
         {resetTime && (
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <span aria-hidden="true">·</span>
@@ -123,8 +126,9 @@ export function AiQuotaNotice({
         ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
         : <Gauge className="size-3.5 shrink-0 text-primary" aria-hidden="true" />}
       <span>
-        今日还可使用 <strong className="font-semibold text-foreground">{quota.remainingRequests}</strong> / {quota.dailyRequestLimit} 次
+        今日还可使用 <strong className="font-semibold text-foreground">{quota.remainingRequests}</strong> / {quota.dailyRequestLimit} 个额度单位
       </span>
+      {costUnits === 2 && <span className="font-medium text-primary">· 本次深度分析占 2 个单位</span>}
       {resetTime && (
         <span className="inline-flex items-center gap-1 text-muted-foreground">
           <span aria-hidden="true">·</span>

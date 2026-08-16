@@ -7,10 +7,15 @@ import {
   countWritingWords,
   createWritingSubmissionV2,
   createWritingSubmissionV3,
+  createWritingSubmissionV4,
   formatWritingFeedbackAsMarkdown,
+  materializeStoredWritingSubmission,
   parseWritingFeedbackV2,
   parseWritingSubmission,
   parseWritingSubmissionV2,
+  parseWritingSubmissionV4,
+  writingQuotaUnits,
+  writingSubmissionUsesImage,
   type WritingFeedbackV2,
   type WritingSubmissionV2,
 } from './writingFeedback'
@@ -360,6 +365,134 @@ describe('WritingSubmissionV2', () => {
   })
 })
 
+describe('WritingSubmissionV4 deep analysis', () => {
+  function deepFeedback(promptKind: 'text' | 'image'): WritingFeedbackV2 {
+    return {
+      ...scoredFeedback(),
+      deepAnalysis: {
+        promptRecognition: promptKind === 'image'
+          ? {
+              status: 'recognized',
+              recognizedPrompt: 'Public transport should be free. To what extent do you agree or disagree?',
+              confidence: 'high',
+              note: '题目图片清晰。',
+            }
+          : {
+              status: 'provided_text',
+              recognizedPrompt: null,
+              confidence: 'high',
+              note: '使用用户填写的完整题目。',
+            },
+        promptCoverage: [{
+          requirement: '明确回应是否应当免费提供公共交通',
+          status: 'partial',
+          finding: '作文表达了同意立场，但尚未充分回应实施条件。',
+          evidence: 'I agree because it reduces traffic',
+          nextStep: '补充免费政策如何实施以及为何利大于弊。',
+        }],
+        argumentMap: [{
+          paragraphIndex: 1,
+          role: '立场与理由概览',
+          contribution: '给出了支持免费公共交通的两个理由。',
+          gap: '两个理由都需要继续展开因果链。',
+        }],
+        recurringPatterns: [{
+          type: 'logic',
+          finding: '理由以并列方式出现，解释不足。',
+          evidence: 'it reduces traffic',
+          fix: '为每个理由补充结果和具体影响。',
+        }],
+        rewritePlan: [
+          { priority: 1, action: '展开减少拥堵的因果链。', successCheck: '理由后至少有一层解释和一个结果。' },
+          { priority: 2, action: '补充低收入通勤者的具体场景。', successCheck: '例子直接支持中心立场。' },
+        ],
+      },
+    }
+  }
+
+  it('uses two quota units and keeps text deep analysis inside the strict contract', () => {
+    const deepText = createWritingSubmissionV4({
+      module: 'academic',
+      task: 'task2',
+      promptSource: {
+        kind: 'text',
+        text: 'Public transport should be free. To what extent do you agree or disagree?',
+        origin: 'typed',
+      },
+      essayText: ESSAY,
+    })
+    expect(parseWritingSubmissionV4(deepText)).toEqual(deepText)
+    expect(writingQuotaUnits(deepText)).toBe(2)
+    expect(writingSubmissionUsesImage(deepText)).toBe(false)
+    expect(parseWritingFeedbackV2(deepFeedback('text'), deepText)).toEqual(deepFeedback('text'))
+    expect(buildWritingContextSnapshot(deepText).quality.warnings.join(' ')).toContain('2 次')
+    expect(formatWritingFeedbackAsMarkdown(deepText, deepFeedback('text'), 6.5)).toContain('深度分析')
+  })
+
+  it('materializes recognized text and removes the inline image before local persistence', () => {
+    const deepImage = createWritingSubmissionV4({
+      module: 'academic',
+      task: 'task2',
+      promptSource: {
+        kind: 'image',
+        mediaType: 'image/jpeg',
+        dataUrl: 'data:image/jpeg;base64,/9j/',
+        byteLength: 3,
+      },
+      essayText: ESSAY,
+    })
+    expect(writingQuotaUnits(deepImage)).toBe(2)
+    expect(writingSubmissionUsesImage(deepImage)).toBe(true)
+    const stored = materializeStoredWritingSubmission(deepImage, deepFeedback('image'))
+    expect(stored).toMatchObject({
+      schemaVersion: 4,
+      promptSource: {
+        kind: 'text',
+        origin: 'recognized_image',
+        text: 'Public transport should be free. To what extent do you agree or disagree?',
+      },
+    })
+    expect(JSON.stringify(stored)).not.toContain('data:image')
+
+    expect(() => parseWritingSubmissionV4({
+      ...deepImage,
+      promptSource: { ...deepImage.promptSource, byteLength: 4 },
+    })).toThrow(/byteLength/)
+  })
+
+  it('accepts only a bounded empty report for failed image recognition', () => {
+    const deepImage = createWritingSubmissionV4({
+      module: 'academic',
+      task: 'task2',
+      promptSource: {
+        kind: 'image',
+        mediaType: 'image/png',
+        dataUrl: 'data:image/png;base64,iVBORw==',
+        byteLength: 4,
+      },
+      essayText: ESSAY,
+    })
+    const failed: WritingFeedbackV2 = {
+      ...insufficientFeedback(),
+      summary: '题目图片无法可靠识别，因此没有生成作文分析。',
+      deepAnalysis: {
+        promptRecognition: {
+          status: 'failed',
+          recognizedPrompt: null,
+          confidence: 'low',
+          note: '图片模糊或被裁切。',
+        },
+        promptCoverage: [],
+        argumentMap: [],
+        recurringPatterns: [],
+        rewritePlan: [],
+      },
+    }
+    expect(parseWritingFeedbackV2(failed, deepImage)).toEqual(failed)
+    expect(() => materializeStoredWritingSubmission(deepImage, failed)).toThrow(/cannot be stored/)
+  })
+})
+
 describe('WritingSubmissionV3 reference mode', () => {
   it('keeps only a Cambridge reference plus the essay and marks automatic recognition as limited', () => {
     const created = createWritingSubmissionV3({
@@ -557,12 +690,12 @@ describe('WritingFeedbackV2', () => {
     expect(markdown).not.toContain('四维参考总分')
   })
 
-  it('enforces the 12000-character serialized feedback boundary exactly', () => {
-    const atLimit = feedbackAtSerializedLength(12_000)
-    expect(JSON.stringify(atLimit)).toHaveLength(12_000)
+  it('enforces the 24000-character serialized feedback boundary exactly', () => {
+    const atLimit = feedbackAtSerializedLength(24_000)
+    expect(JSON.stringify(atLimit)).toHaveLength(24_000)
     expect(parseWritingFeedbackV2(atLimit)).toEqual(atLimit)
 
-    const overLimit = feedbackAtSerializedLength(12_001)
+    const overLimit = feedbackAtSerializedLength(24_001)
     expect(() => parseWritingFeedbackV2(overLimit)).toThrow(/serialized length/)
   })
 })

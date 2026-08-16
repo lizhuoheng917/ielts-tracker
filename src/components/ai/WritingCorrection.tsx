@@ -5,11 +5,13 @@ import {
   CheckCircle2,
   Download,
   FileText,
+  Image as ImageIcon,
   RefreshCcw,
   Save,
   ShieldCheck,
   Sparkles,
   Square,
+  X,
 } from 'lucide-react'
 
 import { AiGatewayError } from '@/ai/gateway'
@@ -26,6 +28,9 @@ import {
   calculateWritingOverallBand,
   countWritingWords,
   createWritingSubmissionV3,
+  createWritingSubmissionV4,
+  isDeepWritingSubmission,
+  materializeStoredWritingSubmission,
   parseWritingFeedbackV2,
   type WritingBand,
   type WritingFeedbackV2,
@@ -33,24 +38,46 @@ import {
   type WritingSubmission,
   type WritingTask,
 } from '@/ai/writingFeedback'
+import {
+  prepareWritingPromptImage,
+  type PreparedWritingPromptImage,
+} from '@/ai/writingPromptImage'
+import {
+  managedAiQuotaActionState,
+  type ManagedAiQuotaState,
+} from '@/ai/managedAiQuota'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { AILoadingState } from '@/components/ai/AILoadingState'
 import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 import { WritingFeedbackContent } from '@/components/ai/StructuredAIContent'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useAiArtifactStore } from '@/stores/aiArtifactStore'
 
-const WRITING_DRAFT_VERSION = 3 as const
+const WRITING_DRAFT_VERSION = 4 as const
 // Keep the existing storage key so a V2 editor draft can be migrated in place.
 const WRITING_DRAFT_PREFIX = 'ielts-tracker:writingDraftV2'
 
-interface WritingDraftV3 {
+interface WritingDraftV4 {
   version: typeof WRITING_DRAFT_VERSION
+  module: WritingModule
+  task: WritingTask
+  bookNumber: string
+  testNumber: string
+  deepAnalysis: boolean
+  promptInputMode: 'text' | 'image'
+  promptText: string
+  essayText: string
+  updatedAt: string
+}
+
+interface LegacyWritingDraftV3 {
+  version: 3
   module: WritingModule
   task: WritingTask
   bookNumber: string
@@ -108,7 +135,7 @@ function isWritingTask(value: unknown): value is WritingTask {
   return value === 'task1' || value === 'task2'
 }
 
-function loadDraft(storageKey: string): WritingDraftV3 | null {
+function loadDraft(storageKey: string): WritingDraftV4 | null {
   try {
     const raw = localStorage.getItem(storageKey)
     if (!raw) return null
@@ -122,8 +149,30 @@ function loadDraft(storageKey: string): WritingDraftV3 | null {
       draft.version === WRITING_DRAFT_VERSION
       && typeof draft.bookNumber === 'string'
       && typeof draft.testNumber === 'string'
+      && typeof draft.deepAnalysis === 'boolean'
+      && (draft.promptInputMode === 'text' || draft.promptInputMode === 'image')
+      && typeof draft.promptText === 'string'
     ) {
-      return draft as unknown as WritingDraftV3
+      return draft as unknown as WritingDraftV4
+    }
+    if (
+      draft.version === 3
+      && typeof draft.bookNumber === 'string'
+      && typeof draft.testNumber === 'string'
+    ) {
+      const legacy = draft as unknown as LegacyWritingDraftV3
+      return {
+        version: WRITING_DRAFT_VERSION,
+        module: legacy.module,
+        task: legacy.task,
+        bookNumber: legacy.bookNumber,
+        testNumber: legacy.testNumber,
+        deepAnalysis: false,
+        promptInputMode: 'text',
+        promptText: '',
+        essayText: legacy.essayText,
+        updatedAt: legacy.updatedAt,
+      }
     }
     // Manual V2 prompt/material fields are intentionally retired. Preserve the
     // learner's essay plus the selected module/task when migrating the draft.
@@ -139,6 +188,9 @@ function loadDraft(storageKey: string): WritingDraftV3 | null {
         task: legacy.task,
         bookNumber: '',
         testNumber: '',
+        deepAnalysis: false,
+        promptInputMode: 'text',
+        promptText: '',
         essayText: legacy.essayText,
         updatedAt: legacy.updatedAt,
       }
@@ -177,6 +229,12 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
   const [task, setTask] = useState<WritingTask>('task2')
   const [bookNumber, setBookNumber] = useState('')
   const [testNumber, setTestNumber] = useState('')
+  const [deepAnalysis, setDeepAnalysis] = useState(false)
+  const [promptInputMode, setPromptInputMode] = useState<'text' | 'image'>('text')
+  const [promptText, setPromptText] = useState('')
+  const [promptImage, setPromptImage] = useState<PreparedWritingPromptImage | null>(null)
+  const [preparingImage, setPreparingImage] = useState(false)
+  const [quotaState, setQuotaState] = useState<ManagedAiQuotaState>({ status: 'idle', quota: null })
   const [essayText, setEssayText] = useState('')
   const [status, setStatus] = useState<WorkspaceStatus>('editing')
   const [preview, setPreview] = useState<FeedbackPreview | null>(null)
@@ -196,6 +254,10 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
   const belowMinimum = wordCount > 0 && wordCount < minimumWords
   const needsTaskOneMaterial = module === 'academic' && task === 'task1'
   const inputLocked = status === 'generating' || status === 'saving'
+  const quotaAction = managedAiQuotaActionState(quotaState, deepAnalysis ? 2 : 1)
+  const promptReady = deepAnalysis
+    ? promptInputMode === 'text' ? Boolean(promptText.trim()) : promptImage !== null
+    : Boolean(bookNumber.trim() && testNumber.trim())
 
   useEffect(() => {
     setLoadedDraftStorageKey(null)
@@ -203,6 +265,11 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
     setTask('task2')
     setBookNumber('')
     setTestNumber('')
+    setDeepAnalysis(false)
+    setPromptInputMode('text')
+    setPromptText('')
+    setPromptImage(null)
+    setPreparingImage(false)
     setEssayText('')
     setPreview(null)
     setSavedRecordId(null)
@@ -215,6 +282,9 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       setTask(draft.task)
       setBookNumber(draft.bookNumber)
       setTestNumber(draft.testNumber)
+      setDeepAnalysis(draft.deepAnalysis)
+      setPromptInputMode(draft.promptInputMode)
+      setPromptText(draft.promptText)
       setEssayText(draft.essayText)
     }
     setLoadedDraftStorageKey(draftStorageKey)
@@ -222,12 +292,15 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
   useEffect(() => {
     if (!draftStorageKey || loadedDraftStorageKey !== draftStorageKey || savedRecordId) return
-    const draft: WritingDraftV3 = {
+    const draft: WritingDraftV4 = {
       version: WRITING_DRAFT_VERSION,
       module,
       task,
       bookNumber,
       testNumber,
+      deepAnalysis,
+      promptInputMode,
+      promptText,
       essayText,
       updatedAt: new Date().toISOString(),
     }
@@ -237,7 +310,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       // The editor remains usable. A save error is shown only when the user
       // explicitly saves a generated report.
     }
-  }, [bookNumber, draftStorageKey, essayText, loadedDraftStorageKey, module, savedRecordId, task, testNumber])
+  }, [bookNumber, deepAnalysis, draftStorageKey, essayText, loadedDraftStorageKey, module, promptInputMode, promptText, savedRecordId, task, testNumber])
 
   useEffect(() => {
     onWorkspaceStateChange?.({
@@ -263,12 +336,17 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       }
       try {
         const feedback = parseWritingFeedbackV2(result.content, taskContext.submission)
+        const storedSubmission = materializeStoredWritingSubmission(taskContext.submission, feedback)
+        const sanitizedSnapshot = {
+          ...taskContext.snapshot,
+          data: { submission: storedSubmission },
+        }
         const generatedAt = result.artifact?.createdAt ?? writingTask.completedAt ?? new Date().toISOString()
         setPreview({
-          submission: taskContext.submission,
+          submission: storedSubmission,
           feedback,
           overallBand: calculateWritingOverallBand(feedback),
-          snapshot: taskContext.snapshot,
+          snapshot: sanitizedSnapshot,
           source: result.source,
           runId: result.run?.runId,
           providerArtifactId: result.artifact?.artifactId,
@@ -282,6 +360,10 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         })
         setError(null)
         setStatus('preview')
+        setPromptImage(null)
+        if (taskKey && isDeepWritingSubmission(taskContext.submission)) {
+          learnerAiTaskCoordinator.clearTerminalTask(taskKey)
+        }
       } catch {
         setError({ message: '未生成写作反馈，作文草稿已保留，你可以重新生成。', code: 'INVALID_RESPONSE' })
         setStatus('error')
@@ -289,12 +371,18 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       return
     }
     const suffix = writingTask.status === 'outcome_unknown' ? '请求状态尚未确认。' : ''
+    const failureMessage = writingTask.failure?.message
+      ?? '未生成写作反馈，作文草稿已保留，你可以重新生成。'
     setError({
-      message: ['未生成写作反馈，作文草稿已保留，你可以重新生成。', suffix].filter(Boolean).join(' '),
+      // Preserve the coordinator's purpose-specific explanation. Deep image
+      // failures must tell the learner whether the two quota units were
+      // refunded instead of collapsing into a generic retry message.
+      message: [failureMessage, suffix].filter(Boolean).join(' '),
       code: writingTask.failure?.code ?? 'UNKNOWN',
     })
     setStatus('error')
-  }, [writingTask])
+    if (taskKey) learnerAiTaskCoordinator.clearTerminalTask(taskKey)
+  }, [taskKey, writingTask])
 
   const clearDraft = () => {
     if (!draftStorageKey) return
@@ -306,16 +394,24 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
   }
 
   const validateBeforeGenerate = (): string | null => {
-    if (!bookNumber.trim()) return '请填写剑雅书号。'
-    if (!testNumber.trim()) return '请填写 Test。'
-    if (!essayText.trim()) return '请先粘贴或输入作文正文。'
-    const parsedBookNumber = Number(bookNumber)
-    if (!Number.isInteger(parsedBookNumber) || parsedBookNumber < 1 || parsedBookNumber > 99) {
-      return '剑雅书号请填写 1 到 99 的整数。'
+    if (deepAnalysis) {
+      if (promptInputMode === 'text' && !promptText.trim()) return '请填写完整写作题目。'
+      if (promptInputMode === 'image' && !promptImage) return '请先上传一张清晰、完整的题目图片。'
+      if (preparingImage) return '题目图片仍在处理中，请稍候。'
+    } else {
+      if (!bookNumber.trim()) return '请填写剑雅书号。'
+      if (!testNumber.trim()) return '请填写 Test。'
     }
-    const parsedTestNumber = Number(testNumber)
-    if (!Number.isInteger(parsedTestNumber) || parsedTestNumber < 1 || parsedTestNumber > 4) {
-      return 'Test 请填写 1 到 4 的整数。'
+    if (!essayText.trim()) return '请先粘贴或输入作文正文。'
+    if (!deepAnalysis) {
+      const parsedBookNumber = Number(bookNumber)
+      if (!Number.isInteger(parsedBookNumber) || parsedBookNumber < 1 || parsedBookNumber > 99) {
+        return '剑雅书号请填写 1 到 99 的整数。'
+      }
+      const parsedTestNumber = Number(testNumber)
+      if (!Number.isInteger(parsedTestNumber) || parsedTestNumber < 1 || parsedTestNumber > 4) {
+        return 'Test 请填写 1 到 4 的整数。'
+      }
     }
     if (essayText.length > 12_000) return '作文内容过长，请控制在 12,000 个字符以内。'
     return null
@@ -324,6 +420,18 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
   const handleGenerate = () => {
     if (access.status === 'locked' || !scopeKey || !taskKey) {
       setError({ message: '请先确认这台设备的账号归属。', code: 'ARTIFACT_ACCESS_LOCKED' })
+      setStatus('error')
+      return
+    }
+    if (quotaAction.blocked) {
+      setError({
+        message: quotaAction.reason === 'loading'
+          ? '正在读取今日 AI 额度，请稍候。'
+          : deepAnalysis && quotaState.quota?.remainingRequests === 1
+            ? '深度分析需要 2 个额度单位，今天只剩 1 个。你仍可改用普通分析。'
+            : '今日 AI 额度不足，请在重置后再试。',
+        code: 'AI_QUOTA_UNAVAILABLE',
+      })
       setStatus('error')
       return
     }
@@ -336,16 +444,30 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
     let submission: WritingSubmission
     try {
-      submission = createWritingSubmissionV3({
-        module,
-        task,
-        sourceReference: {
-          collection: 'cambridge_ielts',
-          bookNumber: Number(bookNumber),
-          testNumber: Number(testNumber),
-        },
-        essayText,
-      })
+      submission = deepAnalysis
+        ? createWritingSubmissionV4({
+            module,
+            task,
+            promptSource: promptInputMode === 'image' && promptImage
+              ? {
+                  kind: 'image',
+                  mediaType: promptImage.mediaType,
+                  dataUrl: promptImage.dataUrl,
+                  byteLength: promptImage.byteLength,
+                }
+              : { kind: 'text', text: promptText, origin: 'typed' },
+            essayText,
+          })
+        : createWritingSubmissionV3({
+            module,
+            task,
+            sourceReference: {
+              collection: 'cambridge_ielts',
+              bookNumber: Number(bookNumber),
+              testNumber: Number(testNumber),
+            },
+            essayText,
+          })
     } catch {
       setError({ message: '请检查剑雅书号、Test 和作文内容后再试。', code: 'SUBMISSION_INVALID' })
       setStatus('error')
@@ -362,7 +484,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       key: taskKey,
       purpose: 'writing_feedback',
       scopeKey,
-      label: '写作反馈',
+      label: deepAnalysis ? '写作深度分析' : '写作反馈',
       returnPath: '/exam',
       context: { submission, snapshot } satisfies WritingTaskContext,
       request: {
@@ -381,6 +503,24 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         }
       },
     })
+  }
+
+  const handlePromptImage = async (file: File | null) => {
+    if (!file) return
+    setPreparingImage(true)
+    setPromptImage(null)
+    setError(null)
+    try {
+      setPromptImage(await prepareWritingPromptImage(file))
+    } catch (imageError) {
+      setError({
+        message: imageError instanceof Error ? imageError.message : '无法处理这张题目图片。',
+        code: 'PROMPT_IMAGE_INVALID',
+      })
+      setStatus('error')
+    } finally {
+      setPreparingImage(false)
+    }
   }
 
   const handleCancel = () => {
@@ -402,7 +542,9 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         runId: preview.runId,
         snapshotId: preview.snapshot.snapshotId,
         contextHash: preview.contextHash,
-        promptVersion: 'writing-feedback-v3-reference',
+        promptVersion: preview.submission.schemaVersion === 4
+          ? 'writing-feedback-v4-deep'
+          : 'writing-feedback-v3-reference',
         rubricVersion: preview.feedback.rubricVersion,
         createdAt: preview.generatedAt,
         dataAsOf: preview.dataAsOf,
@@ -433,7 +575,9 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
       runId: preview.runId,
       snapshotId: preview.snapshot.snapshotId,
       contextHash: preview.contextHash,
-      promptVersion: 'writing-feedback-v3-reference',
+      promptVersion: preview.submission.schemaVersion === 4
+        ? 'writing-feedback-v4-deep'
+        : 'writing-feedback-v3-reference',
       createdAt: preview.generatedAt,
       savedAt: preview.generatedAt,
       dataAsOf: preview.dataAsOf,
@@ -460,7 +604,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
     return (
       <div className="flex min-h-full flex-col" aria-live="polite">
         <div className="space-y-5 pb-4">
-          <AiQuotaNotice purpose="writing_feedback" active={quotaActive} className="text-sm" />
+          <AiQuotaNotice purpose="writing_feedback" active={quotaActive} costUnits={preview.submission.schemaVersion === 4 ? 2 : 1} className="text-sm" />
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5">
             <Button type="button" variant="ghost" size="sm" onClick={returnToEditor} disabled={status === 'saving'}>
               <ArrowLeft className="size-4" aria-hidden="true" />
@@ -514,7 +658,14 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
   return (
     <div className="flex min-h-full flex-col" aria-busy={status === 'generating'}>
       <div className="space-y-4 pb-4">
-        <AiQuotaNotice purpose="writing_feedback" active={quotaActive} pending={status === 'generating'} className="text-sm" />
+        <AiQuotaNotice
+          purpose="writing_feedback"
+          active={quotaActive}
+          pending={status === 'generating'}
+          costUnits={deepAnalysis ? 2 : 1}
+          onStateChange={setQuotaState}
+          className="text-sm"
+        />
         {access.status === 'locked' && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -532,10 +683,29 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="text-base font-semibold text-foreground">本次作文</h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">选择题型，填入剑雅书号与 Test；无需再粘贴题目。</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {deepAnalysis ? '提供完整题目，生成更深入的论证、语言模式与重写报告。' : '选择题型，填入剑雅书号与 Test；无需再粘贴题目。'}
+            </p>
           </div>
-          <Badge variant="outline" className="border-primary/25 bg-primary/5 text-sm font-medium text-primary">题目参考</Badge>
+          <Badge variant="outline" className="border-primary/25 bg-primary/5 text-sm font-medium text-primary">{deepAnalysis ? '深度分析' : '题目参考'}</Badge>
         </div>
+        <label className={cn(
+          'flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors',
+          deepAnalysis ? 'border-primary/30 bg-primary/[0.045]' : 'border-border/70 bg-background/70',
+          inputLocked && 'cursor-not-allowed opacity-60',
+        )}>
+          <Checkbox
+            checked={deepAnalysis}
+            disabled={inputLocked}
+            onCheckedChange={(checked) => setDeepAnalysis(checked === true)}
+            aria-label="启用深度分析"
+            className="mt-1"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-foreground">启用深度分析</span>
+            <span className="mt-0.5 block text-sm leading-6 text-muted-foreground">使用完整题目生成更深入的报告；每次占用 2 个每日额度单位。</span>
+          </span>
+        </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-foreground">考试类型</legend>
@@ -584,7 +754,7 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
             </div>
           </fieldset>
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
+        {!deepAnalysis ? <div className="grid grid-cols-2 gap-2.5">
           <div className="space-y-1.5">
             <Label htmlFor="writing-cambridge-book" className="text-sm">剑雅书号</Label>
             <Input
@@ -615,8 +785,68 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
               placeholder="例如 2"
             />
           </div>
-        </div>
-        {needsTaskOneMaterial && (
+        </div> : (
+          <div className="space-y-3 rounded-xl border border-primary/15 bg-background/75 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-foreground">完整写作题目</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">选择输入文字，或上传包含完整题目与材料的图片。</p>
+              </div>
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                <Button type="button" size="sm" variant={promptInputMode === 'text' ? 'secondary' : 'ghost'} onClick={() => setPromptInputMode('text')} disabled={inputLocked}>文字</Button>
+                <Button type="button" size="sm" variant={promptInputMode === 'image' ? 'secondary' : 'ghost'} onClick={() => setPromptInputMode('image')} disabled={inputLocked}>图片</Button>
+              </div>
+            </div>
+            {promptInputMode === 'text' ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="writing-deep-prompt" className="sr-only">完整写作题目</Label>
+                <Textarea
+                  id="writing-deep-prompt"
+                  value={promptText}
+                  onChange={(event) => setPromptText(event.target.value)}
+                  disabled={inputLocked}
+                  maxLength={4_000}
+                  rows={5}
+                  className="min-h-28 resize-y text-sm leading-6"
+                  placeholder="粘贴完整题目；Academic Task 1 请尽量包含图表中的关键数据或说明…"
+                />
+                <p className="text-xs text-muted-foreground">{promptText.length.toLocaleString()} / 4,000 字符</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {promptImage ? (
+                  <div className="flex min-w-0 items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2.5">
+                    <ImageIcon className="size-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{promptImage.fileName}</p>
+                      <p className="text-xs text-muted-foreground">{promptImage.width} × {promptImage.height} · {Math.ceil(promptImage.byteLength / 1024)} KB · 仅本次请求</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => setPromptImage(null)} disabled={inputLocked} aria-label="移除题目图片"><X className="size-4" /></Button>
+                  </div>
+                ) : (
+                  <label className={cn(
+                    'flex min-h-24 w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/25 px-4 py-3 text-center transition-colors hover:border-primary/40 hover:bg-primary/[0.025]',
+                    inputLocked && 'cursor-not-allowed opacity-60',
+                  )}>
+                    {preparingImage ? <AILoadingState text="正在压缩题目图片" /> : <ImageIcon className="size-6 text-primary" aria-hidden="true" />}
+                    <span className="mt-1.5 text-sm font-medium text-foreground">{preparingImage ? '正在处理…' : '选择 JPG、PNG 或 WebP 图片'}</span>
+                    <span className="mt-1 text-xs text-muted-foreground">原图不超过 10 MB，发送前会压缩到 600 KB 内</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      disabled={inputLocked || preparingImage}
+                      onClick={(event) => { event.currentTarget.value = '' }}
+                      onChange={(event) => { void handlePromptImage(event.target.files?.[0] ?? null) }}
+                    />
+                  </label>
+                )}
+                <p className="text-xs leading-5 text-muted-foreground">图片只随本次分析发送。识别失败会立即提示，并退还本次占用的 2 个额度单位。</p>
+              </div>
+            )}
+          </div>
+        )}
+        {!deepAnalysis && needsTaskOneMaterial && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-500/5 px-3 py-2.5 text-sm leading-6 text-amber-800 dark:text-amber-200">
             <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <p>未提供原图，Task Achievement 仅供参考；本次会重点反馈语言、结构和表达。</p>
@@ -664,11 +894,13 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
         {status === 'generating' && (
           <div className="flex items-center justify-between gap-3 rounded-xl border border-subject-writing-border bg-subject-writing-soft px-3.5 py-3" role="status" aria-live="polite">
             <div className="min-w-0 space-y-1">
-              <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : '正在生成写作反馈'} />
+              <AILoadingState text={writingTask?.status === 'stopping' ? '正在停止等待结果' : deepAnalysis ? '正在生成深度写作报告' : '正在生成写作反馈'} />
               <p className="text-sm leading-5 text-muted-foreground">
                 {writingTask?.status === 'stopping'
                   ? '已停止等待，最终结果状态会在同步后显示。'
-                  : '这次请求可能需要接近一分钟；作文草稿已保留。完成后会在这里显示结果。'}
+                  : deepAnalysis
+                    ? '正在识别题目并分析论证与语言模式；作文草稿已保留。'
+                    : '这次请求可能需要接近一分钟；作文草稿已保留。完成后会在这里显示结果。'}
               </p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={writingTask?.status === 'stopping'}>
@@ -680,15 +912,15 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
 
       <div className="sticky bottom-0 z-10 -mx-4 mt-auto border-t border-border/80 bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm leading-5 text-muted-foreground">作文正文只用于本次批改。</p>
+          <p className="text-sm leading-5 text-muted-foreground">{deepAnalysis && promptInputMode === 'image' ? '题目图片与作文只用于本次分析，不保存原图。' : '题目与作文正文只用于本次批改。'}</p>
           <Button
             type="button"
             onClick={handleGenerate}
-            disabled={status === 'generating' || access.status === 'locked' || !bookNumber.trim() || !testNumber.trim() || !essayText.trim()}
+            disabled={status === 'generating' || access.status === 'locked' || quotaAction.blocked || preparingImage || !promptReady || !essayText.trim()}
             className="w-full shrink-0 bg-subject-writing text-white hover:bg-subject-writing/90 sm:w-auto"
           >
             {status === 'error' ? <RefreshCcw className="size-4" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
-            {status === 'error' ? '重新生成' : '生成写作反馈'}
+            {status === 'error' ? '重新生成' : deepAnalysis ? '生成深度分析' : '生成写作反馈'}
           </Button>
         </div>
       </div>

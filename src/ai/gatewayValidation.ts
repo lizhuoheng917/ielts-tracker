@@ -8,6 +8,7 @@ import {
   AiGatewayError,
   MANAGED_AI_PURPOSES,
   MAX_AI_GATEWAY_REQUEST_BYTES,
+  MAX_AI_GATEWAY_DEEP_WRITING_REQUEST_BYTES,
   MAX_AI_GATEWAY_RESPONSE_CONTENT_LENGTH,
   MAX_AI_GATEWAY_USER_INPUT_LENGTH,
   type AiGatewayRequest,
@@ -18,7 +19,7 @@ import {
   parseStructuredAiOutput,
   type AiStructuredContentV2,
 } from './structuredOutputs'
-import { parseWritingSubmission } from './writingFeedback'
+import { isDeepWritingSubmission, parseWritingSubmission } from './writingFeedback'
 import {
   assertWordsPlanRecommendationMatchesContext,
   type WordsPlanRecommendationContextDataV1,
@@ -500,7 +501,11 @@ export function createAiGatewayWireRequest(
     snapshot: request.snapshot,
     userInput: request.userInput.trim(),
   }
-  if (new TextEncoder().encode(JSON.stringify(wire)).byteLength > MAX_AI_GATEWAY_REQUEST_BYTES) {
+  const requestLimit = request.purpose === 'writing_feedback'
+    && isDeepWritingSubmission(parseWritingSubmission((request.snapshot.data as UnknownRecord).submission))
+    ? MAX_AI_GATEWAY_DEEP_WRITING_REQUEST_BYTES
+    : MAX_AI_GATEWAY_REQUEST_BYTES
+  if (new TextEncoder().encode(JSON.stringify(wire)).byteLength > requestLimit) {
     throw new AiGatewayError('PAYLOAD_TOO_LARGE', '本次分析数据过大，请缩短分析范围后重试。', false, 413)
   }
   return wire

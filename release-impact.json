@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-14-words-execution-feedback-ai-calibration-and-dashboard-personalization",
+  "release": "2026-08-16-prompt-aware-deep-writing-local-review",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker now blocks explicit Words-plan generation while quota is loading, disabled or exhausted, while keeping manual planning available. Vocabulary Center shows an on-demand Words today summary with completed, target and remaining counts without polling. AI recommendation snapshots derive a 30-day target-attainment signal from paired Tracker target and actual counts, applying a conservative total-word ceiling only after at least three comparable executions. Settings now provides a compact homepage-personalization entry above AI Data Permissions. Its dialog keeps the title and metric overview fixed while users can independently show, hide and reorder eight feature cards; Dashboard renders only the resulting layout. The exam target area only edits the date, and countdown visibility is managed exclusively in this dialog."
+    "reason": "Tracker Writing Correction now offers an optional deep-analysis mode that clearly costs two daily quota units. Learners can provide the exact task as text or a locally compressed image, receive a compact report tied to explicit prompt requirements and verbatim essay evidence, and see a clear refund message when recognition fails. Prompt images stay in memory for the request and are replaced by recognized text before any local draft or report is saved."
   },
   "Backend": {
     "status": "changed",
-    "reason": "Reviewed the existing owner-scoped lexi_get_words_planning_context RPC and reused its non-persisted numeric projection for the progress card, so no table, migration, index or extra snapshot is added. The paired Lexi AI Edge Function accepts the new calibrated aggregate fields and maximumTotalWords bound while retaining backward compatibility with legacy Tracker snapshots. Homepage visibility and order remain device-local and require no schema, RPC, RLS or Edge Function change; hiding the Words summary prevents the existing summary RPC from being requested."
+    "reason": "The companion Lexi branch adds backward-compatible writing submission V4 validation, server-side two-unit metering, multimodal routing and atomic two-unit refunds for failed prompt recognition or unsupported image routes. It stores only quota and request-receipt metadata; the prompt image, essay and report are not persisted in Supabase. Existing V2 and V3 writing submissions remain accepted."
   },
   "Admin": {
-    "status": "reviewed-not-needed",
-    "reason": "Reviewed Lexi Control and its existing AI policy and quota controls. The new values are per-request derived aggregates, not persisted administrator-manageable state; the current words_plan_recommendation enable switch and daily quota remain sufficient. Homepage card visibility and order are individual device presentation choices, so no Control UI or admin RPC change is needed."
+    "status": "changed",
+    "reason": "The companion Lexi Control branch adds purpose-specific writing policy controls for daily quota units, request bytes, output tokens and route selection, plus visible image-capability and refund semantics. Other Words and Tracker policy cards keep their existing behavior."
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "Runtime commit 1b012a164c68be07de024778d31cc5e188a9e3b8 was pushed to main and deployed to Cloudflare production as deployment 4aa33d2e-d373-4be0-b1d2-b4c4f90b5684 with source 1b012a1. The paired Lexi release a502907c871f22ac7d10d393919cbc465dd619b6 deployed production lexi-ai-gateway v16 before Tracker, preserving rolling compatibility. No database migration was required."
+    "status": "not-deployed",
+    "reason": "The deep-writing feature and its coordinated Lexi backend and Control changes are intentionally kept on local codex branches for user review. Nothing from this feature has been pushed, migrated or deployed to production."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker release verification passed impact review, typecheck, lint, 86 test files with 534 tests, production build and bundle safety checks. Cross-repository Words-plan parity passed for valid, legacy and rejected contracts. Production Pages source SHA and HTTP checks passed; browser validation confirmed the Settings entry, dedicated eight-card dialog, the single exam-countdown visibility control, Vocabulary Center entry points and normal loading. Words, Control and the corrected Account login surface also loaded successfully, while no real AI generation or learner-data write was triggered during smoke testing."
+    "reason": "Tracker impact, typecheck, lint, all 86 test files with 542 tests and the production build passed; a final six-file writing regression rerun passed 84 tests. The companion Lexi full-stack release gate and V2/V3/V4 cross-repository writing parity passed. Local browser review confirmed text and image prompt modes, two-unit and refund copy, prompt-aware wording, responsive Tracker and Control layouts, and no horizontal overflow without invoking a quota-bearing AI request."
   }
 }

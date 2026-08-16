@@ -10,6 +10,7 @@ import {
   buildWritingContextSnapshot,
   createWritingSubmissionV2,
   createWritingSubmissionV3,
+  createWritingSubmissionV4,
 } from './writingFeedback'
 import { buildWordsPlanRecommendationSnapshot } from './wordsPlanRecommendation'
 import {
@@ -172,6 +173,70 @@ function createReferenceWritingRequest(): AiGatewayRequest {
       createId: () => 'snapshot-writing-reference-1',
     }),
     userInput: '',
+  }
+}
+
+function createDeepWritingRequest(imageBytes = 3): AiGatewayRequest {
+  const encoded = imageBytes === 3 ? '/9j/' : 'A'.repeat(Math.ceil(imageBytes / 3) * 4)
+  const actualBytes = imageBytes === 3 ? 3 : (encoded.length / 4) * 3
+  const submission = createWritingSubmissionV4({
+    module: 'academic',
+    task: 'task2',
+    promptSource: {
+      kind: 'image',
+      mediaType: 'image/jpeg',
+      dataUrl: `data:image/jpeg;base64,${encoded}`,
+      byteLength: actualBytes,
+    },
+    essayText: WRITING_ESSAY,
+  })
+  return {
+    requestId: '123e4567-e89b-42d3-a456-426614174095',
+    idempotencyKey: 'idempotency-writing-deep-1',
+    purpose: 'writing_feedback',
+    snapshot: buildWritingContextSnapshot(submission, {
+      now: NOW,
+      createId: () => 'snapshot-writing-deep-1',
+    }),
+    userInput: '',
+  }
+}
+
+function deepWritingFeedbackContent() {
+  return {
+    ...writingFeedbackContent(),
+    estimatedOverallBand: 6.5,
+    deepAnalysis: {
+      promptRecognition: {
+        status: 'recognized' as const,
+        recognizedPrompt: 'Public transport should be affordable. To what extent do you agree?',
+        confidence: 'high' as const,
+        note: '题目图片清晰。',
+      },
+      promptCoverage: [{
+        requirement: '说明在多大程度上赞成公共交通应当更可负担',
+        status: 'partial' as const,
+        finding: '作文表达了赞成立场，但没有说明赞同程度。',
+        evidence: 'Public transport should be affordable',
+        nextStep: '在引言与结论明确说明赞同程度。',
+      }],
+      argumentMap: [{
+        paragraphIndex: 1,
+        role: '立场与理由',
+        contribution: '给出赞成立场与理由。',
+        gap: '理由需要继续展开。',
+      }],
+      recurringPatterns: [{
+        type: 'logic' as const,
+        finding: '理由停留在列举。',
+        evidence: 'it reduces traffic',
+        fix: '补充原因如何导向具体结果。',
+      }],
+      rewritePlan: [
+        { priority: 1 as const, action: '明确赞同程度。', successCheck: '引言与结论的立场一致。' },
+        { priority: 2 as const, action: '展开拥堵理由。', successCheck: '理由包含解释与结果。' },
+      ],
+    },
   }
 }
 
@@ -489,6 +554,54 @@ describe('managed AI gateway wire validation', () => {
       ok: true,
       artifact: { kind: 'writing_feedback', content: { assessmentStatus: 'scored' } },
     })
+  })
+
+  it('allows the bounded V4 image envelope and requires prompt-specific deep output', () => {
+    const request = createDeepWritingRequest(72_000)
+    const wire = createAiGatewayWireRequest(request, NOW)
+    expect(new TextEncoder().encode(JSON.stringify(wire)).byteLength).toBeGreaterThan(64 * 1024)
+    expect(wire.snapshot).toMatchObject({
+      data: {
+        submission: {
+          schemaVersion: 4,
+          analysisMode: 'deep',
+          promptSource: { kind: 'image', mediaType: 'image/jpeg' },
+        },
+      },
+    })
+
+    const response = createSuccessResponse(request)
+    response.artifact.content = deepWritingFeedbackContent() as never
+    expect(parseAiGatewayResponse(response, wire)).toMatchObject({
+      artifact: {
+        content: {
+          deepAnalysis: {
+            promptCoverage: [{ status: 'partial' }],
+          },
+        },
+      },
+    })
+
+    const genericDeepOutput = createSuccessResponse(request)
+    genericDeepOutput.artifact.content = writingFeedbackContent() as never
+    expect(() => parseAiGatewayResponse(genericDeepOutput, wire)).toThrowError(
+      expect.objectContaining({ code: 'INVALID_RESPONSE' }),
+    )
+
+    const inventedCoverageEvidence = createSuccessResponse(request)
+    inventedCoverageEvidence.artifact.content = {
+      ...deepWritingFeedbackContent(),
+      deepAnalysis: {
+        ...deepWritingFeedbackContent().deepAnalysis,
+        promptCoverage: [{
+          ...deepWritingFeedbackContent().deepAnalysis.promptCoverage[0],
+          evidence: 'This sentence was not submitted.',
+        }],
+      },
+    } as never
+    expect(() => parseAiGatewayResponse(inventedCoverageEvidence, wire)).toThrowError(
+      expect.objectContaining({ code: 'INVALID_RESPONSE' }),
+    )
   })
 
   it('requires the exact writing scope grant and exactly one writing record', () => {

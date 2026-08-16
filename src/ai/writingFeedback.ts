@@ -2,6 +2,7 @@ import type { AiContextSnapshotV1 } from './contracts'
 
 export const WRITING_FEEDBACK_SCHEMA_VERSION = 2 as const
 export const WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION = 3 as const
+export const WRITING_DEEP_SUBMISSION_SCHEMA_VERSION = 4 as const
 export const WRITING_RUBRIC_VERSION = 'ielts-writing-public-descriptors-v1' as const
 
 export type WritingModule = 'academic' | 'general_training'
@@ -60,8 +61,37 @@ export interface CreateWritingSubmissionV3Input {
   essayText: string
 }
 
+export type WritingPromptImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp'
+
+export type WritingDeepPromptSourceV4 =
+  | { kind: 'text'; text: string; origin: 'typed' | 'recognized_image' }
+  | {
+      kind: 'image'
+      mediaType: WritingPromptImageMediaType
+      dataUrl: string
+      byteLength: number
+    }
+
+export interface WritingSubmissionV4 {
+  schemaVersion: typeof WRITING_DEEP_SUBMISSION_SCHEMA_VERSION
+  analysisMode: 'deep'
+  module: WritingModule
+  task: WritingTask
+  promptSource: WritingDeepPromptSourceV4
+  essayText: string
+  /** Host-computed English word count. Provider output can never override it. */
+  wordCount: number
+}
+
+export interface CreateWritingSubmissionV4Input {
+  module: WritingModule
+  task: WritingTask
+  promptSource: WritingDeepPromptSourceV4
+  essayText: string
+}
+
 /** V2 remains readable for historical drafts and saved reports. */
-export type WritingSubmission = WritingSubmissionV2 | WritingSubmissionV3
+export type WritingSubmission = WritingSubmissionV2 | WritingSubmissionV3 | WritingSubmissionV4
 
 export interface WritingCriterionFeedbackV2 {
   band: WritingBand | null
@@ -94,6 +124,41 @@ export interface WritingFeedbackV2 {
   paragraphFeedback: Array<{ paragraphIndex: number; summary: string; evidence: string }>
   corrections: Array<{ original: string; revision: string; reason: string }>
   limitations: string[]
+  /** Present only for a schemaVersion=4 deep-writing submission. */
+  deepAnalysis?: WritingDeepAnalysisV1
+}
+
+export interface WritingDeepAnalysisV1 {
+  promptRecognition: {
+    status: 'provided_text' | 'recognized' | 'failed'
+    recognizedPrompt: string | null
+    confidence: 'high' | 'medium' | 'low'
+    note: string
+  }
+  promptCoverage: Array<{
+    requirement: string
+    status: 'met' | 'partial' | 'missing'
+    finding: string
+    evidence: string | null
+    nextStep: string
+  }>
+  argumentMap: Array<{
+    paragraphIndex: number
+    role: string
+    contribution: string
+    gap: string
+  }>
+  recurringPatterns: Array<{
+    type: 'logic' | 'cohesion' | 'vocabulary' | 'grammar'
+    finding: string
+    evidence: string
+    fix: string
+  }>
+  rewritePlan: Array<{
+    priority: 1 | 2 | 3
+    action: string
+    successCheck: string
+  }>
 }
 
 export interface WritingContextData extends Record<string, unknown> {
@@ -120,7 +185,9 @@ type UnknownRecord = Record<string, unknown>
 const MAX_PROMPT_LENGTH = 4_000
 const MAX_SOURCE_DESCRIPTION_LENGTH = 6_000
 const MAX_ESSAY_LENGTH = 20_000
-const MAX_FEEDBACK_SERIALIZED_LENGTH = 12_000
+const MAX_FEEDBACK_SERIALIZED_LENGTH = 24_000
+export const MAX_WRITING_PROMPT_IMAGE_BYTES = 600 * 1024
+const MAX_DEEP_SUBMISSION_SERIALIZED_LENGTH = 920_000
 const MAX_SNAPSHOT_AGE_SECONDS = 300
 
 function fail(message: string): never {
@@ -432,6 +499,121 @@ export function createWritingSubmissionV3(
   })
 }
 
+function decodedBase64ByteLength(value: string): number | null {
+  if (!value || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  return (value.length / 4) * 3 - padding
+}
+
+function parseDeepPromptSourceV4(value: unknown): WritingDeepPromptSourceV4 {
+  const source = record(value, 'writing submission.promptSource')
+  if (source.kind === 'text') {
+    exactKeys(source, ['kind', 'text', 'origin'], 'writing submission.promptSource')
+    if (source.origin !== 'typed' && source.origin !== 'recognized_image') {
+      fail('writing submission.promptSource.origin has an unsupported value')
+    }
+    return {
+      kind: 'text',
+      text: boundedString(source.text, 'writing submission.promptSource.text', MAX_PROMPT_LENGTH),
+      origin: source.origin,
+    }
+  }
+  if (source.kind !== 'image') {
+    fail('writing submission.promptSource.kind has an unsupported value')
+  }
+  exactKeys(
+    source,
+    ['kind', 'mediaType', 'dataUrl', 'byteLength'],
+    'writing submission.promptSource',
+  )
+  if (
+    source.mediaType !== 'image/jpeg'
+    && source.mediaType !== 'image/png'
+    && source.mediaType !== 'image/webp'
+  ) {
+    fail('writing submission.promptSource.mediaType has an unsupported value')
+  }
+  const byteLength = boundedInteger(
+    source.byteLength,
+    'writing submission.promptSource.byteLength',
+    1,
+    MAX_WRITING_PROMPT_IMAGE_BYTES,
+  )
+  if (typeof source.dataUrl !== 'string') {
+    fail('writing submission.promptSource.dataUrl must be a string')
+  }
+  const prefix = `data:${source.mediaType};base64,`
+  if (!source.dataUrl.startsWith(prefix)) {
+    fail('writing submission.promptSource.dataUrl does not match mediaType')
+  }
+  const encoded = source.dataUrl.slice(prefix.length)
+  if (decodedBase64ByteLength(encoded) !== byteLength) {
+    fail('writing submission.promptSource.byteLength does not match dataUrl')
+  }
+  return {
+    kind: 'image',
+    mediaType: source.mediaType,
+    dataUrl: source.dataUrl,
+    byteLength,
+  }
+}
+
+export function parseWritingSubmissionV4(value: unknown): WritingSubmissionV4 {
+  assertSerializedSize(value, MAX_DEEP_SUBMISSION_SERIALIZED_LENGTH, 'writing submission')
+  const submission = record(value, 'writing submission')
+  exactKeys(submission, [
+    'schemaVersion',
+    'analysisMode',
+    'module',
+    'task',
+    'promptSource',
+    'essayText',
+    'wordCount',
+  ], 'writing submission')
+  if (submission.schemaVersion !== WRITING_DEEP_SUBMISSION_SCHEMA_VERSION || submission.analysisMode !== 'deep') {
+    fail('deep writing submission version or analysisMode is unsupported')
+  }
+  const module = writingModule(submission.module)
+  const task = writingTask(submission.task)
+  const promptSource = parseDeepPromptSourceV4(submission.promptSource)
+  const essayText = boundedString(
+    submission.essayText,
+    'writing submission.essayText',
+    MAX_ESSAY_LENGTH,
+  )
+  const wordCount = normalizeWritingWordCount(
+    submission.wordCount,
+    essayText,
+    'writing submission.wordCount',
+  )
+  return {
+    schemaVersion: WRITING_DEEP_SUBMISSION_SCHEMA_VERSION,
+    analysisMode: 'deep',
+    module,
+    task,
+    promptSource,
+    essayText,
+    wordCount,
+  }
+}
+
+export function createWritingSubmissionV4(
+  input: CreateWritingSubmissionV4Input,
+): WritingSubmissionV4 {
+  const essayText = typeof input.essayText === 'string'
+    ? input.essayText.replace(/\r\n?/g, '\n').trim()
+    : input.essayText
+  return parseWritingSubmissionV4({
+    schemaVersion: WRITING_DEEP_SUBMISSION_SCHEMA_VERSION,
+    analysisMode: 'deep',
+    module: input.module,
+    task: input.task,
+    promptSource: input.promptSource,
+    essayText,
+    wordCount: countWritingWords(essayText),
+  })
+}
+
 export function parseWritingSubmission(value: unknown): WritingSubmission {
   const submission = record(value, 'writing submission')
   if (submission.schemaVersion === WRITING_FEEDBACK_SCHEMA_VERSION) {
@@ -440,6 +622,9 @@ export function parseWritingSubmission(value: unknown): WritingSubmission {
   if (submission.schemaVersion === WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION) {
     return parseWritingSubmissionV3(value)
   }
+  if (submission.schemaVersion === WRITING_DEEP_SUBMISSION_SCHEMA_VERSION) {
+    return parseWritingSubmissionV4(value)
+  }
   fail('writing submission.schemaVersion is unsupported')
 }
 
@@ -447,6 +632,21 @@ export function isAutomaticWritingReference(
   submission: WritingSubmission,
 ): submission is WritingSubmissionV3 {
   return submission.schemaVersion === WRITING_REFERENCE_SUBMISSION_SCHEMA_VERSION
+}
+
+export function isDeepWritingSubmission(
+  submission: WritingSubmission,
+): submission is WritingSubmissionV4 {
+  return submission.schemaVersion === WRITING_DEEP_SUBMISSION_SCHEMA_VERSION
+}
+
+export function writingSubmissionUsesImage(submissionValue: unknown): boolean {
+  const submission = parseWritingSubmission(submissionValue)
+  return isDeepWritingSubmission(submission) && submission.promptSource.kind === 'image'
+}
+
+export function writingQuotaUnits(submissionValue: unknown): 1 | 2 {
+  return isDeepWritingSubmission(parseWritingSubmission(submissionValue)) ? 2 : 1
 }
 
 export function formatWritingSourceReference(submissionValue: WritingSubmission): string | null {
@@ -464,6 +664,7 @@ export function formatWritingSourceReference(submissionValue: WritingSubmission)
 
 export function hasSufficientWritingTaskEvidence(submissionValue: unknown): boolean {
   const submission = parseWritingSubmission(submissionValue)
+  if (isDeepWritingSubmission(submission)) return true
   // Reference-mode reports are intentionally labelled as a reference assessment,
   // but they remain eligible for a scored response. The provider is instructed to
   // state uncertainty rather than pretend the question was exact-matched.
@@ -501,6 +702,15 @@ export function buildWritingContextSnapshot(
     warnings.push('题目自动识别仅作参考评估；AI 会根据剑雅书号、Test 和 Task 尝试识别，可能与原题不完全一致。')
     if (submission.module === 'academic' && submission.task === 'task1') {
       warnings.push('未提供原图，Task Achievement 仅作参考；报告将以语言、结构和表达反馈为主。')
+    }
+  } else if (isDeepWritingSubmission(submission)) {
+    warnings.push('深度分析会占用 2 次写作 AI 额度；题目图片只随本次请求发送，不会保存在报告中。')
+    if (
+      submission.promptSource.kind === 'text'
+      && submission.module === 'academic'
+      && submission.task === 'task1'
+    ) {
+      warnings.push('Academic Task 1 使用文字题目时，未包含在文字中的视觉细节仍可能限制任务完成度判断。')
     }
   } else {
     if (!submission.promptText) warnings.push('缺少写作题目，只能提供语言反馈，不能给出可靠分数。')
@@ -605,6 +815,169 @@ function assertEvidenceComesFromEssay(
   }
 }
 
+function parseWritingDeepAnalysis(
+  value: unknown,
+  submission: WritingSubmissionV4 | undefined,
+  assessmentStatus: WritingFeedbackV2['assessmentStatus'],
+): WritingDeepAnalysisV1 {
+  const deep = record(value, 'writing feedback.deepAnalysis')
+  exactKeys(
+    deep,
+    ['promptRecognition', 'promptCoverage', 'argumentMap', 'recurringPatterns', 'rewritePlan'],
+    'writing feedback.deepAnalysis',
+  )
+  const recognition = record(
+    deep.promptRecognition,
+    'writing feedback.deepAnalysis.promptRecognition',
+  )
+  exactKeys(
+    recognition,
+    ['status', 'recognizedPrompt', 'confidence', 'note'],
+    'writing feedback.deepAnalysis.promptRecognition',
+  )
+  if (
+    recognition.status !== 'provided_text'
+    && recognition.status !== 'recognized'
+    && recognition.status !== 'failed'
+  ) {
+    fail('writing feedback.deepAnalysis.promptRecognition.status is invalid')
+  }
+  if (
+    recognition.confidence !== 'high'
+    && recognition.confidence !== 'medium'
+    && recognition.confidence !== 'low'
+  ) {
+    fail('writing feedback.deepAnalysis.promptRecognition.confidence is invalid')
+  }
+  const recognizedPrompt = recognition.recognizedPrompt === null
+    ? null
+    : boundedString(
+        recognition.recognizedPrompt,
+        'writing feedback.deepAnalysis.promptRecognition.recognizedPrompt',
+        MAX_PROMPT_LENGTH,
+      )
+  const recognitionFailed = recognition.status === 'failed'
+  if ((recognition.status === 'recognized') !== (recognizedPrompt !== null)) {
+    fail('writing feedback.deepAnalysis prompt recognition content is inconsistent')
+  }
+  if (recognition.status !== 'recognized' && recognizedPrompt !== null) {
+    fail('writing feedback.deepAnalysis recognizedPrompt is only valid after image recognition')
+  }
+  if (recognitionFailed && assessmentStatus !== 'insufficient_evidence') {
+    fail('failed prompt recognition cannot produce scored feedback')
+  }
+  if (submission) {
+    const expectedStatus = submission.promptSource.kind === 'image'
+      ? recognitionFailed ? 'failed' : 'recognized'
+      : submission.promptSource.origin === 'recognized_image'
+        ? 'recognized'
+        : 'provided_text'
+    if (recognition.status !== expectedStatus) {
+      fail('writing feedback.deepAnalysis prompt recognition does not match the submitted source')
+    }
+  }
+
+  const promptCoverage = boundedArray(
+    deep.promptCoverage,
+    'writing feedback.deepAnalysis.promptCoverage',
+    recognitionFailed ? 0 : 1,
+    recognitionFailed ? 0 : 4,
+    (item, label) => {
+      const coverage = record(item, label)
+      exactKeys(coverage, ['requirement', 'status', 'finding', 'evidence', 'nextStep'], label)
+      if (!['met', 'partial', 'missing'].includes(String(coverage.status))) {
+        fail(`${label}.status is invalid`)
+      }
+      const evidence = coverage.evidence === null
+        ? null
+        : boundedString(coverage.evidence, `${label}.evidence`, 200)
+      if ((coverage.status === 'missing') !== (evidence === null)) {
+        fail(`${label}.evidence must be null only when the prompt requirement is missing`)
+      }
+      return {
+        requirement: boundedString(coverage.requirement, `${label}.requirement`, 180),
+        status: coverage.status as WritingDeepAnalysisV1['promptCoverage'][number]['status'],
+        finding: boundedString(coverage.finding, `${label}.finding`, 280),
+        evidence,
+        nextStep: boundedString(coverage.nextStep, `${label}.nextStep`, 300),
+      }
+    },
+  )
+  if (new Set(promptCoverage.map((item) => item.requirement.trim().toLocaleLowerCase())).size !== promptCoverage.length) {
+    fail('writing feedback.deepAnalysis.promptCoverage requirements must be unique')
+  }
+
+  const argumentMap = boundedArray(
+    deep.argumentMap,
+    'writing feedback.deepAnalysis.argumentMap',
+    recognitionFailed ? 0 : 1,
+    recognitionFailed ? 0 : 10,
+    (item, label) => {
+      const paragraph = record(item, label)
+      exactKeys(paragraph, ['paragraphIndex', 'role', 'contribution', 'gap'], label)
+      return {
+        paragraphIndex: boundedInteger(paragraph.paragraphIndex, `${label}.paragraphIndex`, 1, 30),
+        role: boundedString(paragraph.role, `${label}.role`, 100),
+        contribution: boundedString(paragraph.contribution, `${label}.contribution`, 260),
+        gap: boundedString(paragraph.gap, `${label}.gap`, 260),
+      }
+    },
+  )
+  if (new Set(argumentMap.map((item) => item.paragraphIndex)).size !== argumentMap.length) {
+    fail('writing feedback.deepAnalysis.argumentMap paragraphIndex values must be unique')
+  }
+  const recurringPatterns = boundedArray(
+    deep.recurringPatterns,
+    'writing feedback.deepAnalysis.recurringPatterns',
+    recognitionFailed ? 0 : 1,
+    recognitionFailed ? 0 : 6,
+    (item, label) => {
+      const pattern = record(item, label)
+      exactKeys(pattern, ['type', 'finding', 'evidence', 'fix'], label)
+      if (!['logic', 'cohesion', 'vocabulary', 'grammar'].includes(String(pattern.type))) {
+        fail(`${label}.type is invalid`)
+      }
+      return {
+        type: pattern.type as WritingDeepAnalysisV1['recurringPatterns'][number]['type'],
+        finding: boundedString(pattern.finding, `${label}.finding`, 280),
+        evidence: boundedString(pattern.evidence, `${label}.evidence`, 200),
+        fix: boundedString(pattern.fix, `${label}.fix`, 300),
+      }
+    },
+  )
+  const rewritePlan = boundedArray(
+    deep.rewritePlan,
+    'writing feedback.deepAnalysis.rewritePlan',
+    recognitionFailed ? 0 : 2,
+    recognitionFailed ? 0 : 3,
+    (item, label) => {
+      const action = record(item, label)
+      exactKeys(action, ['priority', 'action', 'successCheck'], label)
+      return {
+        priority: boundedInteger(action.priority, `${label}.priority`, 1, 3) as 1 | 2 | 3,
+        action: boundedString(action.action, `${label}.action`, 300),
+        successCheck: boundedString(action.successCheck, `${label}.successCheck`, 240),
+      }
+    },
+  )
+  if (new Set(rewritePlan.map((item) => item.priority)).size !== rewritePlan.length) {
+    fail('writing feedback.deepAnalysis.rewritePlan priorities must be unique')
+  }
+
+  return {
+    promptRecognition: {
+      status: recognition.status,
+      recognizedPrompt,
+      confidence: recognition.confidence,
+      note: boundedString(recognition.note, 'writing feedback.deepAnalysis.promptRecognition.note', 240),
+    },
+    promptCoverage,
+    argumentMap,
+    recurringPatterns,
+    rewritePlan,
+  }
+}
+
 export function parseWritingFeedbackV2(
   value: unknown,
   submissionValue?: unknown,
@@ -624,7 +997,7 @@ export function parseWritingFeedbackV2(
     'paragraphFeedback',
     'corrections',
     'limitations',
-  ], 'writing feedback', ['estimatedOverallBand'])
+  ], 'writing feedback', ['estimatedOverallBand', 'deepAnalysis'])
   if (feedback.schemaVersion !== WRITING_FEEDBACK_SCHEMA_VERSION) {
     fail('writing feedback.schemaVersion must be 2')
   }
@@ -742,6 +1115,19 @@ export function parseWritingFeedbackV2(
     (item, label) => boundedString(item, label, 240),
   )
 
+  const parsedSubmission = submissionValue === undefined
+    ? undefined
+    : parseWritingSubmission(submissionValue)
+  const deepSubmission = parsedSubmission && isDeepWritingSubmission(parsedSubmission)
+    ? parsedSubmission
+    : undefined
+  const deepAnalysis = Object.hasOwn(feedback, 'deepAnalysis')
+    ? parseWritingDeepAnalysis(feedback.deepAnalysis, deepSubmission, assessmentStatus)
+    : undefined
+  if (parsedSubmission !== undefined && Boolean(deepSubmission) !== Boolean(deepAnalysis)) {
+    fail('deep writing submissions and feedback must use the deepAnalysis contract together')
+  }
+
   const parsed: WritingFeedbackV2 = {
     schemaVersion: WRITING_FEEDBACK_SCHEMA_VERSION,
     kind: 'writing_feedback',
@@ -756,10 +1142,11 @@ export function parseWritingFeedbackV2(
     paragraphFeedback,
     corrections,
     limitations,
+    ...(deepAnalysis ? { deepAnalysis } : {}),
   }
 
-  if (submissionValue !== undefined) {
-    const submission = parseWritingSubmission(submissionValue)
+  if (parsedSubmission !== undefined) {
+    const submission = parsedSubmission
     if (isAutomaticWritingReference(submission) && parsed.limitations.length < 1) {
       fail('automatic-reference feedback must include at least one limitation')
     }
@@ -775,12 +1162,13 @@ export function parseWritingFeedbackV2(
     }
   }
 
-  if (submissionValue !== undefined) {
-    const submission = parseWritingSubmission(submissionValue)
+  if (parsedSubmission !== undefined) {
+    const submission = parsedSubmission
     if (parsed.taskCriterion !== expectedTaskCriterion(submission.task)) {
       fail('writing feedback.taskCriterion does not match the submitted task')
     }
     const hasSufficientEvidence = hasSufficientWritingTaskEvidence(submission)
+    const recognitionFailed = parsed.deepAnalysis?.promptRecognition.status === 'failed'
     if (assessmentStatus === 'scored' && !hasSufficientEvidence) {
       fail('a submission without complete task evidence cannot receive precise band scores')
     }
@@ -788,6 +1176,7 @@ export function parseWritingFeedbackV2(
       assessmentStatus === 'insufficient_evidence'
       && hasSufficientEvidence
       && !isAutomaticWritingReference(submission)
+      && !recognitionFailed
     ) {
       fail('a submission with complete task evidence cannot receive insufficient-evidence feedback')
     }
@@ -813,6 +1202,21 @@ export function parseWritingFeedbackV2(
         `writing feedback.corrections[${index}].original`,
       )
     })
+    parsed.deepAnalysis?.recurringPatterns.forEach((pattern, index) => {
+      assertEvidenceComesFromEssay(
+        pattern.evidence,
+        submission.essayText,
+        `writing feedback.deepAnalysis.recurringPatterns[${index}].evidence`,
+      )
+    })
+    parsed.deepAnalysis?.promptCoverage.forEach((coverage, index) => {
+      if (coverage.evidence === null) return
+      assertEvidenceComesFromEssay(
+        coverage.evidence,
+        submission.essayText,
+        `writing feedback.deepAnalysis.promptCoverage[${index}].evidence`,
+      )
+    })
   }
 
   return parsed
@@ -827,6 +1231,35 @@ export function calculateWritingOverallBand(feedbackValue: unknown): WritingBand
   }
   const average = (bands as WritingBand[]).reduce<number>((total, band) => total + band, 0) / bands.length
   return (Math.round(average * 2) / 2) as WritingBand
+}
+
+/**
+ * Removes an inline prompt image before a generated report can be persisted.
+ * Only the bounded text recognized by the validated deep report survives.
+ */
+export function materializeStoredWritingSubmission(
+  submissionValue: unknown,
+  feedbackValue: unknown,
+): WritingSubmission {
+  const submission = parseWritingSubmission(submissionValue)
+  const feedback = parseWritingFeedbackV2(feedbackValue, submission)
+  if (!isDeepWritingSubmission(submission) || submission.promptSource.kind !== 'image') {
+    return submission
+  }
+  const recognizedPrompt = feedback.deepAnalysis?.promptRecognition.status === 'recognized'
+    ? feedback.deepAnalysis.promptRecognition.recognizedPrompt
+    : null
+  if (!recognizedPrompt) {
+    fail('a deep image submission cannot be stored without recognized prompt text')
+  }
+  return parseWritingSubmissionV4({
+    ...submission,
+    promptSource: {
+      kind: 'text',
+      text: recognizedPrompt,
+      origin: 'recognized_image',
+    },
+  })
 }
 
 function criterionMarkdown(label: string, criterion: WritingCriterionFeedbackV2): string[] {
@@ -868,7 +1301,11 @@ export function formatWritingFeedbackAsMarkdown(
             ? ['- Task 1 提示：未提供原图，任务完成度仅作参考。']
             : []),
         ]
-      : []),
+      : isDeepWritingSubmission(submission)
+        ? [
+            `- 分析方式：深度分析（${submission.promptSource.kind === 'text' && submission.promptSource.origin === 'recognized_image' ? '图片题目已识别' : '用户提供题目文字或图片'}）`,
+          ]
+        : []),
     `- 英文词数：${submission.wordCount}`,
     ...(feedback.estimatedOverallBand === null
       ? [`- 总分：${overallBand === null ? '证据不足，未评分' : overallBand}`]
@@ -908,6 +1345,29 @@ export function formatWritingFeedbackAsMarkdown(
     lines.push('', '## 修改示例', '', ...feedback.corrections.map((item) => (
       `- 原文：${item.original}\n  修改：${item.revision}\n  原因：${item.reason}`
     )))
+  }
+  if (feedback.deepAnalysis) {
+    lines.push(
+      '',
+      '## 深度诊断',
+      '',
+      `- 题目处理：${feedback.deepAnalysis.promptRecognition.note}`,
+      ...feedback.deepAnalysis.promptCoverage.map((item) => (
+        `- 题目要求（${item.status}）：${item.requirement} 判断：${item.finding}${item.evidence ? ` 证据：${item.evidence}` : ''} 下一步：${item.nextStep}`
+      )),
+      ...feedback.deepAnalysis.argumentMap.map((item) => (
+        `- 第 ${item.paragraphIndex} 段（${item.role}）：${item.contribution} 缺口：${item.gap}`
+      )),
+      ...feedback.deepAnalysis.recurringPatterns.map((item) => (
+        `- ${item.type}：${item.finding} 证据：${item.evidence} 修正：${item.fix}`
+      )),
+      '',
+      '### 重写顺序',
+      '',
+      ...[...feedback.deepAnalysis.rewritePlan]
+        .sort((left, right) => left.priority - right.priority)
+        .map((item) => `- ${item.priority}. ${item.action} 完成标准：${item.successCheck}`),
+    )
   }
   if (feedback.limitations.length > 0) {
     lines.push('', '## 局限', '', ...feedback.limitations.map((item) => `- ${item}`))

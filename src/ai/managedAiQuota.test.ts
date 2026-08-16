@@ -150,4 +150,21 @@ describe('managed AI quota preview contract', () => {
       },
     })).toEqual({ blocked: false, reason: null })
   })
+
+  it('requires two remaining units only for an explicitly selected deep action', () => {
+    const oneRemaining = {
+      status: 'ready' as const,
+      quota: {
+        schemaVersion: 1 as const,
+        productId: 'tracker' as const,
+        purpose: 'writing_feedback' as const,
+        enabled: true,
+        dailyRequestLimit: 6,
+        remainingRequests: 1,
+        resetAt,
+      },
+    }
+    expect(managedAiQuotaActionState(oneRemaining, 1)).toEqual({ blocked: false, reason: null })
+    expect(managedAiQuotaActionState(oneRemaining, 2)).toEqual({ blocked: true, reason: 'exhausted' })
+  })
 })

@@ -20,6 +20,7 @@ import {
   WRITING_RUBRIC_VERSION,
   createWritingSubmissionV2,
   createWritingSubmissionV3,
+  createWritingSubmissionV4,
   type WritingFeedbackV2,
 } from './writingFeedback'
 
@@ -198,6 +199,71 @@ describe('AI artifact repository V2', () => {
     expect(artifact.content.feedback.estimatedOverallBand).toBe(6.5)
     expect(artifact.markdownProjection).toContain('AI 预估总分：6.5')
     expect(aiArtifactToMarkdown(artifact)).toContain('类型：写作批改')
+    expect(parseAiArtifactRecordV2(JSON.parse(JSON.stringify(artifact)))).toEqual(artifact)
+  })
+
+  it('replaces a deep-analysis prompt image with recognized text before any artifact is stored', () => {
+    const imageSubmission = createWritingSubmissionV4({
+      module: 'academic',
+      task: 'task2',
+      promptSource: {
+        kind: 'image',
+        mediaType: 'image/jpeg',
+        dataUrl: 'data:image/jpeg;base64,/9j/',
+        byteLength: 3,
+      },
+      essayText: writingSubmission.essayText,
+    })
+    const feedback: WritingFeedbackV2 = {
+      ...writingFeedback(),
+      deepAnalysis: {
+        promptRecognition: {
+          status: 'recognized',
+          recognizedPrompt: 'Public transport should be affordable. To what extent do you agree?',
+          confidence: 'high',
+          note: '题目图片清晰。',
+        },
+        promptCoverage: [{
+          requirement: '说明在多大程度上赞成公共交通应当更可负担',
+          status: 'partial',
+          finding: '作文表达了赞成立场，但没有说明赞同程度。',
+          evidence: 'I support affordable public transport',
+          nextStep: '在引言和结论明确说明完全赞同或部分赞同。',
+        }],
+        argumentMap: [{
+          paragraphIndex: 1,
+          role: '立场与理由',
+          contribution: '给出赞成立场和两项理由。',
+          gap: '论证尚未展开。',
+        }],
+        recurringPatterns: [{
+          type: 'logic',
+          finding: '理由只有列举。',
+          evidence: 'because it reduces traffic',
+          fix: '补充原因如何导向具体结果。',
+        }],
+        rewritePlan: [
+          { priority: 1, action: '明确赞同程度。', successCheck: '引言与结论的立场一致。' },
+          { priority: 2, action: '展开减少拥堵的因果链。', successCheck: '理由包含解释与结果。' },
+        ],
+      },
+    }
+    const artifact = createWritingFeedbackArtifactV2({
+      submission: imageSubmission,
+      feedback,
+      recordId: 'writing-deep-image-1',
+      dataAsOf: CREATED_AT,
+      createdAt: CREATED_AT,
+      savedAt: CREATED_AT,
+      source: 'managed',
+      promptVersion: 'writing-feedback-v4-deep',
+    }, { status: 'ready', mode: 'device' })
+
+    expect(artifact.content.submission).toMatchObject({
+      schemaVersion: 4,
+      promptSource: { kind: 'text', origin: 'recognized_image' },
+    })
+    expect(JSON.stringify(artifact)).not.toContain('data:image')
     expect(parseAiArtifactRecordV2(JSON.parse(JSON.stringify(artifact)))).toEqual(artifact)
   })
 

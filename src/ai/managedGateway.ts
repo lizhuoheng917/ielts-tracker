@@ -96,6 +96,22 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
       outcomeUnknown,
     )
   }
+  if (status === 422 && gatewayCode === 'prompt_recognition_failed') {
+    return new AiGatewayError(
+      'PROMPT_RECOGNITION_FAILED',
+      '未能从图片中可靠识别写作题目，本次已退还 2 次 AI 额度。请换一张更清晰、完整的图片后重试。',
+      false,
+      status,
+    )
+  }
+  if (status === 503 && gatewayCode === 'vision_route_unavailable') {
+    return new AiGatewayError(
+      'SERVICE_UNAVAILABLE',
+      '当前写作模型暂不支持题目图片，本次已退还 2 次 AI 额度。你可以改用题目文字。',
+      false,
+      status,
+    )
+  }
   if (status === 400 || status === 422) {
     return new AiGatewayError('INVALID_REQUEST', '本次 AI 请求无效，请刷新学习数据后重试。', false, status, undefined, outcomeUnknown)
   }

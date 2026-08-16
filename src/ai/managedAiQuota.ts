@@ -36,6 +36,7 @@ export type ManagedAiQuotaInvoker = (purpose: ManagedAiPurpose) => Promise<unkno
  */
 export function managedAiQuotaActionState(
   state: ManagedAiQuotaState,
+  requiredUnits = 1,
 ): ManagedAiQuotaActionState {
   if (state.status === 'idle' || state.status === 'loading') {
     return { blocked: true, reason: 'loading' }
@@ -46,7 +47,7 @@ export function managedAiQuotaActionState(
   if (!state.quota.enabled) {
     return { blocked: true, reason: 'disabled' }
   }
-  if (state.quota.remainingRequests === 0) {
+  if (state.quota.remainingRequests !== null && state.quota.remainingRequests < requiredUnits) {
     return { blocked: true, reason: 'exhausted' }
   }
   return { blocked: false, reason: null }

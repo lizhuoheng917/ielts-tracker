@@ -6,7 +6,7 @@ import {
   WritingFeedbackContent,
 } from './StructuredAIContent'
 import type { DailySuggestionV2, LearningAnalysisV2 } from '@/ai/structuredOutputs'
-import type { WritingFeedbackV2, WritingSubmissionV2, WritingSubmissionV3 } from '@/ai/writingFeedback'
+import type { WritingFeedbackV2, WritingSubmissionV2, WritingSubmissionV3, WritingSubmissionV4 } from '@/ai/writingFeedback'
 
 const dailySuggestion: DailySuggestionV2 = {
   schemaVersion: 2,
@@ -166,6 +166,66 @@ describe('StructuredAIContent', () => {
     expect(html).toContain('段落点评')
     expect(html).toContain('修订示例')
     expect(html).toContain('评分局限')
+  })
+
+  it('renders prompt-specific coverage before the deeper structure and rewrite guidance', () => {
+    const deepSubmission: WritingSubmissionV4 = {
+      schemaVersion: 4,
+      analysisMode: 'deep',
+      module: 'academic',
+      task: 'task2',
+      promptSource: {
+        kind: 'text',
+        text: writingSubmission.promptText,
+        origin: 'typed',
+      },
+      essayText: writingSubmission.essayText,
+      wordCount: writingSubmission.wordCount,
+    }
+    const deepFeedback: WritingFeedbackV2 = {
+      ...writingFeedback,
+      deepAnalysis: {
+        promptRecognition: {
+          status: 'provided_text',
+          recognizedPrompt: null,
+          confidence: 'high',
+          note: '使用用户填写的完整题目。',
+        },
+        promptCoverage: [{
+          requirement: '讨论建设更多城市公园的观点并给出自己的立场',
+          status: 'partial',
+          finding: '作文给出了支持公园的理由，但没有讨论另一种观点。',
+          evidence: 'Public parks improve daily life.',
+          nextStep: '补充反方观点并说明最终立场为何更有说服力。',
+        }],
+        argumentMap: [{
+          paragraphIndex: 1,
+          role: '立场与理由',
+          contribution: '说明公园能改善日常生活。',
+          gap: '缺少反方观点和让步回应。',
+        }],
+        recurringPatterns: [{
+          type: 'logic',
+          finding: '理由停留在列举层面。',
+          evidence: 'They give residents a quiet place',
+          fix: '补充这一益处如何影响城市居民。',
+        }],
+        rewritePlan: [
+          { priority: 1, action: '补全反方观点。', successCheck: '正文明确呈现并回应两种观点。' },
+          { priority: 2, action: '展开支持公园的因果链。', successCheck: '每个理由包含解释或例子。' },
+        ],
+      },
+    }
+
+    const html = renderToStaticMarkup(
+      <WritingFeedbackContent feedback={deepFeedback} submission={deepSubmission} overallBand={6.5} />,
+    )
+
+    expect(html).toContain('题目回应度')
+    expect(html).toContain('部分回应')
+    expect(html).toContain('没有讨论另一种观点')
+    expect(html).toContain('论证结构')
+    expect(html).toContain('建议重写顺序')
   })
 
   it('renders insufficient-evidence feedback as a short action plan without scores or a long rubric', () => {

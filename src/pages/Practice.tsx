@@ -882,7 +882,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
               </div>
               <div>
                 <p className="text-sm font-semibold">AI 写作批改</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">填写剑雅书号、Test 与作文，生成可执行反馈</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">提供题目信息与作文，生成可执行反馈</p>
               </div>
             </div>
             <span className="shrink-0 text-sm font-medium text-primary">开始批改 →</span>
@@ -1039,7 +1039,7 @@ function TabPanel({ type, onAdd }: { type: PracticeType; onAdd: () => void }) {
                 <Sparkles className="h-5 w-5 text-amber-500" />
                 IELTS 写作反馈
               </DialogTitle>
-              <DialogDescription className="pr-8 text-sm leading-6">输入剑雅题号与作文，AI 会给出可执行的反馈。</DialogDescription>
+              <DialogDescription className="pr-8 text-sm leading-6">提供题目信息与作文；深度分析会逐项核对具体题目要求。</DialogDescription>
             </DialogHeader>
             <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-0 pt-4 sm:px-6 sm:pt-5">
               <WritingCorrection

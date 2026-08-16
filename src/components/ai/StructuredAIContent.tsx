@@ -41,6 +41,12 @@ const PRIORITY_LABELS: Record<LearningAnalysisV2['actions'][number]['priority'],
   low: '可选',
 }
 
+const PROMPT_COVERAGE_LABELS: Record<NonNullable<WritingFeedbackV2['deepAnalysis']>['promptCoverage'][number]['status'], string> = {
+  met: '已回应',
+  partial: '部分回应',
+  missing: '尚未回应',
+}
+
 function EvidenceAndLimitations({
   evidence,
   limitations,
@@ -294,6 +300,7 @@ export function WritingFeedbackContent({
   const moduleLabel = submission.module === 'academic' ? 'Academic' : 'General Training'
   const taskCriterionLabel = WRITING_CRITERION_LABELS.task[value.taskCriterion]
   const automaticReference = submission.schemaVersion === 3
+  const deepSubmission = submission.schemaVersion === 4
 
   // The reference-only writing flow deliberately avoids criterion-level
   // scoring, paragraph-by-paragraph claims, and a long evidence report. Its
@@ -407,6 +414,20 @@ export function WritingFeedbackContent({
                   <p className="mt-2 text-amber-800 dark:text-amber-200">未提供原图，Task Achievement 仅作参考；本报告以语言、结构和表达反馈为主。</p>
                 )}
               </div>
+            ) : deepSubmission ? (
+              <div>
+                <p className="font-medium text-foreground">深度分析题目</p>
+                <p className="mt-1 text-foreground/85">
+                  {submission.promptSource.kind === 'text'
+                    ? submission.promptSource.text
+                    : '题目图片仅用于本次请求，未保存。'}
+                </p>
+                <p className="mt-1">
+                  {submission.promptSource.kind === 'text' && submission.promptSource.origin === 'recognized_image'
+                    ? '图片题目已识别；报告只保留识别出的文字。'
+                    : '本次使用用户提供的完整题目进行深度分析。'}
+                </p>
+              </div>
             ) : (
               <div>
                 <p className="font-medium text-foreground">作文题目</p>
@@ -479,6 +500,75 @@ export function WritingFeedbackContent({
               </li>
             ))}
           </ol>
+        </section>
+      )}
+
+      {value.deepAnalysis && (
+        <section className="overflow-hidden rounded-xl border border-violet-500/20 bg-violet-500/[0.025]" aria-label="深度诊断">
+          <div className="flex items-start gap-3 border-b border-violet-500/15 px-4 py-3.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-700 dark:text-violet-300">
+              <Compass className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">深度诊断</h3>
+              <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{value.deepAnalysis.promptRecognition.note}</p>
+            </div>
+          </div>
+          <div className="border-b border-violet-500/15 px-4 py-4">
+            <h4 className="text-sm font-semibold text-foreground">题目回应度</h4>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {value.deepAnalysis.promptCoverage.map((item, index) => (
+                <article key={`${item.requirement}-${index}`} className="rounded-lg bg-background/80 p-3 text-sm leading-6">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="font-medium text-foreground">{item.requirement}</p>
+                    <Badge variant={item.status === 'met' ? 'secondary' : 'outline'} className="shrink-0 text-xs">
+                      {PROMPT_COVERAGE_LABELS[item.status]}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">{item.finding}</p>
+                  {item.evidence && <p className="mt-1 text-muted-foreground">依据：{item.evidence}</p>}
+                  <p className="mt-1 text-foreground/85"><span className="font-medium text-violet-700 dark:text-violet-300">下一步：</span>{item.nextStep}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-0 divide-y divide-border/60 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+            <div className="p-4">
+              <h4 className="text-sm font-semibold text-foreground">论证结构</h4>
+              <ol className="mt-3 space-y-3">
+                {value.deepAnalysis.argumentMap.map((paragraph) => (
+                  <li key={paragraph.paragraphIndex} className="text-sm leading-6">
+                    <p className="font-medium text-foreground">第 {paragraph.paragraphIndex} 段 · {paragraph.role}</p>
+                    <p className="text-muted-foreground">{paragraph.contribution}</p>
+                    <p className="text-foreground/85"><span className="font-medium text-violet-700 dark:text-violet-300">缺口：</span>{paragraph.gap}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="p-4">
+              <h4 className="text-sm font-semibold text-foreground">反复出现的模式</h4>
+              <ul className="mt-3 space-y-3">
+                {value.deepAnalysis.recurringPatterns.map((pattern, index) => (
+                  <li key={`${pattern.type}-${index}`} className="text-sm leading-6">
+                    <p className="font-medium text-foreground">{pattern.finding}</p>
+                    <p className="text-muted-foreground">依据：{pattern.evidence}</p>
+                    <p className="text-foreground/85"><span className="font-medium text-violet-700 dark:text-violet-300">修正：</span>{pattern.fix}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-violet-500/15 px-4 py-4">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><TrendingUp className="size-4 text-violet-600" aria-hidden="true" />建议重写顺序</h4>
+            <ol className="mt-3 grid gap-2 sm:grid-cols-3">
+              {[...value.deepAnalysis.rewritePlan].sort((left, right) => left.priority - right.priority).map((item) => (
+                <li key={item.priority} className="rounded-lg bg-background/80 p-3 text-sm leading-6">
+                  <p className="font-medium text-foreground">{item.priority}. {item.action}</p>
+                  <p className="mt-1 text-muted-foreground">完成标准：{item.successCheck}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </section>
       )}
 
