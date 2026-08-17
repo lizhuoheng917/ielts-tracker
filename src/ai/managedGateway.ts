@@ -16,12 +16,27 @@ import { createAiGatewayWireRequest, parseAiGatewayResponse } from './gatewayVal
 
 const DEFAULT_GATEWAY_TIMEOUT_MS = 30_000
 // Writing feedback calls Agnes and can legitimately take longer than the
-// short, snapshot-based assistant features. Keep this purpose-specific so a
-// slow essay request does not make every AI interaction wait for a minute.
+// short, snapshot-based assistant features. Standard feedback keeps the
+// historical window; optional deep analysis allows one bounded server-side
+// structure repair without making every AI interaction wait longer.
 const DEFAULT_WRITING_GATEWAY_TIMEOUT_MS = 55_000
+const DEFAULT_DEEP_WRITING_GATEWAY_TIMEOUT_MS = 95_000
 
-function timeoutForPurpose(purpose: AiGatewayRequest['purpose'], baseTimeoutMs: number): number {
-  return purpose === 'writing_feedback'
+function isDeepWritingRequest(request: AiGatewayRequest): boolean {
+  if (request.purpose !== 'writing_feedback') return false
+  const submission = request.snapshot.data.submission
+  return typeof submission === 'object'
+    && submission !== null
+    && !Array.isArray(submission)
+    && (submission as Record<string, unknown>).schemaVersion === 4
+    && (submission as Record<string, unknown>).analysisMode === 'deep'
+}
+
+function timeoutForRequest(request: AiGatewayRequest, baseTimeoutMs: number): number {
+  if (isDeepWritingRequest(request)) {
+    return Math.max(baseTimeoutMs, DEFAULT_DEEP_WRITING_GATEWAY_TIMEOUT_MS)
+  }
+  return request.purpose === 'writing_feedback'
     ? Math.max(baseTimeoutMs, DEFAULT_WRITING_GATEWAY_TIMEOUT_MS)
     : baseTimeoutMs
 }
@@ -281,7 +296,7 @@ export class ManagedAiGateway implements AiGateway {
       result = await this.transport.invoke(AI_GATEWAY_FUNCTION_NAME, {
         body: wire,
         signal: request.signal,
-        timeout: timeoutForPurpose(request.purpose, this.timeoutMs),
+        timeout: timeoutForRequest(request, this.timeoutMs),
       }, identity.accessToken)
     } catch (error) {
       if (error instanceof AiGatewayError) throw error

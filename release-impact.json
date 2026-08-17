@@ -3,11 +3,11 @@
   "release": "2026-08-17-ai-usability-and-control",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker Writing Correction now offers an optional deep-analysis mode that clearly costs two daily quota units. Learners can provide the exact task as text or a locally compressed image, receive a compact report tied to explicit prompt requirements and verbatim essay evidence, and see a clear refund message when recognition fails. All five managed-AI entry points now show quota consistently; daily suggestions, learning analysis and plan drafts also disable explicit generation while quota is loading, disabled or exhausted. Prepared plan text is filled into the editor instead of being submitted automatically."
+    "reason": "Tracker Writing Correction offers an optional deep-analysis mode that clearly costs two daily quota units. Learners can provide the exact task as text or a locally compressed image, receive a compact report tied to explicit prompt requirements and verbatim essay evidence, and see a clear refund message when recognition fails. The client now gives only schemaVersion 4 deep analysis a 95-second transport window, while ordinary AI remains at 30 seconds and standard writing remains at 55 seconds; the pending UI preserves the draft and lets the learner continue browsing. All five managed-AI entry points show quota consistently; daily suggestions, learning analysis and plan drafts also disable explicit generation while quota is loading, disabled or exhausted. Prepared plan text is filled into the editor instead of being submitted automatically."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The companion Lexi branch adds backward-compatible writing submission V4 validation, server-side two-unit metering, multimodal routing and atomic two-unit refunds for failed prompt recognition or unsupported image routes. It stores only quota and request-receipt metadata; the prompt image, essay and report are not persisted in Supabase. Existing V2 and V3 writing submissions remain accepted."
+    "reason": "The companion Lexi branch provides backward-compatible writing submission V4 validation, server-side two-unit metering, multimodal routing and atomic two-unit refunds for failed prompt recognition or unsupported image routes. The optional deep route now has an 88-second total provider budget for one bounded structure repair, still below the dedicated 95-second client window. It stores only quota and request-receipt metadata; the prompt image, essay and report are not persisted in Supabase. Existing V2 and V3 writing submissions remain accepted."
   },
   "Admin": {
     "status": "changed",
@@ -15,10 +15,10 @@
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "The coordinated Tracker, Lexi backend, Words and Control release is being verified locally. Production deployment is planned only after both repository release gates and cross-repository contract parity pass."
+    "reason": "The 95-second deep-analysis transport adjustment and matching 88-second backend repair budget are being verified together. Deploy the exact verified Tracker commit to the Direct Upload Pages project and the exact companion Lexi commit to the AI gateway before repeating production model acceptance."
   },
   "Verification": {
     "status": "required",
-    "reason": "Run Tracker typecheck, lint, tests and production build; then run the companion Lexi full-stack release gate and V2/V3/V4 cross-repository parity. Review quota states, deep-writing text and image inputs, and responsive Tracker and Control layouts without consuming an unnecessary production AI request."
+    "reason": "Run Tracker typecheck, lint, tests and production build; then run the companion Lexi full-stack release gate and V2/V3/V4 cross-repository parity. Use authorized production model calls to verify deep text, image recognition, failed-image refund, standard feedback, quota receipts and administrator controls."
   }
 }

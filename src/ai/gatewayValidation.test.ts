@@ -756,7 +756,7 @@ describe('managed AI account and local data boundary', () => {
     expect(JSON.stringify(invokeOptions.body)).not.toContain(verifiedAccessToken)
   })
 
-  it('keeps the ordinary 30-second transport window but gives writing feedback up to 55 seconds', async () => {
+  it('keeps ordinary calls at 30 seconds, standard writing at 55 seconds, and deep writing at 95 seconds', async () => {
     const gatewayTransport = transport()
     const gateway = new ManagedAiGateway({
       transport: gatewayTransport,
@@ -775,6 +775,14 @@ describe('managed AI account and local data boundary', () => {
     await expect(gateway.execute(writingRequest)).resolves.toMatchObject({ ok: true })
     const writingOptions = vi.mocked(gatewayTransport.invoke).mock.calls[1][1]
     expect(writingOptions.timeout).toBe(55_000)
+
+    const deepWritingRequest = createDeepWritingRequest()
+    const deepWritingResponse = createSuccessResponse(deepWritingRequest)
+    deepWritingResponse.artifact.content = deepWritingFeedbackContent() as never
+    vi.mocked(gatewayTransport.invoke).mockResolvedValueOnce({ data: deepWritingResponse, error: null })
+    await expect(gateway.execute(deepWritingRequest)).resolves.toMatchObject({ ok: true })
+    const deepWritingOptions = vi.mocked(gatewayTransport.invoke).mock.calls[2][1]
+    expect(deepWritingOptions.timeout).toBe(95_000)
   })
 
   it('does not inspect or invoke when Auth cannot verify a current user', async () => {
