@@ -19,7 +19,7 @@ describe('managed AI gateway error state', () => {
       outcomeUnknown: false,
     })).toMatchObject({
       code: 'INVALID_RESPONSE',
-      message: '本次 AI 未生成可用结果，未保存。请重试。',
+      message: '本次 AI 未生成可用结果，未保存且未计入额度。请重试。',
       retryable: true,
       outcomeUnknown: false,
     })
@@ -31,7 +31,7 @@ describe('managed AI gateway error state', () => {
       outcomeUnknown: false,
     })).toMatchObject({
       code: 'PROMPT_RECOGNITION_FAILED',
-      message: expect.stringMatching(/识别.*退还 2 次/),
+      message: expect.stringMatching(/识别.*未计入 2 个额度单位/),
       retryable: false,
       outcomeUnknown: false,
     })
@@ -40,7 +40,7 @@ describe('managed AI gateway error state', () => {
       outcomeUnknown: false,
     })).toMatchObject({
       code: 'SERVICE_UNAVAILABLE',
-      message: expect.stringMatching(/不支持.*退还 2 次/),
+      message: expect.stringMatching(/不支持.*未计入 2 个额度单位/),
       retryable: false,
       outcomeUnknown: false,
     })

@@ -36,7 +36,7 @@ function timeoutForRequest(request: AiGatewayRequest, baseTimeoutMs: number): nu
   if (isDeepWritingRequest(request)) {
     return Math.max(baseTimeoutMs, DEFAULT_DEEP_WRITING_GATEWAY_TIMEOUT_MS)
   }
-  return request.purpose === 'writing_feedback'
+  return request.purpose === 'writing_feedback' || request.purpose === 'writing_revision_coach'
     ? Math.max(baseTimeoutMs, DEFAULT_WRITING_GATEWAY_TIMEOUT_MS)
     : baseTimeoutMs
 }
@@ -104,7 +104,7 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
   if (status === 502 && gatewayCode === 'generation_failed') {
     return new AiGatewayError(
       'INVALID_RESPONSE',
-      '本次 AI 未生成可用结果，未保存。请重试。',
+      '本次 AI 未生成可用结果，未保存且未计入额度。请重试。',
       true,
       status,
       undefined,
@@ -114,7 +114,7 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
   if (status === 422 && gatewayCode === 'prompt_recognition_failed') {
     return new AiGatewayError(
       'PROMPT_RECOGNITION_FAILED',
-      '未能从图片中可靠识别写作题目，本次已退还 2 次 AI 额度。请换一张更清晰、完整的图片后重试。',
+      '未能从图片中可靠识别写作题目，本次未计入 2 个额度单位。请换一张更清晰、完整的图片后重试。',
       false,
       status,
     )
@@ -122,7 +122,7 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
   if (status === 503 && gatewayCode === 'vision_route_unavailable') {
     return new AiGatewayError(
       'SERVICE_UNAVAILABLE',
-      '当前写作模型暂不支持题目图片，本次已退还 2 次 AI 额度。你可以改用题目文字。',
+      '当前写作模型暂不支持题目图片，本次未计入 2 个额度单位。你可以改用题目文字。',
       false,
       status,
     )
@@ -152,7 +152,7 @@ export function mapAiGatewayHttpStatus(status: number, payload?: unknown): AiGat
     )
   }
   if (status === 502) {
-    return new AiGatewayError('PROVIDER_ERROR', 'AI 服务商暂时没有响应，请稍后再试。', true, status, undefined, outcomeUnknown)
+    return new AiGatewayError('PROVIDER_ERROR', 'AI 服务商暂时没有响应；未生成可用结果不会计入额度。请稍后再试。', true, status, undefined, outcomeUnknown)
   }
   if (status === 504) {
     return new AiGatewayError('TIMEOUT', 'AI 分析等待超时，请稍后重试。', true, status, undefined, outcomeUnknown)
@@ -202,9 +202,9 @@ async function mapInvokeError(
       (typeof DOMException !== 'undefined' && cause instanceof DOMException && cause.name === 'AbortError') ||
       (typeof cause === 'object' && cause !== null && (cause as { name?: unknown }).name === 'AbortError')
     ) {
-      return new AiGatewayError('TIMEOUT', 'AI 分析等待超时，请稍后重试。', true, 504, undefined, true)
+      return new AiGatewayError('TIMEOUT', 'AI 分析等待超时；若未生成可用结果，临时占用的额度会自动恢复。', true, 504, undefined, true)
     }
-    return new AiGatewayError('NETWORK_ERROR', '无法连接 Lexi 内置 AI，请检查网络后重试。', true, undefined, undefined, true)
+    return new AiGatewayError('NETWORK_ERROR', '无法连接 Lexi 内置 AI；若未生成可用结果，临时占用的额度会自动恢复。请检查网络后重试。', true, undefined, undefined, true)
   }
   return new AiGatewayError('SERVICE_UNAVAILABLE', 'Lexi 内置 AI 暂时不可用，请稍后再试。', true, undefined, undefined, true)
 }

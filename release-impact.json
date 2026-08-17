@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-17-ai-usability-and-control",
+  "release": "2026-08-18-success-only-ai-quota-and-writing-revision",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker Writing Correction offers an optional deep-analysis mode that clearly costs two daily quota units. Learners can provide the exact task as text or a locally compressed image, receive a compact report tied to explicit prompt requirements and verbatim essay evidence, and see a clear refund message when recognition fails. The client now gives only schemaVersion 4 deep analysis a 95-second transport window, while ordinary AI remains at 30 seconds and standard writing remains at 55 seconds; the pending UI preserves the draft and lets the learner continue browsing. A valid deep report may explicitly show that no stable recurring pattern had enough exact evidence, instead of forcing a possibly invented pattern. All five managed-AI entry points show quota consistently; daily suggestions, learning analysis and plan drafts also disable explicit generation while quota is loading, disabled or exhausted. Prepared plan text is filled into the editor instead of being submitted automatically."
+    "reason": "All managed-AI quota notices now describe temporary reservation and success-only charging. The writing report adds one compact optional flow: select one to three existing report focuses, edit the prefilled essay, and receive only improved, remaining and next-action feedback. Drafts and valid results remain local."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The companion Lexi branch provides backward-compatible writing submission V4 validation, server-side two-unit metering, multimodal routing and atomic two-unit refunds for failed prompt recognition or unsupported image routes. The optional deep route now has an 88-second total provider budget for one bounded structure repair, still below the dedicated 95-second client window. Completed provider output is conservatively projected into the exact contract when a display subsection or evidence identifier is malformed; exact submitted evidence remains mandatory, and recurring patterns may be empty when unsupported. It stores only quota and request-receipt metadata; the prompt image, essay and report are not persisted in Supabase. Existing V2 and V3 writing submissions remain accepted."
+    "reason": "The coordinated Lexi backend branch adds strict writing_revision_coach input and output validation, exact revised-essay evidence, independent metering, success-only settlement and stale-reservation recovery. Tracker keeps provider keys and model controls out of the browser."
   },
   "Admin": {
     "status": "changed",
-    "reason": "The companion Lexi Control branch adds purpose-specific writing policy controls for daily quota units, request bytes, output tokens and route selection, plus visible image-capability and refund semantics. Other Words and Tracker policy cards keep their existing behavior."
+    "reason": "The coordinated Lexi Control branch adds a separate revision-coach policy card and success-versus-restored quota metrics so administrators retain independent control without mixing this flow with full writing feedback."
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "The exact verified Tracker commit is published to the Direct Upload Cloudflare Pages production project, coordinated with the verified Lexi gateway commit and the Lexi learner, Control and Account Pages releases. The 95-second client transport and 88-second bounded backend repair window are therefore live as one compatible flow."
+    "status": "not-deployed",
+    "reason": "The Tracker companion is prepared for local review only. No production Pages deployment or coordinated Supabase change has been applied."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker typecheck, lint, 542 tests, production build and bundle checks passed; the companion Lexi full-stack gate and V2/V3/V4 cross-repository parity passed. Authorized production-model acceptance passed for standard feedback, deep text feedback, clear-image recognition and report generation, unreadable-image messaging with atomic two-unit refund, quota accounting, exact essay evidence, task-specific feedback and authenticated administrator controls."
+    "reason": "Tracker typecheck and lint passed, all 87 test files with 546 tests passed, Task 1 and Task 2 revision fixtures passed, the production build and bundle scan passed, and the coordinated Lexi migration, gateway, administrator and cross-repository writing parity gates passed locally."
   }
 }

@@ -5,7 +5,7 @@ export interface AiCapability {
   purpose: AiPurpose
   readScopes: readonly AiDataScope[]
   optionalPrivateReadScopes: readonly AiDataScope[]
-  output: 'suggestion' | 'analysis' | 'plan_draft' | 'writing_feedback' | 'words_plan_recommendation' | 'chat_response'
+  output: 'suggestion' | 'analysis' | 'plan_draft' | 'writing_feedback' | 'writing_revision_coach' | 'words_plan_recommendation' | 'chat_response'
   directMutationAllowed: false
 }
 
@@ -42,6 +42,13 @@ export const AI_CAPABILITIES: Readonly<Record<AiPurpose, AiCapability>> = {
     readScopes: [],
     optionalPrivateReadScopes: ['writing.submission'],
     output: 'writing_feedback',
+    directMutationAllowed: false,
+  },
+  writing_revision_coach: {
+    purpose: 'writing_revision_coach',
+    readScopes: [],
+    optionalPrivateReadScopes: ['writing.submission'],
+    output: 'writing_revision_coach',
     directMutationAllowed: false,
   },
   words_plan_recommendation: {

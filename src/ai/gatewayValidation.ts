@@ -20,6 +20,7 @@ import {
   type AiStructuredContentV2,
 } from './structuredOutputs'
 import { isDeepWritingSubmission, parseWritingSubmission } from './writingFeedback'
+import { parseWritingRevisionInputV1 } from './writingRevision'
 import {
   assertWordsPlanRecommendationMatchesContext,
   type WordsPlanRecommendationContextDataV1,
@@ -433,12 +434,12 @@ function assertSnapshot(snapshot: AiContextSnapshotV1, purpose: ManagedAiPurpose
     fail('snapshot scopes must be unique')
   }
   if (
-    purpose === 'writing_feedback'
+    (purpose === 'writing_feedback' || purpose === 'writing_revision_coach')
     && (
       snapshot.privateScopes.length !== 1
       || snapshot.privateScopes[0] !== 'writing.submission'
     )
-  ) fail('writing_feedback requires the writing.submission private scope')
+  ) fail(`${purpose} requires the writing.submission private scope`)
   if (purpose === 'words_plan_recommendation' && snapshot.privateScopes.length !== 0) {
     fail('words_plan_recommendation does not accept private scopes')
   }
@@ -463,6 +464,15 @@ function assertSnapshot(snapshot: AiContextSnapshotV1, purpose: ManagedAiPurpose
   if (purpose === 'writing_feedback') {
     if (recordCount !== 1) fail('writing_feedback snapshot must contain exactly one submission')
     assertWritingContextData(snapshot)
+  } else if (purpose === 'writing_revision_coach') {
+    if (recordCount !== 1) fail('writing_revision_coach snapshot must contain exactly one revision pair')
+    const data = record(snapshot.data, 'snapshot.data')
+    exactKeys(data, ['revision'], 'snapshot.data')
+    try {
+      parseWritingRevisionInputV1(data.revision)
+    } catch {
+      fail('writing_revision_coach snapshot is invalid')
+    }
   } else if (purpose === 'words_plan_recommendation') {
     assertWordsPlanRecommendationContextData(snapshot)
   } else {
@@ -481,10 +491,16 @@ export function createAiGatewayWireRequest(
     request.userInput,
     'userInput',
     MAX_AI_GATEWAY_USER_INPUT_LENGTH,
-    request.purpose === 'writing_feedback' || request.purpose === 'words_plan_recommendation',
+    request.purpose === 'writing_feedback'
+      || request.purpose === 'writing_revision_coach'
+      || request.purpose === 'words_plan_recommendation',
   )
   if (
-    (request.purpose === 'writing_feedback' || request.purpose === 'words_plan_recommendation')
+    (
+      request.purpose === 'writing_feedback'
+      || request.purpose === 'writing_revision_coach'
+      || request.purpose === 'words_plan_recommendation'
+    )
     && request.userInput.trim().length !== 0
   ) {
     fail(`${request.purpose} userInput must be empty`)
@@ -588,7 +604,9 @@ export function parseAiGatewayResponse(
     try {
       const writingSubmission = request.purpose === 'writing_feedback'
         ? parseWritingSubmission((request.snapshot.data as UnknownRecord).submission)
-        : undefined
+        : request.purpose === 'writing_revision_coach'
+          ? (request.snapshot.data as UnknownRecord).revision
+          : undefined
       content = parseStructuredAiOutput(artifact.content, request.purpose, writingSubmission)
       if (request.purpose === 'words_plan_recommendation' && content.kind === 'words_plan_recommendation') {
         assertWordsPlanRecommendationMatchesContext(

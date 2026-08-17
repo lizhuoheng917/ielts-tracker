@@ -105,7 +105,7 @@ export function AiQuotaNotice({
         aria-live="polite"
       >
         <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
-        <span>请求已提交，今日 AI 额度正在同步。</span>
+        <span>请求已提交，额度仅临时占用；生成失败会自动恢复。</span>
         {resetTime && (
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <span aria-hidden="true">·</span>
@@ -129,6 +129,7 @@ export function AiQuotaNotice({
         今日还可使用 <strong className="font-semibold text-foreground">{quota.remainingRequests}</strong> / {quota.dailyRequestLimit} 个额度单位
       </span>
       {costUnits === 2 && <span className="font-medium text-primary">· 本次深度分析占 2 个单位</span>}
+      <span>· 仅成功结果计入额度</span>
       {resetTime && (
         <span className="inline-flex items-center gap-1 text-muted-foreground">
           <span aria-hidden="true">·</span>

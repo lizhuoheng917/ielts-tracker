@@ -5,6 +5,28 @@ import {
   type WritingFeedbackV2,
   type WritingSubmission,
 } from './writingFeedback'
+import {
+  parseWritingRevisionCoachV2,
+  type WritingRevisionCoachV2,
+} from './writingRevision'
+
+export {
+  WRITING_REVISION_INPUT_SCHEMA_VERSION,
+  WRITING_REVISION_OUTPUT_SCHEMA_VERSION,
+  buildWritingRevisionSnapshot,
+  createWritingRevisionFocusOptions,
+  createWritingRevisionFocuses,
+  parseWritingRevisionCoachV2,
+  parseWritingRevisionInputV1,
+  WritingRevisionValidationError,
+  type BuildWritingRevisionSnapshotOptions,
+  type WritingRevisionCoachV2,
+  type WritingRevisionContextDataV1,
+  type WritingRevisionFocus,
+  type WritingRevisionFocusOption,
+  type WritingRevisionFocusSource,
+  type WritingRevisionInputV1,
+} from './writingRevision'
 
 export {
   WRITING_FEEDBACK_SCHEMA_VERSION,
@@ -179,6 +201,7 @@ export type AiStructuredContentV2 =
   | PlanDraftV2
   | WordsPlanRecommendationV2
   | WritingFeedbackV2
+  | WritingRevisionCoachV2
 
 export type AiStructuredContentForPurpose<TPurpose extends ManagedAiPurpose> =
   TPurpose extends 'daily_suggestion'
@@ -189,7 +212,9 @@ export type AiStructuredContentForPurpose<TPurpose extends ManagedAiPurpose> =
         ? PlanDraftV2
         : TPurpose extends 'writing_feedback'
           ? WritingFeedbackV2
-          : WordsPlanRecommendationV2
+          : TPurpose extends 'writing_revision_coach'
+            ? WritingRevisionCoachV2
+            : WordsPlanRecommendationV2
 
 export class StructuredAiOutputValidationError extends Error {
   constructor(message: string) {
@@ -658,7 +683,7 @@ export function parseWordsPlanRecommendationV2(
 export function parseStructuredAiOutput<TPurpose extends ManagedAiPurpose>(
   value: unknown,
   purpose: TPurpose,
-  writingSubmission?: WritingSubmission,
+  purposeContext?: unknown,
 ): AiStructuredContentForPurpose<TPurpose> {
   return (purpose === 'daily_suggestion'
     ? parseDailySuggestionV2(value)
@@ -667,14 +692,16 @@ export function parseStructuredAiOutput<TPurpose extends ManagedAiPurpose>(
       : purpose === 'plan_draft'
         ? parsePlanDraftV2(value)
         : purpose === 'writing_feedback'
-          ? parseWritingFeedbackV2(value, writingSubmission)
-          : parseWordsPlanRecommendationV2(value)) as AiStructuredContentForPurpose<TPurpose>
+          ? parseWritingFeedbackV2(value, purposeContext as WritingSubmission | undefined)
+          : purpose === 'writing_revision_coach'
+            ? parseWritingRevisionCoachV2(value, purposeContext)
+            : parseWordsPlanRecommendationV2(value)) as AiStructuredContentForPurpose<TPurpose>
 }
 
 export function parseStructuredAiOutputJson<TPurpose extends ManagedAiPurpose>(
   rawContent: string,
   purpose: TPurpose,
-  writingSubmission?: WritingSubmission,
+  purposeContext?: unknown,
 ): AiStructuredContentForPurpose<TPurpose> {
   if (typeof rawContent !== 'string' || !rawContent.trim() || rawContent.length > MAX_SERIALIZED_OUTPUT_LENGTH) {
     fail('AI output must be a bounded JSON string')
@@ -688,7 +715,7 @@ export function parseStructuredAiOutputJson<TPurpose extends ManagedAiPurpose>(
   } catch {
     fail('AI output is not valid JSON')
   }
-  return parseStructuredAiOutput(parsed, purpose, writingSubmission)
+  return parseStructuredAiOutput(parsed, purpose, purposeContext)
 }
 
 export function isDailySuggestionV2(value: unknown): value is DailySuggestionV2 {

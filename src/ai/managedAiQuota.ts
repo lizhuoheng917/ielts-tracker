@@ -114,10 +114,12 @@ export function parseManagedAiQuota(value: unknown, purpose: ManagedAiPurpose): 
 async function invokeManagedAiQuotaRpc(purpose: ManagedAiPurpose): Promise<unknown> {
   const { supabase } = await import('@/lib/supabase')
   if (!supabase) throw new Error('AI quota is not configured')
-  const { data, error } = await supabase.rpc('ai_gateway_get_quota', {
-    p_product: AI_GATEWAY_PRODUCT_ID,
-    p_feature: purpose,
-  })
+  const { data, error } = purpose === 'writing_revision_coach'
+    ? await supabase.rpc('ai_gateway_get_writing_revision_coach_quota')
+    : await supabase.rpc('ai_gateway_get_quota', {
+        p_product: AI_GATEWAY_PRODUCT_ID,
+        p_feature: purpose,
+      })
   if (error) throw new Error('AI quota is unavailable')
   return data
 }

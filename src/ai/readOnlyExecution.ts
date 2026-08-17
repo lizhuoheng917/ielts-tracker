@@ -6,7 +6,7 @@ import {
   parseStructuredAiOutput,
   type AiStructuredContentForPurpose,
 } from './structuredOutputs'
-import { parseWritingSubmission, type WritingSubmission } from './writingFeedback'
+import { parseWritingSubmission } from './writingFeedback'
 import {
   assertWordsPlanRecommendationMatchesContext,
   type WordsPlanRecommendationContextDataV1,
@@ -36,16 +36,16 @@ export interface ReadOnlyAiExecutionDependencies {
   createId?: () => string
 }
 
-function writingSubmissionForRequest(
-  request: ReadOnlyAiExecutionRequest,
-): WritingSubmission | undefined {
-  if (request.purpose !== 'writing_feedback') return undefined
+function purposeContextForRequest(request: ReadOnlyAiExecutionRequest): unknown {
+  if (request.purpose !== 'writing_feedback' && request.purpose !== 'writing_revision_coach') return undefined
   const data = request.snapshot.data
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new AiGatewayError('INVALID_REQUEST', '本次写作提交格式无效，请重新填写后再试。')
   }
   try {
-    return parseWritingSubmission((data as Record<string, unknown>).submission)
+    return request.purpose === 'writing_feedback'
+      ? parseWritingSubmission((data as Record<string, unknown>).submission)
+      : (data as Record<string, unknown>).revision
   } catch {
     throw new AiGatewayError('INVALID_REQUEST', '本次写作提交格式无效，请重新填写后再试。')
   }
@@ -109,7 +109,7 @@ export async function executeReadOnlyAi<TPurpose extends ManagedAiPurpose>(
   request: ReadOnlyAiExecutionRequest<TPurpose>,
   dependencies: ReadOnlyAiExecutionDependencies = {},
 ): Promise<ReadOnlyAiExecutionResult<TPurpose>> {
-  const writingSubmission = writingSubmissionForRequest(request)
+  const purposeContext = purposeContextForRequest(request)
   const createId = dependencies.createId ?? (() => crypto.randomUUID())
   const requestId = createId()
   const result = await (dependencies.managedGateway ?? managedAiGateway).execute({
@@ -130,7 +130,7 @@ export async function executeReadOnlyAi<TPurpose extends ManagedAiPurpose>(
 
   let content: AiStructuredContentForPurpose<TPurpose>
   try {
-    content = parseStructuredAiOutput(result.artifact.content, request.purpose, writingSubmission)
+    content = parseStructuredAiOutput(result.artifact.content, request.purpose, purposeContext)
     if (request.purpose === 'words_plan_recommendation' && content.kind === 'words_plan_recommendation') {
       assertWordsPlanRecommendationMatchesContext(
         content,

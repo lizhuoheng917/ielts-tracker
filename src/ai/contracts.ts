@@ -3,6 +3,7 @@ export const AI_PURPOSES = [
   'learning_analysis',
   'plan_draft',
   'writing_feedback',
+  'writing_revision_coach',
   'words_plan_recommendation',
   'assistant_chat',
 ] as const
@@ -88,6 +89,7 @@ export type AiArtifactKind =
   | 'learning_analysis'
   | 'plan_draft'
   | 'writing_feedback'
+  | 'writing_revision_coach'
   | 'words_plan_recommendation'
   | 'chat_response'
 

@@ -50,6 +50,7 @@ import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { AILoadingState } from '@/components/ai/AILoadingState'
 import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 import { WritingFeedbackContent } from '@/components/ai/StructuredAIContent'
+import { WritingRevisionCoach } from '@/components/ai/WritingRevisionCoach'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -620,6 +621,13 @@ export function WritingCorrection({ onWorkspaceStateChange, quotaActive = true }
             submission={preview.submission}
             feedback={preview.feedback}
             overallBand={preview.overallBand}
+          />
+
+          <WritingRevisionCoach
+            submission={preview.submission}
+            feedback={preview.feedback}
+            contextHash={preview.contextHash}
+            quotaActive={quotaActive}
           />
 
           {preview.warnings.length > 0 && (
