@@ -76,6 +76,11 @@ import { LearningAnalysisContent } from '@/components/ai/StructuredAIContent'
 import { AiArtifactLibrary } from '@/components/ai/AiArtifactLibrary'
 import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
+import {
+  managedAiQuotaActionState,
+  type ManagedAiQuotaState,
+} from '@/ai/managedAiQuota'
+import { useAuth } from '@/auth/authContext'
 import { useAccountDialog } from '@/components/account/accountDialogContext'
 import { SUBJECT_VISUALS } from '@/lib/subjectVisuals'
 import { cn } from '@/lib/utils'
@@ -275,6 +280,7 @@ function DraggableFloatButton({ onClick }: { onClick: () => void }) {
 export default function Stats() {
   const statsViewRecordedRef = useRef(false)
   const { openAccountDialog } = useAccountDialog()
+  const { status: authStatus } = useAuth()
   const artifactAccess = useAiArtifactAccess()
 
   // --- 统计页面访问计数（成就系统）---
@@ -341,6 +347,7 @@ export default function Stats() {
   const [reportCreatedAt, setReportCreatedAt] = useState(() => new Date().toISOString())
   const [reportContextMeta, setReportContextMeta] = useState<ReportContextMeta | null>(null)
   const [reportAccessKey, setReportAccessKey] = useState<string | null>(null)
+  const [reportQuotaState, setReportQuotaState] = useState<ManagedAiQuotaState>({ status: 'idle', quota: null })
   const saveLearningAnalysis = useAiArtifactStore((state) => state.saveLearningAnalysis)
   const scopeKey = learnerAiTaskScopeKey(artifactAccess)
   const currentExecutionKey = scopeKey ?? `locked:${artifactAccess.status === 'locked' ? artifactAccess.reason : 'unavailable'}`
@@ -349,6 +356,9 @@ export default function Stats() {
     : null
   const { tasks, openRequestedTaskKey } = useLearnerAiTaskState()
   const reportTask = reportTaskKey ? tasks[reportTaskKey] : undefined
+  const reportQuotaAction = authStatus === 'signed-in'
+    ? managedAiQuotaActionState(reportQuotaState)
+    : { blocked: false, reason: null }
 
   const [aiOpen, setAiOpen] = useState(false)
 
@@ -418,6 +428,16 @@ export default function Stats() {
 
   // --- 生成报告（只读托管网关）---
   const generateReport = () => {
+    if (reportQuotaAction.blocked) {
+      setReportErrorCode('RATE_LIMITED')
+      setReportError(reportQuotaAction.reason === 'loading'
+        ? '正在读取今日 AI 额度，请稍候。'
+        : reportQuotaAction.reason === 'disabled'
+          ? '当前 AI 学习分析暂未开放。'
+          : '今日 AI 额度已用完，请在重置后再试。')
+      setReportState('idle')
+      return
+    }
     setReportState('loading')
     setReportContent('')
     setReportStructuredContent(null)
@@ -1061,7 +1081,7 @@ export default function Stats() {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 px-5 pb-5 pt-2">
-                <AiQuotaNotice purpose="learning_analysis" active={aiOpen} />
+                <AiQuotaNotice purpose="learning_analysis" active={aiOpen} onStateChange={setReportQuotaState} />
                 <div className="rounded-xl border border-primary/15 bg-primary/5 p-4">
                   <div className="flex items-start gap-2.5">
                     <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -1083,7 +1103,7 @@ export default function Stats() {
                 </p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button variant="outline" onClick={closeReportDialog}>取消</Button>
-                  <Button onClick={generateReport}>
+                  <Button onClick={generateReport} disabled={reportQuotaAction.blocked}>
                     <Sparkles className="h-4 w-4" />
                     开始分析
                   </Button>
@@ -1100,7 +1120,7 @@ export default function Stats() {
                   AI 智能分析
                 </DialogTitle>
               </DialogHeader>
-              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="mx-5 mt-2" />
+              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} pending onStateChange={setReportQuotaState} className="mx-5 mt-2" />
               <div className="flex flex-col items-center justify-center px-5 py-16 gap-5">
                 {/* 简约加载动画：渐变圆环 + 中心图标 */}
                 <div className="relative">
@@ -1149,7 +1169,7 @@ export default function Stats() {
                 </DialogTitle>
               </DialogHeader>
               <div className="flex flex-col items-center justify-center px-5 py-12 gap-4">
-                <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="w-full" />
+                <AiQuotaNotice purpose="learning_analysis" active={aiOpen} onStateChange={setReportQuotaState} className="w-full" />
                 <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{reportError}</span>
@@ -1164,7 +1184,7 @@ export default function Stats() {
                       {reportErrorCode === 'UNAUTHORIZED' ? '登录 Lexi 账号' : '查看账号安全状态'}
                     </Button>
                   ) : (
-                    <Button size="sm" onClick={generateReport}>重试</Button>
+                    <Button size="sm" onClick={generateReport} disabled={reportQuotaAction.blocked}>重试</Button>
                   )}
                 </div>
               </div>
@@ -1179,7 +1199,7 @@ export default function Stats() {
                   学习分析报告
                 </DialogTitle>
               </DialogHeader>
-              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} className="mx-5 mt-2 shrink-0 sm:mx-6" />
+              <AiQuotaNotice purpose="learning_analysis" active={aiOpen} onStateChange={setReportQuotaState} className="mx-5 mt-2 shrink-0 sm:mx-6" />
               <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                 {/* 报告内容 */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-white px-5 py-3 dark:bg-background sm:px-6 sm:py-4">
@@ -1217,6 +1237,7 @@ export default function Stats() {
                     variant="outline"
                     size="sm"
                     onClick={generateReport}
+                    disabled={reportQuotaAction.blocked}
                     className="gap-1.5"
                   >
                     <RefreshCw className="h-4 w-4" />

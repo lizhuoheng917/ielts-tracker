@@ -20,6 +20,11 @@ import { latestAiArtifactForAccess } from '@/ai/artifactRepository'
 import { useAiArtifactAccess } from '@/ai/useAiArtifactAccess'
 import { useAIPrivacyStore } from '@/stores/aiPrivacyStore'
 import { AiQuotaNotice } from '@/components/ai/AiQuotaNotice'
+import {
+  managedAiQuotaActionState,
+  type ManagedAiQuotaState,
+} from '@/ai/managedAiQuota'
+import { useAuth } from '@/auth/authContext'
 
 interface AiSuggestionDialogProps {
   open: boolean
@@ -29,6 +34,8 @@ interface AiSuggestionDialogProps {
 export function AiSuggestionDialog({ open, onOpenChange }: AiSuggestionDialogProps) {
   const [localError, setLocalError] = useState('')
   const [localErrorCode, setLocalErrorCode] = useState<AiGatewayErrorCode | null>(null)
+  const [quotaState, setQuotaState] = useState<ManagedAiQuotaState>({ status: 'idle', quota: null })
+  const { status: authStatus } = useAuth()
   const { openAccountDialog } = useAccountDialog()
   const navigate = useNavigate()
   const artifactAccess = useAiArtifactAccess()
@@ -48,10 +55,23 @@ export function AiSuggestionDialog({ open, onOpenChange }: AiSuggestionDialogPro
   const error = localError || taskError?.message || ''
   const errorCode = localErrorCode ?? (taskError?.code as AiGatewayErrorCode | undefined) ?? null
   const displaySuggestion = suggestion
+  const quotaAction = authStatus === 'signed-in'
+    ? managedAiQuotaActionState(quotaState)
+    : { blocked: false, reason: null }
 
   const generateSuggestion = () => {
     setLocalError('')
     setLocalErrorCode(null)
+
+    if (quotaAction.blocked) {
+      setLocalErrorCode('RATE_LIMITED')
+      setLocalError(quotaAction.reason === 'loading'
+        ? '正在读取今日 AI 额度，请稍候。'
+        : quotaAction.reason === 'disabled'
+          ? '当前 AI 学习建议暂未开放。'
+          : '今日 AI 额度已用完，请在重置后再试。')
+      return
+    }
 
     if (artifactAccess.status === 'locked' || !scopeKey || !taskKey) {
       const code: AiGatewayErrorCode = artifactAccess.status === 'locked' && artifactAccess.reason === 'account-mismatch'
@@ -110,7 +130,12 @@ export function AiSuggestionDialog({ open, onOpenChange }: AiSuggestionDialogPro
 
   return (
     <div className="space-y-4">
-      <AiQuotaNotice purpose="daily_suggestion" active={open} />
+      <AiQuotaNotice
+        purpose="daily_suggestion"
+        active={open}
+        pending={isLoading}
+        onStateChange={setQuotaState}
+      />
 
       {/* 加载状态 */}
       {isLoading && (
@@ -180,7 +205,7 @@ export function AiSuggestionDialog({ open, onOpenChange }: AiSuggestionDialogPro
                   variant="ghost"
                   size="sm"
                   onClick={generateSuggestion}
-                  disabled={isLoading}
+                  disabled={isLoading || quotaAction.blocked}
                   className="h-7 text-xs text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
                   <RefreshCw className="h-3 w-3 mr-1" />
@@ -216,7 +241,7 @@ export function AiSuggestionDialog({ open, onOpenChange }: AiSuggestionDialogPro
       {!displaySuggestion && (
         <Button 
           onClick={generateSuggestion} 
-          disabled={isLoading} 
+          disabled={isLoading || quotaAction.blocked}
           className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-md hover:shadow-lg transition-all"
         >
           {isLoading ? (

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-16-prompt-aware-deep-writing-local-review",
+  "release": "2026-08-17-ai-usability-and-control",
   "Frontend": {
     "status": "changed",
-    "reason": "Tracker Writing Correction now offers an optional deep-analysis mode that clearly costs two daily quota units. Learners can provide the exact task as text or a locally compressed image, receive a compact report tied to explicit prompt requirements and verbatim essay evidence, and see a clear refund message when recognition fails. Prompt images stay in memory for the request and are replaced by recognized text before any local draft or report is saved."
+    "reason": "Tracker Writing Correction now offers an optional deep-analysis mode that clearly costs two daily quota units. Learners can provide the exact task as text or a locally compressed image, receive a compact report tied to explicit prompt requirements and verbatim essay evidence, and see a clear refund message when recognition fails. All five managed-AI entry points now show quota consistently; daily suggestions, learning analysis and plan drafts also disable explicit generation while quota is loading, disabled or exhausted. Prepared plan text is filled into the editor instead of being submitted automatically."
   },
   "Backend": {
     "status": "changed",
@@ -15,10 +15,10 @@
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "The deep-writing feature and its coordinated Lexi backend and Control changes are intentionally kept on local codex branches for user review. Nothing from this feature has been pushed, migrated or deployed to production."
+    "reason": "The coordinated Tracker, Lexi backend, Words and Control release is being verified locally. Production deployment is planned only after both repository release gates and cross-repository contract parity pass."
   },
   "Verification": {
-    "status": "passed",
-    "reason": "Tracker impact, typecheck, lint, all 86 test files with 542 tests and the production build passed; a final six-file writing regression rerun passed 84 tests. The companion Lexi full-stack release gate and V2/V3/V4 cross-repository writing parity passed. Local browser review confirmed text and image prompt modes, two-unit and refund copy, prompt-aware wording, responsive Tracker and Control layouts, and no horizontal overflow without invoking a quota-bearing AI request."
+    "status": "required",
+    "reason": "Run Tracker typecheck, lint, tests and production build; then run the companion Lexi full-stack release gate and V2/V3/V4 cross-repository parity. Review quota states, deep-writing text and image inputs, and responsive Tracker and Control layouts without consuming an unnecessary production AI request."
   }
 }

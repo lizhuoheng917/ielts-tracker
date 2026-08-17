@@ -43,6 +43,10 @@ import { AIConfirmCard } from './AIConfirmCard'
 import { AILoadingState } from './AILoadingState'
 import { AiQuotaNotice } from './AiQuotaNotice'
 import { SafeAIContent } from './SafeAIContent'
+import {
+  managedAiQuotaActionState,
+  type ManagedAiQuotaState,
+} from '@/ai/managedAiQuota'
 
 interface AIChatPanelProps {
   createSnapshot: () => AiContextSnapshotV1
@@ -149,7 +153,7 @@ export function AIChatPanel({
   chatContext = 'plans',
   quotaActive = true,
 }: AIChatPanelProps) {
-  const { user } = useAuth()
+  const { user, status: authStatus } = useAuth()
   const artifactAccess = useAiArtifactAccess()
   const getStoreMessages = useChatStore((state) => state.getMessages)
   const chatSetMessages = useChatStore((state) => state.setMessages)
@@ -165,6 +169,7 @@ export function AIChatPanel({
   const [draftCloudModes, setDraftCloudModes] = useState<Record<string, TrackerContentCloudMode>>({})
   const [transientReceipts, setTransientReceipts] = useState<Record<string, AiCommandReceipt>>({})
   const [hydratedKey, setHydratedKey] = useState('')
+  const [quotaState, setQuotaState] = useState<ManagedAiQuotaState>({ status: 'idle', quota: null })
 
   const messagesRef = useRef<ChatMessageRecord[]>([])
   const applyingRef = useRef<Set<string>>(new Set())
@@ -183,6 +188,9 @@ export function AIChatPanel({
   const { tasks } = useLearnerAiTaskState()
   const activeTask = taskKey ? tasks[taskKey] : undefined
   const isLoading = activeTask?.status === 'running' || activeTask?.status === 'stopping'
+  const quotaAction = authStatus === 'signed-in'
+    ? managedAiQuotaActionState(quotaState)
+    : { blocked: false, reason: null }
 
   const receiptByKey = useMemo(() => {
     const index = new Map<string, AiCommandReceipt>()
@@ -237,6 +245,14 @@ export function AIChatPanel({
   const sendMessage = useCallback((content: string) => {
     const trimmed = content.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
     if (!trimmed || isLoading) return
+    if (quotaAction.blocked) {
+      setError(quotaAction.reason === 'loading'
+        ? '正在读取今日 AI 额度，请稍候。'
+        : quotaAction.reason === 'disabled'
+          ? '当前 AI 计划草稿功能暂未开放。'
+          : '今日 AI 额度已用完，请在重置后再试。')
+      return
+    }
     if (!taskScopeKey || !taskKey || artifactAccess.status === 'locked') {
       setError(
         artifactAccess.status === 'locked' && artifactAccess.reason === 'account-mismatch'
@@ -354,7 +370,7 @@ export function AIChatPanel({
       )))
       if (mountedRef.current && currentChatKeyRef.current === chatKey) setError(message)
     })
-  }, [artifactAccess, chatKey, chatSetMessages, createSnapshot, currentScopeId, isLoading, scrollToBottom, taskKey, taskScopeKey])
+  }, [artifactAccess, chatKey, chatSetMessages, createSnapshot, currentScopeId, isLoading, quotaAction.blocked, quotaAction.reason, scrollToBottom, taskKey, taskScopeKey])
 
   useEffect(() => {
     if (
@@ -363,9 +379,11 @@ export function AIChatPanel({
       && messages.length === 0
       && getStoreMessages(chatKey).length === 0
     ) {
-      void sendMessage(initialQuery)
+      // A deep link may prepare a request, but only the learner's explicit
+      // send action is allowed to consume managed AI quota.
+      setInput(current => current || initialQuery.slice(0, MAX_USER_MESSAGE_LENGTH))
     }
-  }, [chatKey, getStoreMessages, hydratedKey, initialQuery, messages.length, sendMessage])
+  }, [chatKey, getStoreMessages, hydratedKey, initialQuery, messages.length])
 
   const confirmDraft = useCallback(async (draft: NonNullable<ChatMessageRecord['commandDrafts']>[number]) => {
     if (applyingRef.current.has(draft.draftId)) return
@@ -416,7 +434,13 @@ export function AIChatPanel({
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
-      <AiQuotaNotice purpose="plan_draft" active={quotaActive} className="mb-2" />
+      <AiQuotaNotice
+        purpose="plan_draft"
+        active={quotaActive}
+        pending={isLoading}
+        onStateChange={setQuotaState}
+        className="mb-2"
+      />
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
@@ -457,7 +481,8 @@ export function AIChatPanel({
                     key={suggestion}
                     type="button"
                     onClick={() => void sendMessage(suggestion)}
-                    className="min-h-11 w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-left text-xs leading-5 hover:border-indigo-300 hover:bg-indigo-50/60 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30"
+                    disabled={isLoading || quotaAction.blocked}
+                    className="min-h-11 w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-left text-xs leading-5 hover:border-indigo-300 hover:bg-indigo-50/60 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30"
                   >
                     {suggestion}
                   </button>
@@ -552,7 +577,8 @@ export function AIChatPanel({
                 key={suggestion}
                 type="button"
                 onClick={() => void sendMessage(suggestion)}
-                className="min-h-9 shrink-0 rounded-full border border-border/60 bg-background px-3 text-xs text-muted-foreground hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-200"
+                disabled={isLoading || quotaAction.blocked}
+                className="min-h-9 shrink-0 rounded-full border border-border/60 bg-background px-3 text-xs text-muted-foreground hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-200"
               >
                 {suggestion}
               </button>
@@ -578,7 +604,7 @@ export function AIChatPanel({
           <Button
             type="button"
             onClick={() => void sendMessage(input)}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || quotaAction.blocked}
             size="icon"
             className="h-11 w-11 shrink-0 bg-indigo-600 text-white hover:bg-indigo-700"
             aria-label="发送计划请求"
