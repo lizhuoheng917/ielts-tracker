@@ -14,11 +14,11 @@
     "reason": "The coordinated Lexi Control branch adds a separate revision-coach policy card, success-versus-restored quota metrics, and a per-user inheritance or exception panel so administrators retain control without mixing full writing feedback, revision review, or content-storage quotas."
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "Production release is authorized but remains pending until the coordinated Supabase, Lexi Pages and Tracker Pages release is online and accepted."
+    "status": "deployed",
+    "reason": "The final verified Tracker build is deployed together with the coordinated Lexi backend and Control release. Authenticated production acceptance completed a topic-specific deep Task 2 report and a focused revision review; an intentionally observed truncated revision remained at 4/4 quota, while the successful retry moved to 3/4."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker typecheck and lint passed, all 87 test files with 546 tests passed, Task 1 and Task 2 revision fixtures passed, the production build and bundle scan passed, and the coordinated Lexi migration, gateway, administrator and cross-repository writing parity gates passed locally."
+    "reason": "Tracker typecheck and lint passed, all 87 test files with 546 tests passed, Task 1 and Task 2 revision fixtures passed, the production build and bundle scan passed, and the coordinated Lexi migration, gateway, administrator and cross-repository writing parity gates passed. Production model acceptance also confirmed topic-specific deep feedback, no unsupported numerical example in the regenerated report, local draft retention, success-only charging and the compact revision result."
   }
 }
