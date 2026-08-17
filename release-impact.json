@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-18-success-only-ai-quota-and-writing-revision",
+  "release": "2026-08-18-success-only-ai-quota-inheritance-and-writing-revision",
   "Frontend": {
     "status": "changed",
     "reason": "All managed-AI quota notices now describe temporary reservation and success-only charging. The writing report adds one compact optional flow: select one to three existing report focuses, edit the prefilled essay, and receive only improved, remaining and next-action feedback. Drafts and valid results remain local."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The coordinated Lexi backend branch adds strict writing_revision_coach input and output validation, exact revised-essay evidence, independent metering, success-only settlement and stale-reservation recovery. Tracker keeps provider keys and model controls out of the browser."
+    "reason": "The coordinated Lexi backend branch adds strict writing_revision_coach input and output validation, exact revised-essay evidence, independent metering, success-only settlement, stale-reservation recovery and live global quota inheritance with sparse future account entitlements. Tracker keeps provider keys and model controls out of the browser."
   },
   "Admin": {
     "status": "changed",
-    "reason": "The coordinated Lexi Control branch adds a separate revision-coach policy card and success-versus-restored quota metrics so administrators retain independent control without mixing this flow with full writing feedback."
+    "reason": "The coordinated Lexi Control branch adds a separate revision-coach policy card, success-versus-restored quota metrics, and a per-user inheritance or exception panel so administrators retain control without mixing full writing feedback, revision review, or content-storage quotas."
   },
   "Deployment": {
     "status": "not-deployed",
-    "reason": "The Tracker companion is prepared for local review only. No production Pages deployment or coordinated Supabase change has been applied."
+    "reason": "Production release is authorized but remains pending until the coordinated Supabase, Lexi Pages and Tracker Pages release is online and accepted."
   },
   "Verification": {
     "status": "passed",
