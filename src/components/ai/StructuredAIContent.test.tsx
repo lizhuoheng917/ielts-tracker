@@ -226,6 +226,18 @@ describe('StructuredAIContent', () => {
     expect(html).toContain('没有讨论另一种观点')
     expect(html).toContain('论证结构')
     expect(html).toContain('建议重写顺序')
+
+    const noStablePatternFeedback: WritingFeedbackV2 = {
+      ...deepFeedback,
+      deepAnalysis: {
+        ...deepFeedback.deepAnalysis!,
+        recurringPatterns: [],
+      },
+    }
+    const noStablePatternHtml = renderToStaticMarkup(
+      <WritingFeedbackContent feedback={noStablePatternFeedback} submission={deepSubmission} overallBand={6.5} />,
+    )
+    expect(noStablePatternHtml).toContain('本次未发现有足够原文证据支持的稳定重复模式')
   })
 
   it('renders insufficient-evidence feedback as a short action plan without scores or a long rubric', () => {

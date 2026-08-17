@@ -547,15 +547,19 @@ export function WritingFeedbackContent({
             </div>
             <div className="p-4">
               <h4 className="text-sm font-semibold text-foreground">反复出现的模式</h4>
-              <ul className="mt-3 space-y-3">
-                {value.deepAnalysis.recurringPatterns.map((pattern, index) => (
-                  <li key={`${pattern.type}-${index}`} className="text-sm leading-6">
-                    <p className="font-medium text-foreground">{pattern.finding}</p>
-                    <p className="text-muted-foreground">依据：{pattern.evidence}</p>
-                    <p className="text-foreground/85"><span className="font-medium text-violet-700 dark:text-violet-300">修正：</span>{pattern.fix}</p>
-                  </li>
-                ))}
-              </ul>
+              {value.deepAnalysis.recurringPatterns.length === 0 ? (
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">本次未发现有足够原文证据支持的稳定重复模式。</p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {value.deepAnalysis.recurringPatterns.map((pattern, index) => (
+                    <li key={`${pattern.type}-${index}`} className="text-sm leading-6">
+                      <p className="font-medium text-foreground">{pattern.finding}</p>
+                      <p className="text-muted-foreground">依据：{pattern.evidence}</p>
+                      <p className="text-foreground/85"><span className="font-medium text-violet-700 dark:text-violet-300">修正：</span>{pattern.fix}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <div className="border-t border-violet-500/15 px-4 py-4">

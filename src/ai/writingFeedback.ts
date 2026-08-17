@@ -929,7 +929,7 @@ function parseWritingDeepAnalysis(
   const recurringPatterns = boundedArray(
     deep.recurringPatterns,
     'writing feedback.deepAnalysis.recurringPatterns',
-    recognitionFailed ? 0 : 1,
+    0,
     recognitionFailed ? 0 : 6,
     (item, label) => {
       const pattern = record(item, label)

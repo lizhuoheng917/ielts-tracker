@@ -425,6 +425,9 @@ describe('WritingSubmissionV4 deep analysis', () => {
     expect(writingQuotaUnits(deepText)).toBe(2)
     expect(writingSubmissionUsesImage(deepText)).toBe(false)
     expect(parseWritingFeedbackV2(deepFeedback('text'), deepText)).toEqual(deepFeedback('text'))
+    const noStablePattern = deepFeedback('text')
+    noStablePattern.deepAnalysis!.recurringPatterns = []
+    expect(parseWritingFeedbackV2(noStablePattern, deepText)).toEqual(noStablePattern)
     expect(buildWritingContextSnapshot(deepText).quality.warnings.join(' ')).toContain('2 次')
     expect(formatWritingFeedbackAsMarkdown(deepText, deepFeedback('text'), 6.5)).toContain('深度分析')
   })
