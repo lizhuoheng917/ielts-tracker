@@ -14,11 +14,11 @@
     "reason": "The companion Lexi Control branch adds purpose-specific writing policy controls for daily quota units, request bytes, output tokens and route selection, plus visible image-capability and refund semantics. Other Words and Tracker policy cards keep their existing behavior."
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "The 95-second deep-analysis transport adjustment and matching 88-second backend repair budget are being verified together. Deploy the exact verified Tracker commit to the Direct Upload Pages project and the exact companion Lexi commit to the AI gateway before repeating production model acceptance."
+    "status": "deployed",
+    "reason": "The exact verified Tracker commit is published to the Direct Upload Cloudflare Pages production project, coordinated with the verified Lexi gateway commit and the Lexi learner, Control and Account Pages releases. The 95-second client transport and 88-second bounded backend repair window are therefore live as one compatible flow."
   },
   "Verification": {
-    "status": "required",
-    "reason": "Run Tracker typecheck, lint, tests and production build; then run the companion Lexi full-stack release gate and V2/V3/V4 cross-repository parity. Use authorized production model calls to verify deep text, image recognition, failed-image refund, standard feedback, quota receipts and administrator controls."
+    "status": "passed",
+    "reason": "Tracker typecheck, lint, 542 tests, production build and bundle checks passed; the companion Lexi full-stack gate and V2/V3/V4 cross-repository parity passed. Authorized production-model acceptance passed for standard feedback, deep text feedback, clear-image recognition and report generation, unreadable-image messaging with atomic two-unit refund, quota accounting, exact essay evidence, task-specific feedback and authenticated administrator controls."
   }
 }
