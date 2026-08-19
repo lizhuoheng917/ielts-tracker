@@ -4,6 +4,9 @@ import {
   readPendingLocalMutation,
   recoverPendingLocalMutation,
 } from '@/data/localMutationJournal'
+import { installTrackerRuntimeTelemetry } from '@/lib/runtimeTelemetry'
+
+installTrackerRuntimeTelemetry()
 
 async function recoverAfterActiveWriterSettles() {
   const pending = readPendingLocalMutation()

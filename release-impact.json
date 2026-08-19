@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "release": "2026-08-18-success-only-ai-quota-inheritance-and-writing-revision",
+  "release": "2026-08-19-cross-product-runtime-stabilization",
   "Frontend": {
     "status": "changed",
-    "reason": "All managed-AI quota notices now describe temporary reservation and success-only charging. The writing report adds one compact optional flow: select one to three existing report focuses, edit the prefilled essay, and receive only improved, remaining and next-action feedback. Drafts and valid results remain local."
+    "reason": "Tracker now reports signed-in page crashes and real sync failures through the shared privacy-preserving Lexi runtime channel. Reporting is silent, deduplicated for 15 minutes, skipped offline, and does not alter local-first saves, retries, conflict handling or any learner-facing interface."
   },
   "Backend": {
     "status": "changed",
-    "reason": "The coordinated Lexi backend branch adds strict writing_revision_coach input and output validation, exact revised-essay evidence, independent metering, success-only settlement, stale-reservation recovery and live global quota inheritance with sparse future account entitlements. Tracker keeps provider keys and model controls out of the browser."
+    "reason": "The coordinated Lexi backend adds a product-aware aggregate RPC and separates Tracker buckets from Words and Control while retaining the existing rate limit and retention controls. The legacy Words RPC stays backward-compatible throughout the rollout window."
   },
   "Admin": {
     "status": "changed",
-    "reason": "The coordinated Lexi Control branch adds a separate revision-coach policy card, success-versus-restored quota metrics, and a per-user inheritance or exception panel so administrators retain control without mixing full writing feedback, revision review, or content-storage quotas."
+    "reason": "The coordinated Lexi Control release identifies Tracker separately and shows only recurring coarse error combinations, so administrators can investigate real failures without receiving account identity, error text, URLs or learning content."
   },
   "Deployment": {
-    "status": "deployed",
-    "reason": "The final verified Tracker build is deployed together with the coordinated Lexi backend and Control release. Authenticated production acceptance completed a topic-specific deep Task 2 report and a focused revision review; an intentionally observed truncated revision remained at 4/4 quota, while the successful retry moved to 3/4."
+    "status": "not-deployed",
+    "reason": "The Tracker and coordinated Lexi changes are prepared only in local review worktrees. No production backend or Pages deployment has been performed."
   },
   "Verification": {
     "status": "passed",
-    "reason": "Tracker typecheck and lint passed, all 87 test files with 546 tests passed, Task 1 and Task 2 revision fixtures passed, the production build and bundle scan passed, and the coordinated Lexi migration, gateway, administrator and cross-repository writing parity gates passed. Production model acceptance also confirmed topic-specific deep feedback, no unsupported numerical example in the regenerated report, local draft retention, success-only charging and the compact revision result."
+    "reason": "The complete Tracker release gate passed: typecheck, lint, 88 test files with 549 tests, production build and bundle scan. The coordinated Lexi full-stack release gate and cross-repository writing contract parity also passed; local management UI review remains part of the handoff evidence."
   }
 }

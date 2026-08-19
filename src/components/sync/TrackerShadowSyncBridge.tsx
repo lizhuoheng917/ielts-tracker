@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useAuth } from '@/auth/authContext'
 import { STORAGE_PREFIX } from '@/lib/constants'
 import { isLocalDate } from '@/lib/localDate'
+import { reportTrackerRuntimeSignal } from '@/lib/runtimeTelemetry'
 import {
   TrackerPhase4bSyncRuntime,
   type TrackerPhase4bSyncStatusEvent,
@@ -52,6 +53,10 @@ function reportSyncFailure(stream: 'exam-date' | 'learning-records', error: unkn
     ? `${error.name}: ${error.message}`
     : 'Unknown sync failure'
   console.warn(`[tracker-sync:${stream}] ${detail}`)
+  void reportTrackerRuntimeSignal({
+    kind: 'sync_failure',
+    error,
+  })
 }
 
 function syncDebugDetail(error: unknown): string | null {
@@ -158,8 +163,9 @@ export function TrackerShadowSyncBridge() {
             ? async (choice) => {
                 try {
                   await examDateRuntime.resolveBaselineConflict(choice)
-                } catch {
-                  updateFailureStatus('exam')
+                } catch (error) {
+                  reportSyncFailure('exam-date', error)
+                  updateFailureStatus('exam', error)
                 }
               }
             : null,
