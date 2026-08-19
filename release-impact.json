@@ -14,11 +14,11 @@
     "reason": "The coordinated Lexi Control release identifies Tracker separately and shows only recurring coarse error combinations, so administrators can investigate real failures without receiving account identity, error text, URLs or learning content."
   },
   "Deployment": {
-    "status": "not-deployed",
-    "reason": "The Tracker and coordinated Lexi changes are prepared only in local review worktrees. No production backend or Pages deployment has been performed."
+    "status": "deployed",
+    "reason": "The shared production migration and matching Lexi Control release are active. The final Tracker production bundle contains the product-aware runtime RPC and the verified source SHA, and the stable Pages domain serves that exact artifact."
   },
   "Verification": {
     "status": "passed",
-    "reason": "The complete Tracker release gate passed: typecheck, lint, 88 test files with 549 tests, production build and bundle scan. The coordinated Lexi full-stack release gate and cross-repository writing contract parity also passed; local management UI review remains part of the handoff evidence."
+    "reason": "The complete Tracker release gate passed: typecheck, lint, 88 test files with 549 tests, production build and bundle scan. The coordinated Lexi full-stack release gate and cross-repository writing contract parity also passed. Authenticated production acceptance restored the existing local-first workspace without changing records, loaded the Words summary, and confirmed the deployed bundle includes the product-aware runtime reporter and release SHA."
   }
 }
